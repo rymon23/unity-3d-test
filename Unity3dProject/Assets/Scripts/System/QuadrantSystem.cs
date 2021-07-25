@@ -22,17 +22,18 @@ public struct QuadrantEntity : IComponentData {
 public struct QuadrantData {
     public Entity entity;
     public float3 position;
+    // public Transform transform;
     public QuadrantEntity quadrantEntity;
 }
 
 public class QuadrantSystem : ComponentSystem
 {
     private GameObject playerGameObject; 
-    private static NativeMultiHashMap<int, QuadrantData> quadrantMultiHashMap;
+    public static NativeMultiHashMap<int, QuadrantData> quadrantMultiHashMap;
     private const int quadrantYMultiplier = 1000;
     private const int quadrantCellSize = 20;
 
-    protected static int GetPositionHashMapKey(float3 position) {
+    public static int GetPositionHashMapKey(float3 position) {
         return (int) (math.floor(position.x / quadrantCellSize) + (quadrantYMultiplier * math.floor(position.z / quadrantCellSize)));
     }
 
@@ -44,17 +45,6 @@ public class QuadrantSystem : ComponentSystem
         Debug.DrawLine(lowerLeft + new Vector3(+0, 0, +1) * quadrantCellSize, lowerLeft + new Vector3(+1, 0, +1) * quadrantCellSize);
         // Debug.Log(GetPositionHashMapKey(position) + " " + position);
     }
-    // private static int GetPositionHashMapKey(float3 position) {
-    //     return (int) (math.floor(position.x / quadrantCellSize) + (quadrantYMultiplier * math.floor(position.y / quadrantCellSize)));
-    // }
-    // private static void DebugDrawQuadrant(float3 position) {
-    //     Vector3 lowerLeft = new Vector3(math.floor(position.x / quadrantCellSize) * quadrantCellSize, math.floor(position.y / quadrantCellSize) * quadrantCellSize);
-    //     Debug.DrawLine(lowerLeft, lowerLeft + new Vector3(+1, +0) * quadrantCellSize);
-    //     Debug.DrawLine(lowerLeft, lowerLeft + new Vector3(+0, +1) * quadrantCellSize);
-    //     Debug.DrawLine(lowerLeft + new Vector3(+1, +0) * quadrantCellSize, lowerLeft + new Vector3(+1, +1) * quadrantCellSize);
-    //     Debug.DrawLine(lowerLeft + new Vector3(+0, +1) * quadrantCellSize, lowerLeft + new Vector3(+1, +1) * quadrantCellSize);
-    //     Debug.Log(GetPositionHashMapKey(position) + " " + position);
-    // }
 
     private static int GetEnityCountInHashMap(NativeMultiHashMap<int, QuadrantData> quadrantMultiHashMap, int hashMapKey) {
         QuadrantData quadrantData;
@@ -67,6 +57,21 @@ public class QuadrantSystem : ComponentSystem
         }
         return count;
     }
+
+    private static Vector3[] GetNeighoborQuadrantPositions(Vector3 currentPosition) {
+        Vector3[] neighborPositions = new Vector3[8];
+
+        neighborPositions[0] = currentPosition + Vector3.forward * quadrantCellSize;
+        neighborPositions[1] = currentPosition + Vector3.back * quadrantCellSize;
+        neighborPositions[2] = currentPosition + Vector3.left * quadrantCellSize;
+        neighborPositions[3] = currentPosition + Vector3.right * quadrantCellSize;
+
+        neighborPositions[4] = currentPosition + (Vector3.right + Vector3.forward) * quadrantCellSize;
+        neighborPositions[5] = currentPosition + (Vector3.left + Vector3.forward) * quadrantCellSize;
+        neighborPositions[6] = currentPosition + (Vector3.right + Vector3.back) * quadrantCellSize;
+        neighborPositions[7] = currentPosition + (Vector3.left + Vector3.back) * quadrantCellSize;
+        return neighborPositions;
+    }
     
     // [BurstCompile]
     // private struct SetQuadrantDataHashMapJob : IJobForEachWithEntity<Translation, QuadrantEntity> {
@@ -76,6 +81,7 @@ public class QuadrantSystem : ComponentSystem
     //         quadrantMultiHashMap.Add(hashMapKey, new QuadrantData {
     //             entity = entity,
     //             position = trans.Value,
+                    // transform = transform,
     //             quadrantEntity = quadrantEntity
     //         });
     //     }
@@ -92,20 +98,11 @@ public class QuadrantSystem : ComponentSystem
     }
 
     protected override void OnUpdate() {
-        EntityQuery entityQuery = GetEntityQuery(typeof(IsActor));
-        // NativeMultiHashMap<int, QuadrantData> quadrantMultiHashMap = new NativeMultiHashMap<int, QuadrantData>(entityQuery.CalculateEntityCount(), Allocator.TempJob);
-
-        // Set position on the IsActorComponentData struct for use on IJob
-        // Entities.WithAll<IsActor, Translation, Transform>().ForEach((IsActor actor, Transform tran) => {
-        //     Translation actorComponentData = tran.gameObject.GetComponent<Translation>();
-        //     actorComponentData.Value = tran.position;
-        //     Debug.Log(tran.gameObject.name + ": " + actorComponentData);
-        // });
-
-        Debug.Log("Running...");
-
+        EntityQuery entityQuery = GetEntityQuery(typeof(QuadrantSearchable));
+        // Debug.Log("Running...");
 
         quadrantMultiHashMap.Clear();
+
         //Expand to fit 
         if (entityQuery.CalculateEntityCount() > quadrantMultiHashMap.Capacity) {
             quadrantMultiHashMap.Capacity = entityQuery.CalculateEntityCount();
@@ -116,9 +113,9 @@ public class QuadrantSystem : ComponentSystem
             quadrantMultiHashMap.Add(hashMapKey, new QuadrantData{
                 entity = entity,
                 position = actor.gameObject.transform.position,
+                // transform = actor.gameObject.transform
                 // quadrantEntity = quadrantEntity
             });
-            // Debug.Log(actor.gameObject.name);
         });
 
         // TODO: Make this work with the JobHandler instead of the above
@@ -138,11 +135,41 @@ public class QuadrantSystem : ComponentSystem
         }
 
         if (playerGameObject) {
-            DebugDrawQuadrant(playerGameObject.transform.position);
-            Debug.Log("Actors in " + playerGameObject.name + "'s current quadrant: \n" + GetEnityCountInHashMap(quadrantMultiHashMap, GetPositionHashMapKey(playerGameObject.transform.position)));
+            Vector3 playerPos = playerGameObject.transform.position;
+            DebugDrawQuadrant(playerPos);
 
-            // quadrantMultiHashMap.Dispose();
+            Vector3[] neighborPositions = GetNeighoborQuadrantPositions(playerPos);
+            
+            for (int i = 0; i < neighborPositions.Length; i++)
+            {
+                DebugDrawQuadrant(neighborPositions[i]);
+            }
+
+            // int quadrantNeighborCellSize = quadrantCellSize; //math.abs(quadrantCellSize / 2);
+
+            // Vector3 posForward = playerPos + Vector3.forward * quadrantNeighborCellSize;
+            // Vector3 posBack = playerPos + Vector3.back * quadrantNeighborCellSize;
+            // Vector3 posLeft = playerPos + Vector3.left * quadrantNeighborCellSize;
+            // Vector3 posRight = playerPos + Vector3.right * quadrantNeighborCellSize;
+
+            // Vector3 posForwardRight = playerPos + (Vector3.right + Vector3.forward) * quadrantNeighborCellSize;
+            // Vector3 posForwardLeft = playerPos + (Vector3.left + Vector3.forward) * quadrantNeighborCellSize;
+            // Vector3 posBackRight = playerPos + (Vector3.right + Vector3.back) * quadrantNeighborCellSize;
+            // Vector3 posBackLeft = playerPos + (Vector3.left + Vector3.back) * quadrantNeighborCellSize;
+
+            // DebugDrawQuadrant(posForwardRight);
+            // DebugDrawQuadrant(posForwardLeft);
+            // DebugDrawQuadrant(posBackLeft);
+            // DebugDrawQuadrant(posBackRight);
+            
+            // DebugDrawQuadrant(posForward);
+            // DebugDrawQuadrant(posBack);
+            // DebugDrawQuadrant(posLeft);
+            // DebugDrawQuadrant(posRight);
+
+            Debug.Log("\nActors in " + playerGameObject.name + "'s current quadrant: " + GetEnityCountInHashMap(quadrantMultiHashMap, GetPositionHashMapKey(playerGameObject.transform.position)));
         }
     }
+
 
 }
