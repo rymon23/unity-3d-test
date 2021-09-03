@@ -58,18 +58,21 @@ public class QuadrantSystem : ComponentSystem
         return count;
     }
 
-    private static Vector3[] GetNeighoborQuadrantPositions(Vector3 currentPosition) {
-        Vector3[] neighborPositions = new Vector3[8];
+    public static Vector3[] GetNeighoborQuadrantPositions(Vector3 currentPosition) {
+        //Note: Returns the currentPosition in index 0
+        Vector3[] neighborPositions = new Vector3[9];
 
-        neighborPositions[0] = currentPosition + Vector3.forward * quadrantCellSize;
-        neighborPositions[1] = currentPosition + Vector3.back * quadrantCellSize;
-        neighborPositions[2] = currentPosition + Vector3.left * quadrantCellSize;
-        neighborPositions[3] = currentPosition + Vector3.right * quadrantCellSize;
+        neighborPositions[0] = currentPosition;
 
-        neighborPositions[4] = currentPosition + (Vector3.right + Vector3.forward) * quadrantCellSize;
-        neighborPositions[5] = currentPosition + (Vector3.left + Vector3.forward) * quadrantCellSize;
-        neighborPositions[6] = currentPosition + (Vector3.right + Vector3.back) * quadrantCellSize;
-        neighborPositions[7] = currentPosition + (Vector3.left + Vector3.back) * quadrantCellSize;
+        neighborPositions[1] = currentPosition + Vector3.forward * quadrantCellSize;
+        neighborPositions[2] = currentPosition + Vector3.back * quadrantCellSize;
+        neighborPositions[3] = currentPosition + Vector3.left * quadrantCellSize;
+        neighborPositions[4] = currentPosition + Vector3.right * quadrantCellSize;
+
+        neighborPositions[5] = currentPosition + (Vector3.right + Vector3.forward) * quadrantCellSize;
+        neighborPositions[6] = currentPosition + (Vector3.left + Vector3.forward) * quadrantCellSize;
+        neighborPositions[7] = currentPosition + (Vector3.right + Vector3.back) * quadrantCellSize;
+        neighborPositions[8] = currentPosition + (Vector3.left + Vector3.back) * quadrantCellSize;
         return neighborPositions;
     }
     
@@ -129,47 +132,29 @@ public class QuadrantSystem : ComponentSystem
             Entities.WithAll<Target, Transform>().ForEach((Transform tran) => {
                 if (tran.gameObject.tag == "Player") {
                     playerGameObject = tran.gameObject;
-                    Debug.Log("Player GameObject found: " + tran.gameObject.name);
+                    // Debug.Log("Player GameObject found: " + tran.gameObject.name);
                 }
             });            
         }
 
         if (playerGameObject) {
             Vector3 playerPos = playerGameObject.transform.position;
-            DebugDrawQuadrant(playerPos);
+            int entityCount = 0;
 
+            // // Draw player quadrant
+            // DebugDrawQuadrant(playerPos);
+            // entityCount += GetEnityCountInHashMap(quadrantMultiHashMap, GetPositionHashMapKey(playerPos));
+
+            //Draw current & neighboring quadrants
             Vector3[] neighborPositions = GetNeighoborQuadrantPositions(playerPos);
-            
             for (int i = 0; i < neighborPositions.Length; i++)
             {
                 DebugDrawQuadrant(neighborPositions[i]);
+                entityCount += GetEnityCountInHashMap(quadrantMultiHashMap, GetPositionHashMapKey(neighborPositions[i]));
             }
 
-            // int quadrantNeighborCellSize = quadrantCellSize; //math.abs(quadrantCellSize / 2);
-
-            // Vector3 posForward = playerPos + Vector3.forward * quadrantNeighborCellSize;
-            // Vector3 posBack = playerPos + Vector3.back * quadrantNeighborCellSize;
-            // Vector3 posLeft = playerPos + Vector3.left * quadrantNeighborCellSize;
-            // Vector3 posRight = playerPos + Vector3.right * quadrantNeighborCellSize;
-
-            // Vector3 posForwardRight = playerPos + (Vector3.right + Vector3.forward) * quadrantNeighborCellSize;
-            // Vector3 posForwardLeft = playerPos + (Vector3.left + Vector3.forward) * quadrantNeighborCellSize;
-            // Vector3 posBackRight = playerPos + (Vector3.right + Vector3.back) * quadrantNeighborCellSize;
-            // Vector3 posBackLeft = playerPos + (Vector3.left + Vector3.back) * quadrantNeighborCellSize;
-
-            // DebugDrawQuadrant(posForwardRight);
-            // DebugDrawQuadrant(posForwardLeft);
-            // DebugDrawQuadrant(posBackLeft);
-            // DebugDrawQuadrant(posBackRight);
-            
-            // DebugDrawQuadrant(posForward);
-            // DebugDrawQuadrant(posBack);
-            // DebugDrawQuadrant(posLeft);
-            // DebugDrawQuadrant(posRight);
-
-            Debug.Log("\nActors in " + playerGameObject.name + "'s current quadrant: " + GetEnityCountInHashMap(quadrantMultiHashMap, GetPositionHashMapKey(playerGameObject.transform.position)));
+            Debug.Log("\nActors in " + playerGameObject.name + "'s local quadrants: " + entityCount);
         }
     }
-
 
 }

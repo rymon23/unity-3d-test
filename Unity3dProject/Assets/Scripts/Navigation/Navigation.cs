@@ -5,6 +5,9 @@ using UnityEngine.AI;
 
 public class Navigation : MonoBehaviour
 {
+    private Vector3 stayPosition;
+    [SerializeField] private float patrolRadius = 10f;
+
     public Vector3 RandomNavmeshLocation(float radius, Vector3 centerPoint ) {
         Vector3 randomDirection = UnityEngine.Random.insideUnitSphere * radius;
          randomDirection += centerPoint;

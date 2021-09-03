@@ -7,10 +7,10 @@ public class ActorFOV : MonoBehaviour {
     [Range(5, 100)] public float maxRadius = 40f;
     [Range(5, 20)] public float peripheralAngleOffset = 20f;
     [Range(5, 50)] public float peripheralRadius = 18f;
-    public float overlapSphereRadius = 4f;
-    public Transform viewPoint = null;
-    
-    [SerializeField] private GameObject currentTarget;
+    public float overlapSphereRadius = 4f;    
+    [SerializeField] public GameObject currentTarget;
+    public Transform viewPoint;
+
     public bool bDebug;
 
     public void SetTarget(GameObject newTarget) {
@@ -26,8 +26,9 @@ public class ActorFOV : MonoBehaviour {
         DrawViewingAngle();
 
         if (currentTarget) {
+            Vector3 myPos = viewPoint != null ? viewPoint.position : transform.position;
             Gizmos.color = Color.green;
-            Gizmos.DrawRay( viewPoint? viewPoint.position : transform.position, (currentTarget.transform.position - transform.position));
+            Gizmos.DrawRay(myPos, (currentTarget.transform.position - myPos));
         }
 
         Gizmos.color = Color.white;

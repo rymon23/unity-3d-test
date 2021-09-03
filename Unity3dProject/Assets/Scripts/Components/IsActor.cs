@@ -3,9 +3,15 @@ using UnityEngine;
 namespace Hybrid.Components
 {
     [RequireComponent(
-        typeof(ActorFOV)
-        ,typeof(Target)
+        typeof(Target)
         ,typeof(Targeting)
+        ,typeof(QuadrantSearchable)
+        )]
+
+    [RequireComponent(
+         typeof(ActorFOV)
+        ,typeof(ActorFactions)
+        ,typeof(ActorNavigationData)
         )]
 
     public class IsActor : MonoBehaviour {

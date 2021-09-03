@@ -83,7 +83,7 @@ public class PlayerMovement : MonoBehaviour
         float moveZ = Input.GetAxis("Vertical");
         float moveX = Input.GetAxis("Horizontal");
 
-        moveDirection = new Vector3(0, 0, moveZ);
+        moveDirection = new Vector3(moveX, 0, moveZ);
         moveDirection = transform.TransformDirection(moveDirection);
 
         if (isGrounded) {
@@ -118,19 +118,19 @@ public class PlayerMovement : MonoBehaviour
     private void Idle() {
         groundedState = GroundedAnimationState.idle;
 
-        anim.SetFloat("XAxis", 0, 0.1f, Time.deltaTime);
+        anim.SetFloat("YAxis", 0, 0.1f, Time.deltaTime);
     }
     private void Walk() {
         moveSpeed = walkSpeed;
         groundedState = GroundedAnimationState.walking;
 
-        anim.SetFloat("XAxis", 0.5f, 0.1f, Time.deltaTime);
+        anim.SetFloat("YAxis", 0.5f, 0.1f, Time.deltaTime);
     }
     private void Run() {
         moveSpeed = runSpeed;
         groundedState = GroundedAnimationState.running;
 
-        anim.SetFloat("XAxis", 1, 0.1f, Time.deltaTime);
+        anim.SetFloat("YAxis", 1, 0.1f, Time.deltaTime);
     } 
     private void Jump() {
         velocity.y = Mathf.Sqrt(jumpHeight * -2 * gravity);
