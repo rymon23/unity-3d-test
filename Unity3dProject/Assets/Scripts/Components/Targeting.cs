@@ -4,13 +4,46 @@ using UnityEngine;
 
 namespace Hybrid.Components
 {
-    public class Targeting : MonoBehaviour {
+    public struct TrackedTarget
+    {
+        public TrackedTarget(string _refId, FactionRelationship _relationship = FactionRelationship.unset, float _targetLostTimer = 23f, float _priority = 100f)
+        {
+            refId = _refId;
+            targetLostTimer = _targetLostTimer;
+            priority = _priority;
+            relationship = _relationship;
+        }
+        public string refId { get; }
+        public float targetLostTimer { get; set; }
+        public float priority { get; set; }
+        public FactionRelationship relationship { get; set; }
+    }
+
+    public class Targeting : MonoBehaviour
+    {
+        [SerializeField]
+        public string refId = "-";
         public Transform currentTarget = null;
-        public Transform lastTarget = null;
+
+        public string currentTargetRefId; // Temporary for debugging
+        public float currentTargetLostTimer; // Temporary for debugging
+
+        public Transform currentNavGoal = null;
+        public HashSet<string> trackedTargets = null;
+        public Hashtable trackedTargetStats = null;
+        public int allycount = 0;
+        public int enemycount = 0;
+
+        public int trackedTargetCount;
+        // public HashSet<string> trackedGoals = null;
         public Transform closestTarget = null;
-        public Vector3 navPosition;
-        public HashSet<Transform> enemies = new HashSet<Transform>();
-        public HashSet<Transform> allies = new HashSet<Transform>();
+        public float targetDistance;
+        public float targetAttackDistance;
+        public Vector3 attackPos;
+
+
+        public bool hasTargetInFOV = false;
+        public Transform lastTarget = null;
         public Vector3 searchCenterPos;
         public float searchRadius;
         public float targetLostTimer;

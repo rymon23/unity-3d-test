@@ -1,18 +1,15 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using Hybrid.Components;
 
 public class ChaseTarget : MonoBehaviour
 {
-    // public GameObject target;
     NavMeshAgent agent;
     Targeting targeting;
 
     void Start()
     {
-        agent = this.GetComponentInChildren<NavMeshAgent>();
+        agent = agent == null? this.GetComponentInChildren<NavMeshAgent>() : agent;
         targeting = this.GetComponent<Targeting>();
     }
 
@@ -20,6 +17,8 @@ public class ChaseTarget : MonoBehaviour
     {
         if (targeting.currentTarget) {
             agent.SetDestination(targeting.currentTarget.position);
+
+            // transform.LookAt(targeting.currentTarget);    
         }
     }
 }

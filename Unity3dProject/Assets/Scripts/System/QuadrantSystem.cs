@@ -22,6 +22,7 @@ public struct QuadrantEntity : IComponentData {
 public struct QuadrantData {
     public Entity entity;
     public float3 position;
+    public bool isDead;
     // public Transform transform;
     public QuadrantEntity quadrantEntity;
 }
@@ -111,11 +112,12 @@ public class QuadrantSystem : ComponentSystem
             quadrantMultiHashMap.Capacity = entityQuery.CalculateEntityCount();
         }
 
-        Entities.ForEach((Entity entity, IsActor actor) => {
+        Entities.ForEach((Entity entity, IsActor actor, ActorHealth actorHealth) => {
             int hashMapKey = GetPositionHashMapKey(actor.gameObject.transform.position);
             quadrantMultiHashMap.Add(hashMapKey, new QuadrantData{
                 entity = entity,
                 position = actor.gameObject.transform.position,
+                isDead = actorHealth.deathState >= DeathState.dying
                 // transform = actor.gameObject.transform
                 // quadrantEntity = quadrantEntity
             });

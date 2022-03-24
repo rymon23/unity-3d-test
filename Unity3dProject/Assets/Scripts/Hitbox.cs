@@ -1,38 +1,71 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Events;
+using Hybrid.Components;
 
 [RequireComponent(typeof(BoxCollider))]
 public class Hitbox : MonoBehaviour
 {
-    [SerializeField] private UnityEvent<Weapon> hitEvent;
-    public BoxCollider col;
+    [SerializeField] IsActor actor;
+    [SerializeField] GameObject myGameObject;
+    [SerializeField] BoxCollider myCollider;
+    [SerializeField] ActorEventManger actorEventManger;
+    [SerializeField] HitPositionType bodyPosition = 0;
 
-    private void Awake() {
-        col = GetComponent<BoxCollider>();
-
-        // if (hitEvent == null)
-        //     hitEvent = new UnityEvent<Weapon>();
-        //     hitEvent.AddListener();
-
-        // combatEvent = GetComponent<CombatEvent>();
+    private void Awake()
+    {
+        actor = GetComponentInParent<IsActor>();
+        actorEventManger = GetComponentInParent<ActorEventManger>();
+        myGameObject = GetComponentInParent<IsActor>().gameObject;
+        myCollider = GetComponent<BoxCollider>();
     }
 
-    // private void OnAttackHit(Weapon weapon) {
-    //     Debug.Log("")
-    // }
+    void onWeaponHit(Weapon weapon, HitPositionType hitPosition)
+    {
+        if (actorEventManger != null) actorEventManger.TakeWeaponHit(weapon, hitPosition);
+    }
 
-    private void OnTriggerEnter(Collider col) {
+    private void OnTriggerEnter(Collider col)
+    {
         Debug.Log("onTriggerEnter: " + gameObject.name + "| Collider: " + col.gameObject.name);
-        if (col.CompareTag("WeaponHitBox")) {
+
+        if (col.CompareTag("WeaponHitBox"))
+        {
+            Debug.Log("onTriggerEnter: " + gameObject.name + "| Collider: " + col.gameObject.name);
+
             WeaponCollider weaponCollider = col.GetComponent<WeaponCollider>();
-            if (weaponCollider?.weapon != null) {
-                Debug.Log("Weapon Hit: " + weaponCollider.weapon + " On "+ gameObject.name);
-                // hitEvent?.Invoke(weaponCollider.weapon);
-            } else {
-                Debug.Log("Weapon Hit: " + col + " On "+ gameObject.name);
+            if (weaponCollider.weapon != null)
+            {
+                if (weaponCollider.weapon._ownerRefId == actor.refId)
+                {
+                    Debug.Log("Ignore my own weapon hit" + weaponCollider.weapon + " On " + gameObject.name);
+                    return;
+                }
+
+                if (weaponCollider.weapon.attackblockedList.Contains(actor.refId))
+                {
+                    Debug.Log("Ignore Blocked Hit: " + weaponCollider.weapon + " On " + gameObject.name);
+                    return;
+                }
+
+                Debug.Log("Weapon Hit: " + weaponCollider.weapon + " On " + gameObject.name);
+                onWeaponHit(weaponCollider.weapon, bodyPosition);
+            }
+            else
+            {
+                Debug.Log("Non-weapon hit: " + col + " On " + gameObject.name);
             }
         }
     }
+}
+
+public enum HitPositionType
+{
+    body = 0,
+    head = 1,
+}
+
+public enum HitDirectionType
+{
+    front = 0,
+    back = 1,
+    side = 2,
 }

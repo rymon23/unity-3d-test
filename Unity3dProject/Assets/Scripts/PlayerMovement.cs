@@ -119,18 +119,21 @@ public class PlayerMovement : MonoBehaviour
         groundedState = GroundedAnimationState.idle;
 
         anim.SetFloat("YAxis", 0, 0.1f, Time.deltaTime);
+        // anim.SetFloat("XAxis", moveX, 0.1f, Time.deltaTime);
     }
     private void Walk() {
         moveSpeed = walkSpeed;
         groundedState = GroundedAnimationState.walking;
 
         anim.SetFloat("YAxis", 0.5f, 0.1f, Time.deltaTime);
+        // anim.SetFloat("XAxis", moveX, 0.1f, Time.deltaTime);
     }
     private void Run() {
         moveSpeed = runSpeed;
         groundedState = GroundedAnimationState.running;
 
         anim.SetFloat("YAxis", 1, 0.1f, Time.deltaTime);
+        anim.SetFloat("XAxis", 1, 0.1f, Time.deltaTime);
     } 
     private void Jump() {
         velocity.y = Mathf.Sqrt(jumpHeight * -2 * gravity);

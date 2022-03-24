@@ -30,14 +30,31 @@ public class AILocomotionAgent : MonoBehaviour
 		anim.SetFloat ("YAxis", agent.velocity.magnitude);
 		// anim.SetFloat ("YAxis", velocity.y);
 
-		LookAt lookAt = GetComponent<LookAt>();
-		if (lookAt)
-			lookAt.lookAtTargetPosition = agent.steeringTarget + transform.forward;
+		// LookAt lookAt = GetComponent<LookAt>();
+		// if (lookAt)
+		// 	lookAt.lookAtTargetPosition = agent.steeringTarget + transform.forward;
 
 		// Pull character towards agent
-		if (worldDeltaPosition.magnitude > agent.radius)
-			transform.position = agent.nextPosition - 0.9f*worldDeltaPosition;
+		// if (worldDeltaPosition.magnitude > agent.radius)
+		// 	transform.position = agent.nextPosition - 0.9f*worldDeltaPosition;
 	}
+
+
+	// void  LateUpdate() {
+	// 	float accuracy = 1.0f;
+	// 	float rotSpeed = 0.4f;
+	// 	float speed = 0.5f;
+
+	// 	Vector3 lookaAtGoal = new Vector3(agent.transform.position.x, this.transform.position.y, agent.transform.position.z);
+	// 	Vector3 direction = lookaAtGoal - this.transform.position;
+	// 	this.transform.rotation = Quaternion.Slerp(this.transform.rotation, Quaternion.LookRotation(direction), Time.deltaTime * rotSpeed);
+
+
+	// 	if (Vector3.Distance(transform.position,lookaAtGoal) > accuracy) {
+	// 		this.transform.Translate(0,0, speed * Time.deltaTime);
+	// 	}
+	// }
+
 
 	void OnAnimatorMove () {
 		// Update postion to agent position

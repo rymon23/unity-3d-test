@@ -11,32 +11,49 @@ public enum WeaponType
 
 public class Weapon : MonoBehaviour
 {
+    public string _ownerRefId = "-";
     public WeaponType weaponType;
     public EquipSlotType equipSlotType;
     public ItemType itemType = 0;
 
     public WeaponCollider weaponCollider;
-    
+    [SerializeField] private BoxCollider boxCollider;
+
     public float damage = 0;
     public bool canParry = true;
 
-    void Start()
+    public HashSet<string> attackblockedList;
+
+    void Awake()
     {
-        weaponCollider = GetComponentInChildren<WeaponCollider>();
-        if (weaponCollider != null) {
+        weaponCollider = this.gameObject.GetComponentInChildren<WeaponCollider>();
+        if (weaponCollider != null)
+        {
             weaponCollider.weapon = this;
-            // DisableWeaponCollider();
+            boxCollider = this.gameObject.GetComponentInChildren<BoxCollider>();
+            DisableWeaponCollider();
         }
     }
 
-    public void EnableWeaponCollider() {
-        if (weaponCollider != null) {
-            weaponCollider.gameObject.SetActive(true);
-        }
+    private void Start()
+    {
+        // attackblockedList = new HashSet<string>();
     }
-    public void DisableWeaponCollider() {
-        if (weaponCollider != null) {
-            weaponCollider.gameObject.SetActive(false);
-        }
+
+    public void EnableWeaponCollider()
+    {
+        boxCollider.enabled = true;
+
+        // weaponCollider.gameObject.SetActive(true);
+
+        // weaponCollider.transform.SetParent(this.transform);
+        // weaponCollider.transform.localPosition = Vector3.zero; // Or desired position
+        // weaponCollider.transform.rotation = Quaternion.Euler(0, 0, 0);
+    }
+    public void DisableWeaponCollider()
+    {
+        boxCollider.enabled = false;
+
+        // weaponCollider.gameObject.SetActive(false);
     }
 }

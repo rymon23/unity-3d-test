@@ -3,29 +3,55 @@ using UnityEngine;
 public class CombatAnimationEvent : MonoBehaviour
 {
     AnimationState animationState;
+    EquipSlotController equipSlotController;
 
     void Start()
     {
         animationState = GetComponent<AnimationState>();
+        equipSlotController = GetComponentInChildren<EquipSlotController>();
     }
-    public void AE_OnWeaponDrawState(DrawAnimationState state) {
+
+    public void AE_OnWeaponDrawState(DrawAnimationState state)
+    {
         Debug.Log("Animation Event: OnWeaponDrawState - " + state);
         animationState.drawAnimationState = state;
     }
-    public void AE_OnWeaponSheathState(SheathAnimationState state) {
+    public void AE_OnWeaponSheathState(SheathAnimationState state)
+    {
         Debug.Log("Animation Event: OnWeaponSheathState - " + state);
         animationState.sheathAnimationState = state;
     }
-    public void AE_OnMeleeAttackState(AttackAnimationState state) {
+    public void AE_OnMeleeAttackState(AttackAnimationState state)
+    {
         Debug.Log("Animation Event: OnMeleeAttackState - " + state);
         animationState.attackAnimationState = state;
+
+        if (equipSlotController != null && animationState.IsInAttackHitFame())
+        {
+            Weapon weapon = equipSlotController.handEquipSlots[0].weapon;
+            weapon.EnableWeaponCollider();
+            Debug.Log("Enable weapon collider");
+        }
+        else
+        {
+            Weapon weapon = equipSlotController.handEquipSlots[0].weapon;
+            weapon.DisableWeaponCollider();
+            Debug.Log("Disable weapon collider");
+        }
     }
-    public void AE_OnMeleeParryState(BlockAnimationState state) {
+    public void AE_OnMeleeParryState(BlockAnimationState state)
+    {
         Debug.Log("Animation Event: OnMeleeParryState - " + state);
         animationState.blockAnimationState = state;
     }
-    public void AE_OnMeleeDodgeState(DodgeAnimationState state) {
+    public void AE_OnMeleeDodgeState(DodgeAnimationState state)
+    {
         Debug.Log("Animation Event: OnMeleeDodgeState - " + state);
         animationState.dodgeAnimationState = state;
+    }
+    public void AE_OnCastRangeState(CastAnimationState state)
+    {
+        Debug.Log("Animation Event: OnCastRangeState - " + state);
+        animationState.castAnimationState = state;
     }
 }
