@@ -55,7 +55,7 @@ namespace Hybrid.Systems
                     bool hasTargetInFOV = UtilityHelpers.IsInFOVScope(actor.transform, targeting.currentTarget.transform.position, myFOV.maxAngle, myFOV.maxRadius);
 
                     combatStateData.movementUpdateTimer -= updateTime;
-                    if (combatStateData.movementUpdateTimer < 0 || myNavAgent.remainingDistance <= myNavAgent.stoppingDistance && !myNavAgent.pathPending)
+                    if (combatStateData.movementUpdateTimer < 0) // || myNavAgent.remainingDistance <= myNavAgent.stoppingDistance && !myNavAgent.pathPending)
                     {
                         int rand = UnityEngine.Random.Range(0, 100);
                         // float newTimer;
@@ -63,7 +63,7 @@ namespace Hybrid.Systems
                         // bool isInInnerRange = distance < 1.5f;
                         bool isInInnerRange = distance < combatStateData.meleeAttackRange;
 
-                        if ((isInInnerRange && rand < 50) || (isWithinOuterRange && rand < 20))
+                        if ((isInInnerRange && rand < 40) || (isWithinOuterRange && rand < 20))
                         {
                             // newTimer = UnityEngine.Random.Range(combatStateData.fallBackTimeMin, combatStateData.fallBackTimeMax);
                             combatStateData.combatMovementType = CombatMovementType.fallBack;
@@ -96,10 +96,10 @@ namespace Hybrid.Systems
                             {
                                 // if (UnityEngine.Random.Range(0, 100) < 80)
                                 // {
-                                //     int currentBlockVariant = ((int)animator.GetFloat("animBlockType"));
+                                //     int currentBlockVariant = ((int)animator.GetFloat("fAnimBlockType"));
                                 //     int maxBlendTreeLength = 6;
                                 //     int nextBlockType = (currentBlockVariant + UnityEngine.Random.Range(1, maxBlendTreeLength)) % maxBlendTreeLength;
-                                //     animator.SetFloat("animBlockType", nextBlockType);
+                                //     animator.SetFloat("fAnimBlockType", nextBlockType);
                                 //     animator.SetTrigger("BlockHit");
                                 // }
                                 // else

@@ -15,14 +15,13 @@ public class Weapon : MonoBehaviour
     public WeaponType weaponType;
     public EquipSlotType equipSlotType;
     public ItemType itemType = 0;
-
-    public WeaponCollider weaponCollider;
+    [SerializeField] private WeaponCollider weaponCollider;
     [SerializeField] private BoxCollider boxCollider;
 
     public float damage = 0;
     public bool canParry = true;
 
-    public HashSet<string> attackblockedList;
+    // public HashSet<string> attackblockedList;
 
     void Awake()
     {
@@ -35,25 +34,18 @@ public class Weapon : MonoBehaviour
         }
     }
 
-    private void Start()
-    {
-        // attackblockedList = new HashSet<string>();
-    }
+    // private void Start()
+    // {
+    // }
 
     public void EnableWeaponCollider()
     {
         boxCollider.enabled = true;
-
-        // weaponCollider.gameObject.SetActive(true);
-
-        // weaponCollider.transform.SetParent(this.transform);
-        // weaponCollider.transform.localPosition = Vector3.zero; // Or desired position
-        // weaponCollider.transform.rotation = Quaternion.Euler(0, 0, 0);
+        weaponCollider.gameObject.SetActive(true);
     }
     public void DisableWeaponCollider()
     {
         boxCollider.enabled = false;
-
-        // weaponCollider.gameObject.SetActive(false);
+        weaponCollider.gameObject.SetActive(false);
     }
 }

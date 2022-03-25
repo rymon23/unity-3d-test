@@ -20,7 +20,11 @@ public class Hitbox : MonoBehaviour
 
     void onWeaponHit(Weapon weapon, HitPositionType hitPosition)
     {
-        if (actorEventManger != null) actorEventManger.TakeWeaponHit(weapon, hitPosition);
+        if (actorEventManger != null)
+        {
+            actorEventManger.TriggerAnim_Stagger(hitPosition);
+            actorEventManger.TakeWeaponHit(weapon, hitPosition);
+        }
     }
 
     private void OnTriggerEnter(Collider col)
@@ -40,11 +44,11 @@ public class Hitbox : MonoBehaviour
                     return;
                 }
 
-                if (weaponCollider.weapon.attackblockedList.Contains(actor.refId))
-                {
-                    Debug.Log("Ignore Blocked Hit: " + weaponCollider.weapon + " On " + gameObject.name);
-                    return;
-                }
+                // if (weaponCollider.weapon.attackblockedList.Contains(actor.refId))
+                // {
+                //     Debug.Log("Ignore Blocked Hit: " + weaponCollider.weapon + " On " + gameObject.name);
+                //     return;
+                // }
 
                 Debug.Log("Weapon Hit: " + weaponCollider.weapon + " On " + gameObject.name);
                 onWeaponHit(weaponCollider.weapon, bodyPosition);

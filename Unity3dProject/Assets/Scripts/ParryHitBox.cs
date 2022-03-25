@@ -8,6 +8,7 @@ using Hybrid.Components;
 public class ParryHitBox : MonoBehaviour
 {
     [SerializeField] IsActor actor;
+    [SerializeField] ActorFOV actorFOV;
     public BoxCollider col;
     public Animator animator;
     public AnimationState animationState;
@@ -17,6 +18,7 @@ public class ParryHitBox : MonoBehaviour
     {
         col = GetComponent<BoxCollider>();
         actor = GetComponentInParent<IsActor>();
+        actorFOV = GetComponentInParent<ActorFOV>();
         animator = GetComponentInParent<Animator>();
         animationState = GetComponentInParent<AnimationState>();
         actorEventManger = GetComponentInParent<ActorEventManger>();
@@ -24,20 +26,31 @@ public class ParryHitBox : MonoBehaviour
 
     void onHitBlocked(float fDamage)
     {
-        if (actorEventManger != null) actorEventManger.BlockHit(fDamage);
+        if (actorEventManger != null) {
+            actorEventManger.TriggerAnim_Block();
+            actorEventManger.BlockHit(fDamage);
+        }
     }
 
     private void OnTriggerEnter(Collider col)
     {
-        Debug.Log("onTriggerEnter: " + gameObject.name + "| Collider: " + col.gameObject.name);
-        if (col.CompareTag("WeaponHitBox") )//&& animationState.isBlocking)
+        // Debug.Log("onTriggerEnter: " + gameObject.name + "| Collider: " + col.gameObject.name);
+        if (col.CompareTag("WeaponHitBox"))//&& animationState.isBlocking)
         {
-            int currentBlockVariant = ((int)animator.GetFloat("animBlockType"));
-            int maxBlendTreeLength = 6;
-            int nextBlockType = (currentBlockVariant + UnityEngine.Random.Range(1, maxBlendTreeLength)) % maxBlendTreeLength;
+            // int currentBlockVariant = ((int)animator.GetFloat("fAnimBlockType"));
+            // int maxBlendTreeLength = 6;
+            // int nextBlockType = (currentBlockVariant + UnityEngine.Random.Range(1, maxBlendTreeLength)) % maxBlendTreeLength;
 
             WeaponCollider weaponCollider = col.GetComponent<WeaponCollider>();
             Weapon weapon = weaponCollider.weapon;
+            Debug.Log("WeaponHitBox found on " + weapon + " On " + gameObject.name);
+
+            bool hasTargetInFOV = UtilityHelpers.IsInFOVScope(actor.transform, weapon.transform.position, actorFOV.maxAngle, actorFOV.maxRadius);
+            if (!hasTargetInFOV)
+            {
+                Debug.Log("Ignore Block from ourside FOV " + weapon + " On " + gameObject.name);
+                return;
+            }
 
             if (weapon != null)
             {
@@ -49,10 +62,9 @@ public class ParryHitBox : MonoBehaviour
 
                 weapon.DisableWeaponCollider();
 
-                animator.SetFloat("animBlockType", nextBlockType);
-                animator.SetTrigger("BlockHit");
+                // animator.SetFloat("animBlockType", nextBlockType);
+                // animator.SetTrigger("BlockHit");
                 onHitBlocked(10f);
-                // weapon.attackblockedList.Add(actor.refId);
 
                 Debug.Log("Blocked Hit from " + weaponCollider.weapon + " On " + gameObject.name);
             }

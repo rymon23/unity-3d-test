@@ -38,15 +38,34 @@ namespace Hybrid.Systems
 
                     if (animationState != null && equipSlotController != null)
                     {
+                        GameObject blockingCollider = parryStateController.blockingCollider;
 
-                        // Assign actor's refId to weapon
                         Weapon weapon = equipSlotController.handEquipSlots[0].weapon;
-                        if (weapon != null && weapon._ownerRefId == UtilityHelpers.GetUnsetActorEntityRefId())
+                        bool hasGun = false;
+
+                        if (weapon != null)
                         {
-                            weapon._ownerRefId = actor.refId;
+                            // Assign actor's refId to weapon
+                            if (weapon._ownerRefId == UtilityHelpers.GetUnsetActorEntityRefId())
+                            {
+                                weapon._ownerRefId = actor.refId;
+                            }
+                            hasGun = (weapon.weaponType == WeaponType.gun);
+
                         }
 
-                        GameObject blockingCollider = parryStateController.blockingCollider;
+                        if (hasGun)
+                        {
+                            animationState.isBlocking = false;
+                            animationState.isWeaponDrawn = true;
+                            blockingCollider?.SetActive(false);
+                            animator.SetBool("Blocking", false);
+                            animator.SetBool("IsWeaponOut", true);
+                            animator.SetFloat("IdleType", 2f);
+                            animator.SetFloat("animWeaponType", 2);
+                            animator.SetInteger("animMovementType", 2);
+                            return;
+                        }
 
                         animator.SetBool("IsWeaponOut", animationState.isWeaponDrawn);
 
@@ -77,29 +96,6 @@ namespace Hybrid.Systems
                             }
                         }
 
-                        // if (animationState.isWeaponDrawn == false)
-                        // {
-                        //     if (combatStateData.combatState >= CombatState.active )
-                        //     {
-                        //       if (!animationState.isDrawingWeapon()) {
-
-
-                        //       }
-                        //         animator.SetTrigger("DrawWeapon");
-                        //     }
-                        //     else
-                        //     {
-                        //         if (combatStateData.combatState == CombatState.inactive && !animationState.isSheathingWeapon())
-                        //         {
-                        //             animator.SetTrigger("SheathWeapon");
-
-                        //             animator.SetFloat("IdleType", 0f);
-                        //             animator.SetInteger("animWeaponType", 0);
-                        //             animator.SetInteger("animMovementType", 0);
-                        //         }
-
-                        //     }
-                        // }
                         if (weapon == null) return;
 
                         if (animationState.IsInAttackHitFame())

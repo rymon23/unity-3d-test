@@ -35,7 +35,11 @@ static class UtilityHelpers
         directionBetween.y *= 0;
         return Vector3.Angle(viewer.forward, directionBetween);
     }
-
+    public static bool HasFOVAngle(Transform viewer, Vector3 targetPos, float maxAngle, float maxRadius)
+    {
+        float angle = getFOVAngle(viewer, targetPos, maxAngle, maxRadius);
+        return (angle <= maxAngle);
+    }
 
     public static bool IsInFOVScope(Transform viewer, Vector3 targetPos, float maxAngle, float maxRadius)
     {

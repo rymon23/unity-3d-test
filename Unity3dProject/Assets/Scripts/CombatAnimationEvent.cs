@@ -26,7 +26,7 @@ public class CombatAnimationEvent : MonoBehaviour
         Debug.Log("Animation Event: OnMeleeAttackState - " + state);
         animationState.attackAnimationState = state;
 
-        if (equipSlotController != null && animationState.IsInAttackHitFame())
+        if (equipSlotController != null && animationState.IsInAttackHitFame() && !animationState.IsStaggered())
         {
             Weapon weapon = equipSlotController.handEquipSlots[0].weapon;
             weapon.EnableWeaponCollider();
@@ -49,9 +49,14 @@ public class CombatAnimationEvent : MonoBehaviour
         Debug.Log("Animation Event: OnMeleeDodgeState - " + state);
         animationState.dodgeAnimationState = state;
     }
-    public void AE_OnCastRangeState(CastAnimationState state)
+    public void AE_OnCastRangeState(AnimState_Casting state)
     {
         Debug.Log("Animation Event: OnCastRangeState - " + state);
         animationState.castAnimationState = state;
+    }
+    public void AE_OnStaggerState(AnimState_Stagger state)
+    {
+        Debug.Log("Animation Event: AE_OnStaggerState - " + state);
+        animationState.animState_Stagger = state;
     }
 }

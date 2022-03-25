@@ -42,14 +42,14 @@ namespace Hybrid.Components
             set => _combatMovementType = value;
         }
 
-        public float fallBackTimeMax = 5f;
-        public float fallBackTimeMin = 3f;
-        public float advanceTimeMax = 5f;
-        public float advanceTimeMin = 3f;
-        public float flankTimeMax = 5f;
-        public float flankTimeMin = 2f;
-        public float holdPositionMin = 5f;
-        public float holdPositionMax = 2f;
+        public float fallBackTimeMax = 3f;
+        public float fallBackTimeMin = 0.8f;
+        public float advanceTimeMax = 4f;
+        public float advanceTimeMin = 2f;
+        public float flankTimeMax = 3f;
+        public float flankTimeMin = 0.8f;
+        public float holdPositionMin = 4f;
+        public float holdPositionMax = 1f;
 
 
         public float meleeAttackRange = 1.15f; //TEMP - Move this somewere else
