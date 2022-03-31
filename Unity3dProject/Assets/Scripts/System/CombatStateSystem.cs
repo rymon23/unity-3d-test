@@ -48,44 +48,44 @@ namespace Hybrid.Systems
                     AnimationState enemyAnimState = enemyGameObject.GetComponent<AnimationState>();
                     CombatStateData enemyCombatStateData = enemyGameObject.GetComponent<CombatStateData>();
                     NavMeshAgent myNavAgent = actor.GetComponent<NavMeshAgent>();
+                    AIDecisionController myDecisionController = actor.GetComponent<AIDecisionController>();
+
 
                     float distance = Vector3.Distance(actor.transform.position, enemyGameObject.transform.position);
                     targeting.targetDistance = distance;
 
-                    bool hasTargetInFOV = UtilityHelpers.IsInFOVScope(actor.transform, targeting.currentTarget.transform.position, myFOV.maxAngle, myFOV.maxRadius);
+                    Vector3 targetPos = targeting.currentTarget.transform.position + (targeting.currentTarget.transform.up * 1.2f);
+                    bool hasTargetInFOV = UtilityHelpers.IsInFOVScope(myFOV.viewPoint, targetPos, myFOV.maxAngle, myFOV.maxRadius);
 
-                    combatStateData.movementUpdateTimer -= updateTime;
-                    if (combatStateData.movementUpdateTimer < 0) // || myNavAgent.remainingDistance <= myNavAgent.stoppingDistance && !myNavAgent.pathPending)
-                    {
-                        int rand = UnityEngine.Random.Range(0, 100);
-                        // float newTimer;
-                        bool isWithinOuterRange = distance < 5.2f;
-                        // bool isInInnerRange = distance < 1.5f;
-                        bool isInInnerRange = distance < combatStateData.meleeAttackRange;
 
-                        if ((isInInnerRange && rand < 40) || (isWithinOuterRange && rand < 20))
-                        {
-                            // newTimer = UnityEngine.Random.Range(combatStateData.fallBackTimeMin, combatStateData.fallBackTimeMax);
-                            combatStateData.combatMovementType = CombatMovementType.fallBack;
-                        }
-                        else if (isWithinOuterRange)
-                        {
-                            // newTimer = UnityEngine.Random.Range(combatStateData.flankTimeMin, combatStateData.flankTimeMax);
-                            combatStateData.combatMovementType = UnityEngine.Random.Range(0, 100) < 50 ? CombatMovementType.flankRight : CombatMovementType.flankLeft;
-                        }
-                        else
-                        {
-                            // newTimer = UnityEngine.Random.Range(combatStateData.advanceTimeMin, combatStateData.advanceTimeMax);
-                            combatStateData.combatMovementType = CombatMovementType.pressAttack;
+                    UpdateActorCombatMovement(distance, combatStateData, myNavAgent, myDecisionController, animationState);
 
-                        }
-                        // combatStateData.movementUpdateTimer = newTimer;
-                        combatStateData.UpdateMovementTimer(combatStateData.combatMovementType);
-
-                    }
 
                     float attackDistance = Vector3.Distance(targeting.attackPos, enemyGameObject.transform.position);
                     targeting.targetAttackDistance = attackDistance;
+
+
+
+                    // Rifle Bash
+                    if (combatStateData.combatMovementBehaviorType == CombatMovementBehaviorType.shooter && hasTargetInFOV && animationState.IsAbleToAttack())
+                    {
+                        if (attackDistance < 1.2f)
+                        {
+                            animator.SetTrigger("tBash");
+                            return;
+                        }
+                        else
+                        {
+                            Weapon weapon = equipSlotController.handEquipSlots[0].weapon;
+                            if (weapon != null)
+                            {
+                                weapon.bShouldFire = true;
+                                return;
+                            }
+
+                        }
+                    }
+
 
                     if (hasTargetInFOV && attackDistance < combatStateData.meleeAttackRange && distance > 0.01f && !animationState.isAttacking)
                     // if (hasTargetInFOV && distance < 2 && distance > 0.01f && !animationState.isAttacking)
@@ -110,13 +110,13 @@ namespace Hybrid.Systems
                         }
                         else
                         {
-                            if (!animationState.IsInBlockHitFame() && !animationState.isAttacking && !animationState.bDisableAttacking)
+                            if (animationState.IsAbleToAttack())
                             {
                                 int currentBlockVariant = ((int)animator.GetFloat("fAnimMeleeAttackType"));
                                 int maxBlendTreeLength = 3;
                                 int nextAttackType = (currentBlockVariant + UnityEngine.Random.Range(1, maxBlendTreeLength)) % maxBlendTreeLength;
                                 animator.SetFloat("fAnimMeleeAttackType", nextAttackType);
-                                animator.SetTrigger("Attack");
+                                animator.SetTrigger("tAttack");
 
                                 int rand = UnityEngine.Random.Range(0, 100);
                                 if (rand < 78)
@@ -138,6 +138,58 @@ namespace Hybrid.Systems
 
             }
         }
-    }
 
+
+        private void UpdateActorCombatMovement(float targetDistance, CombatStateData combatStateData, NavMeshAgent myNavAgent, AIDecisionController myDecisionController, AnimationState animationState)
+        {
+            combatStateData.movementUpdateTimer -= updateTime;
+
+            float keepDistMin;
+            // float keepDistMin = combatStateData.keepDistanceMin > combatStateData.meleeAttackRange ? combatStateData.keepDistanceMin : combatStateData.meleeAttackRange;
+            if (combatStateData.combatMovementBehaviorType == CombatMovementBehaviorType.shooter)
+            {
+                keepDistMin = 8f;
+            }
+            else
+            {
+                keepDistMin = combatStateData.meleeAttackRange;
+            }
+            float keepDistMax = keepDistMin * combatStateData.distanceBufferRangeMult;
+
+            bool navStopped = myNavAgent.remainingDistance <= myNavAgent.stoppingDistance && !myNavAgent.pathPending;
+
+            // Override other movements if out of the buffer range
+            if (targetDistance < keepDistMin || navStopped || animationState.IsStaggered())
+            {
+                combatStateData.combatMovementType = CombatMovementType.fallBack;
+                combatStateData.UpdateMovementTimer(combatStateData.combatMovementType, 0.5f);
+            }
+            else if (targetDistance > keepDistMax)
+            {
+                combatStateData.combatMovementType = CombatMovementType.pressAttack;
+                combatStateData.UpdateMovementTimer(combatStateData.combatMovementType, 0.5f);
+            }
+
+            // Update movment type if timmer complete
+            if (combatStateData.movementUpdateTimer < 0)
+            {
+                combatStateData.distanceBufferRangeMult = UnityEngine.Random.Range(combatStateData.distanceBufferRangeMultMin, combatStateData.distanceBufferRangeMultMax);
+
+                // if (myDecisionController != null)
+                // {
+                //     combatStateData.combatMovementType = myDecisionController.GetCombatMovementChoice();
+                //     myDecisionController.lastMovmentSelected = combatStateData.combatMovementType;
+                // }
+                // else
+                // {
+                combatStateData.combatMovementType = UnityEngine.Random.Range(0, 100) < 50 ? CombatMovementType.flankRight : CombatMovementType.flankLeft;
+                // }
+
+                combatStateData.UpdateMovementTimer(combatStateData.combatMovementType);
+            }
+
+        }
+
+
+    }
 }

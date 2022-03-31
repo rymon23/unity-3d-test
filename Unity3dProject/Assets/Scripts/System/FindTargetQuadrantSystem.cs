@@ -147,24 +147,24 @@ namespace Hybrid.Systems
             Debug.Log("FindTargetQuadrantSystem: \n Total Targeters: " + entityCount + " | Total Targets: " + targetCount);
         }
 
-        public static bool IsInFOVScope(Transform viewer, Vector3 targetPos, float maxAngle, float maxRadius)
-        {
-            Vector3 directionBetween = (targetPos - viewer.position).normalized;
-            directionBetween.y *= 0;
-            float angle = Vector3.Angle(viewer.forward, directionBetween);
+        // public static bool IsInFOVScope(Transform viewer, Vector3 targetPos, float maxAngle, float maxRadius)
+        // {
+        //     Vector3 directionBetween = (targetPos - viewer.position).normalized;
+        //     directionBetween.y *= 0;
+        //     float angle = Vector3.Angle(viewer.forward, directionBetween);
 
 
-            //TO DO: fix LOS
-            // if (angle <= maxAngle)
-            // {
-            //     Ray ray = new Ray(viewer.position, targetPos - viewer.position);
-            //     RaycastHit hit;
+        //     //TO DO: fix LOS
+        //     // if (angle <= maxAngle)
+        //     // {
+        //     //     Ray ray = new Ray(viewer.position, targetPos - viewer.position);
+        //     //     RaycastHit hit;
 
-            //     if (Physics.Raycast(ray, out hit, maxRadius))  return hit.transform.position == targetPos;
-            // }
-            return (angle <= maxAngle);
-            // return false;
-        }
+        //     //     if (Physics.Raycast(ray, out hit, maxRadius))  return hit.transform.position == targetPos;
+        //     // }
+        //     return (angle <= maxAngle);
+        //     // return false;
+        // }
 
     }
 

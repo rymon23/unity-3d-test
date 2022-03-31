@@ -56,6 +56,7 @@ namespace Hybrid.Systems
                                 // Debug.Log(myTargeting + "current targets: [" + myTargeting.trackedTargetCount + "]");
                                 Transform priorityTarget = null;
                                 float priorityLevel = 0;
+                                float priorityDistance = -1;
 
                                 string priorityTargetRefId = null;
                                 float priorityTargetLostTimer = 0f;
@@ -109,13 +110,15 @@ namespace Hybrid.Systems
                                                 Debug.Log("Enemy found");
                                             }
 
+                                            bool hasTargetLOS = UtilityHelpers.IsTargetDetectable(myFOV.viewPoint, targetActor.transform.position, myFOV.maxAngle, myFOV.maxRadius);
+
                                             float distance = Vector3.Distance(myActor.transform.position, targetActor.transform.position);
                                             // TrackedTarget trackedTarget;
                                             if (!sharesFaction && !targetLost && myTargeting.trackedTargetStats.ContainsKey(targetRefId))
                                             {
                                                 trackedTarget = (TrackedTarget)myTargeting.trackedTargetStats[targetRefId];
 
-                                                if (distance < myFOV.maxRadius && UtilityHelpers.IsTargetDetectable(myActor.transform, targetActor.transform.position, myFOV.maxAngle, myFOV.maxRadius))
+                                                if (hasTargetLOS && distance < myFOV.maxRadius)
                                                 {
                                                     trackedTarget.targetLostTimer = 23f;
                                                     myTargeting.trackedTargetStats[targetRefId] = trackedTarget;
@@ -146,14 +149,25 @@ namespace Hybrid.Systems
                                             if (!sharesFaction && !targetLost)
                                             {
                                                 // int priority = -(int)Math.Floor(distance + FindTargetQuadrantSystem.getFOVAngle(myActor.transform, targetActor.transform.position, myFOV.maxAngle, myFOV.maxRadius) );
-                                                float priority = distance;// * -10f;
+
+
+                                                // float newPriority  = distance;// * -10f;
+                                                float newPriority = 4f;
+                                                if (hasTargetLOS) newPriority += 9f;
+
+                                                if (priorityDistance == -1 || priorityDistance > distance) {
+                                                    priorityDistance = distance;
+
+                                                    newPriority += 4;
+                                                }
+
 
                                                 // Debug.Log(myActor.gameObject.name + ": Entity found in targets! " + targetActor.name + "\n Priority: " + priority + " | Distance: " + distance);
                                                 // Debug.Log("Target Priority: " + priority);
 
-                                                if (priorityLevel == 0 || priorityLevel > priority)
+                                                if (priorityLevel <= 0 || priorityLevel > newPriority)
                                                 {
-                                                    priorityLevel = priority;
+                                                    priorityLevel = newPriority;
                                                     priorityTarget = targetActor.gameObject.transform;
 
                                                     // TEMP

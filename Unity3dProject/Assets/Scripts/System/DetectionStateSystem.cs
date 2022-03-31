@@ -45,7 +45,7 @@ namespace Hybrid.Systems
 
                                 // float distance = Vector3.Distance(actor.transform.position, currentTarget.position);
 
-                                if (UtilityHelpers.IsTargetDetectable(actor.transform, currentTarget.position, myFOV.maxAngle, myFOV.maxRadius))
+                                if (UtilityHelpers.IsTargetDetectable(myFOV.viewPoint, currentTarget.transform.position, myFOV.maxAngle, myFOV.maxRadius))
                                 {
                                     detectionStateData.ResetTimer_TargetRegainVisibility();
                                     detectionStateData.targetTrackingState = TargetTrackingState.active;
