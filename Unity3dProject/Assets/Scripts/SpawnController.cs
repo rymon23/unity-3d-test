@@ -30,7 +30,7 @@ public class SpawnController : MonoBehaviour
             Debug.Log("SPAWN!");
             // Entity newEntity = entityManager.Instantiate(entity);
 
-            Vector3 spawnPos = UtilityHelpers.getRandomNavmeshPoint(radius, this.transform.position);
+            Vector3 spawnPos = UtilityHelpers.GetRandomNavmeshPoint(radius, this.transform.position);
             Instantiate(prefab, new Vector3(spawnPos.x, 3, spawnPos.z), Quaternion.identity);
         }
     }

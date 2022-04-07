@@ -55,7 +55,8 @@ namespace Hybrid.Systems
                     targeting.targetDistance = distance;
 
                     Vector3 targetPos = targeting.currentTarget.transform.position + (targeting.currentTarget.transform.up * 1.2f);
-                    bool hasTargetInFOV = UtilityHelpers.IsInFOVScope(myFOV.viewPoint, targetPos, myFOV.maxAngle, myFOV.maxRadius);
+                    // bool hasTargetInFOV = UtilityHelpers.IsInFOVScope(myFOV.viewPoint, targetPos, myFOV.maxAngle, myFOV.maxRadius);
+                    bool hasTargetInFOV = UtilityHelpers.IsTargetDetectable(myFOV.viewPoint, targetPos, myFOV.maxAngle, myFOV.maxRadius);
 
 
                     UpdateActorCombatMovement(distance, combatStateData, myNavAgent, myDecisionController, animationState);
@@ -65,6 +66,16 @@ namespace Hybrid.Systems
                     targeting.targetAttackDistance = attackDistance;
 
 
+
+                    ActorSpells actorSpells = actor.GetComponent<ActorSpells>();
+                    if (actorSpells != null && actorSpells.spellsTemp != null && actorSpells.spellsTemp.Length > 0)
+                    {
+                        if (!animationState.isCasting && actorHealth.magic >= actorSpells.spellsTemp[0].baseMagicCost)
+                        {
+                            animator.SetTrigger("tCastSpell");
+                            return;
+                        }
+                    }
 
                     // Rifle Bash
                     if (combatStateData.combatMovementBehaviorType == CombatMovementBehaviorType.shooter && hasTargetInFOV && animationState.IsAbleToAttack())
@@ -76,12 +87,12 @@ namespace Hybrid.Systems
                         }
                         else
                         {
-                            Weapon weapon = equipSlotController.handEquipSlots[0].weapon;
-                            if (weapon != null)
-                            {
-                                weapon.bShouldFire = true;
-                                return;
-                            }
+                            // Weapon weapon = equipSlotController.handEquipSlots[0].weapon;
+                            // if (weapon != null && UtilityHelpers.HasShotLinedUp(weapon.firePoint, targetPos) && UtilityHelpers.HasLOS(weapon.firePoint, targetPos))
+                            // {
+                            //     weapon.bShouldFire = true;
+                            //     return;
+                            // }
 
                         }
                     }
@@ -162,12 +173,12 @@ namespace Hybrid.Systems
             if (targetDistance < keepDistMin || navStopped || animationState.IsStaggered())
             {
                 combatStateData.combatMovementType = CombatMovementType.fallBack;
-                combatStateData.UpdateMovementTimer(combatStateData.combatMovementType, 0.5f);
+                // combatStateData.UpdateMovementTimer(combatStateData.combatMovementType, 0.5f);
             }
             else if (targetDistance > keepDistMax)
             {
                 combatStateData.combatMovementType = CombatMovementType.pressAttack;
-                combatStateData.UpdateMovementTimer(combatStateData.combatMovementType, 0.5f);
+                // combatStateData.UpdateMovementTimer(combatStateData.combatMovementType, 0.5f);
             }
 
             // Update movment type if timmer complete

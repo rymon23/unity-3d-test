@@ -8,7 +8,7 @@ namespace Hybrid.Components
         public Faction[] factions
         {
             get => _factions;
-            private set => _factions = value;
+            set => _factions = value;
         }
     }
 }

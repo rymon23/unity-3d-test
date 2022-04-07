@@ -33,13 +33,18 @@ namespace Hybrid.Systems
                     {
 
                         // Check if actor is Dead
-                        if (actorHealth.deathState >= DeathState.dying)
+                        if (actorHealth.isDead())
                         {
                             return;
                         }
 
                         if (myActor.gameObject.tag != "Player")
                         {
+
+                            string myRefId = UtilityHelpers.getActorEntityRefId(myEntity);
+                            int allies = 0;
+                            int enemies = 0;
+
 
                             if (myTargeting.trackedTargets == null)
                             {
@@ -51,6 +56,9 @@ namespace Hybrid.Systems
                                 myTargeting.trackedTargetCount = myTargeting.trackedTargets.Count;
                             }
 
+                            Debug.Log(myActor.gameObject.name + " check trackedTargets: " + myTargeting.trackedTargets.Count);
+
+
                             if (myTargeting.trackedTargetCount > 0)
                             {
                                 // Debug.Log(myTargeting + "current targets: [" + myTargeting.trackedTargetCount + "]");
@@ -61,10 +69,11 @@ namespace Hybrid.Systems
                                 string priorityTargetRefId = null;
                                 float priorityTargetLostTimer = 0f;
 
+
                                 ActorFactions actorFactions = myActor.gameObject.GetComponent<ActorFactions>();
                                 if (actorFactions != null)
                                 {
-                                    Debug.Log("Factions found: " + actorFactions.factions.Length);
+                                    Debug.Log(myActor.gameObject.name + "- Factions: " + actorFactions.factions.Length);
                                 }
 
                                 Entities.WithAll<DetectionStateData, IsActor, Targeting, ActorFOV, CombatStateData>()
@@ -87,7 +96,8 @@ namespace Hybrid.Systems
 
 
                                             // Check Faction Relations
-                                            bool sharesFaction = false;
+                                            bool isHostile = false;
+
                                             ActorFactions targetFactions = targetActor.gameObject.GetComponent<ActorFactions>();
                                             if (actorFactions != null && targetFactions != null && actorFactions.factions.Length > 0 && targetFactions.factions.Length > 0)
                                             {
@@ -99,13 +109,21 @@ namespace Hybrid.Systems
                                                         trackedTarget.relationship = Faction.GetMultiFactionRelationship(actorFactions.factions, targetFactions.factions);
                                                         myTargeting.trackedTargetStats[targetRefId] = trackedTarget;
 
-                                                        Debug.Log("Faction Relationship: " + trackedTarget.relationship);
+                                                        Debug.Log("Faction Relationship: " + trackedTarget.relationship + " / myRefID: " + myRefId);
                                                     }
-                                                    sharesFaction = (trackedTarget.relationship == FactionRelationship.ally);
+                                                    if (trackedTarget.relationship == FactionRelationship.ally)
+                                                    {
+                                                        allies++;
+                                                    }
+                                                    else if (trackedTarget.relationship == FactionRelationship.enemy)
+                                                    {
+                                                        enemies++;
+                                                    }
+                                                    isHostile = trackedTarget.relationship == FactionRelationship.enemy;
                                                 }
 
                                             }
-                                            if (!sharesFaction)
+                                            if (isHostile)
                                             {
                                                 Debug.Log("Enemy found");
                                             }
@@ -114,7 +132,7 @@ namespace Hybrid.Systems
 
                                             float distance = Vector3.Distance(myActor.transform.position, targetActor.transform.position);
                                             // TrackedTarget trackedTarget;
-                                            if (!sharesFaction && !targetLost && myTargeting.trackedTargetStats.ContainsKey(targetRefId))
+                                            if (isHostile && !targetLost && myTargeting.trackedTargetStats.ContainsKey(targetRefId))
                                             {
                                                 trackedTarget = (TrackedTarget)myTargeting.trackedTargetStats[targetRefId];
 
@@ -146,26 +164,42 @@ namespace Hybrid.Systems
                                                 }
                                             }
 
-                                            if (!sharesFaction && !targetLost)
+                                            if (isHostile && !targetLost)
                                             {
                                                 // int priority = -(int)Math.Floor(distance + FindTargetQuadrantSystem.getFOVAngle(myActor.transform, targetActor.transform.position, myFOV.maxAngle, myFOV.maxRadius) );
+                                                AnimationState targetCombatState = targetActor.gameObject.GetComponent<AnimationState>();
 
-
-                                                // float newPriority  = distance;// * -10f;
-                                                float newPriority = 4f;
-                                                if (hasTargetLOS) newPriority += 9f;
-
-                                                if (priorityDistance == -1 || priorityDistance > distance) {
+                                                bool prioritize = false;
+                                                bool distanceUpdated = false;
+                                                float newPriority = 2f;
+                                                if (priorityDistance == -1 || distance < priorityDistance)
+                                                {
+                                                    distanceUpdated = true;
                                                     priorityDistance = distance;
+                                                    newPriority += 8;
+                                                }
 
-                                                    newPriority += 4;
+                                                if (hasTargetLOS) newPriority += 6f;
+                                                // Is targetting me
+                                                if (tarTargeting != null && tarTargeting.currentTargetRefId == myRefId)
+                                                {
+                                                    newPriority += 6;
+
+                                                    if (distanceUpdated && (hasTargetLOS || distance < 1.5f))
+                                                    {
+                                                        newPriority += 12;
+                                                        if (targetCombatState.attackAnimationState < AttackAnimationState.attackHitFinish)
+                                                        {
+                                                            newPriority += 6 * (1 + (int)targetCombatState.attackAnimationState);
+                                                        }
+                                                    }
                                                 }
 
 
                                                 // Debug.Log(myActor.gameObject.name + ": Entity found in targets! " + targetActor.name + "\n Priority: " + priority + " | Distance: " + distance);
                                                 // Debug.Log("Target Priority: " + priority);
 
-                                                if (priorityLevel <= 0 || priorityLevel > newPriority)
+                                                if (prioritize || priorityLevel <= 0 || priorityLevel < newPriority)
                                                 {
                                                     priorityLevel = newPriority;
                                                     priorityTarget = targetActor.gameObject.transform;
@@ -193,7 +227,7 @@ namespace Hybrid.Systems
                                     ActorEventManger actorEventManger = myActor.GetComponent<ActorEventManger>();
                                     if (actorEventManger != null) actorEventManger.CombatTargetUpdate(priorityTarget.gameObject);
 
-                                    Debug.Log("New Priority Target! " + myTargeting.currentTarget.name);
+                                    Debug.Log(myActor.gameObject.name + " - New Priority Target! " + myTargeting.currentTarget.name);
                                 }
                                 else
                                 {
@@ -206,15 +240,29 @@ namespace Hybrid.Systems
                             if (myTargeting.currentTarget != null)
                             {
                                 ActorHealth targetHealth = myTargeting.currentTarget.gameObject.GetComponent<ActorHealth>();
-                                if (targetHealth.deathState >= DeathState.dying)
+                                if (targetHealth.isDead())
                                 {
                                     myTargeting.currentTarget = null;
                                     myTargeting.currentTargetRefId = null;
+                                    myTargeting.allycount = allies;
+                                    myTargeting.enemycount = enemies;
                                     myFOV.currentTarget = null;
 
                                     ActorEventManger actorEventManger = myActor.GetComponent<ActorEventManger>();
                                     if (actorEventManger != null) actorEventManger.CombatTargetUpdate(null);
+
                                 }
+                                else
+                                {
+                                    if (!myCombatStateData.IsInCombat())
+                                    {
+                                        myCombatStateData.combatState = CombatState.active;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                myCombatStateData.EvaluateCombatState(true);
                             }
 
                         }

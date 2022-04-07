@@ -10,7 +10,6 @@ public class ParryHitBox : MonoBehaviour
     [SerializeField] IsActor actor;
     [SerializeField] ActorFOV actorFOV;
     public BoxCollider col;
-    public Animator animator;
     public AnimationState animationState;
     public ActorEventManger actorEventManger;
 
@@ -19,38 +18,64 @@ public class ParryHitBox : MonoBehaviour
         col = GetComponent<BoxCollider>();
         actor = GetComponentInParent<IsActor>();
         actorFOV = GetComponentInParent<ActorFOV>();
-        animator = GetComponentInParent<Animator>();
         animationState = GetComponentInParent<AnimationState>();
         actorEventManger = GetComponentInParent<ActorEventManger>();
     }
 
-    void onHitBlocked(float fDamage)
+    void onHitBlocked(Weapon weapon)
     {
-        if (actorEventManger != null) {
+        if (actorEventManger != null)
+        {
             actorEventManger.TriggerAnim_Block();
-            actorEventManger.BlockHit(fDamage);
+            actorEventManger.BlockWeaponHit(weapon);
+        }
+    }
+    public void onHitBlocked(Projectile projectile)
+    {
+        if (actorEventManger != null)
+        {
+            actorEventManger.TriggerAnim_Block();
+            actorEventManger.BlockProjectileHit(projectile);
         }
     }
 
+    // private void OnTriggerExit(Collider other)
+    // {
+    //     Debug.Log("OnTriggerExit: " + gameObject.name + "| Collider: " + col.gameObject.name);
+
+    //     if (col.CompareTag("BulletHitBox"))
+    //     {
+    //         Projectile projectile = col.GetComponent<Projectile>();
+    //         onHitBlocked(projectile);
+    //         Destroy(projectile.gameObject);
+    //         Debug.Log("Blocked hit from " + gameObject.name);
+    //     }
+    // }
+
     private void OnTriggerEnter(Collider col)
     {
-        // Debug.Log("onTriggerEnter: " + gameObject.name + "| Collider: " + col.gameObject.name);
-        if (col.CompareTag("WeaponHitBox"))//&& animationState.isBlocking)
-        {
-            // int currentBlockVariant = ((int)animator.GetFloat("fAnimBlockType"));
-            // int maxBlendTreeLength = 6;
-            // int nextBlockType = (currentBlockVariant + UnityEngine.Random.Range(1, maxBlendTreeLength)) % maxBlendTreeLength;
+        Debug.Log("onTriggerEnter: " + gameObject.name + "| Collider: " + col.gameObject.name);
 
+        if (col.CompareTag("BulletHitBox"))
+        {
+            Projectile projectile = col.GetComponent<Projectile>();
+            onHitBlocked(projectile);
+            Destroy(projectile.gameObject);
+            Debug.Log("Blocked hit from " + gameObject.name);
+
+        }
+        else if (col.CompareTag("WeaponHitBox"))//&& animationState.isBlocking)
+        {
             WeaponCollider weaponCollider = col.GetComponent<WeaponCollider>();
             Weapon weapon = weaponCollider.weapon;
             Debug.Log("WeaponHitBox found on " + weapon + " On " + gameObject.name);
 
-            bool hasTargetInFOV = UtilityHelpers.IsInFOVScope(actor.transform, weapon.transform.position, actorFOV.maxAngle, actorFOV.maxRadius);
-            if (!hasTargetInFOV)
-            {
-                Debug.Log("Ignore Block from ourside FOV " + weapon + " On " + gameObject.name);
-                return;
-            }
+            // bool hasTargetInFOV = UtilityHelpers.IsInFOVScope(actor.transform, weapon.transform.position, actorFOV.maxAngle, actorFOV.maxRadius);
+            // if (!hasTargetInFOV)
+            // {
+            //     Debug.Log("Ignore Block from ourside FOV " + weapon + " On " + gameObject.name);
+            //     return;
+            // }
 
             if (weapon != null)
             {
@@ -61,10 +86,7 @@ public class ParryHitBox : MonoBehaviour
                 }
 
                 weapon.DisableWeaponCollider();
-
-                // animator.SetFloat("animBlockType", nextBlockType);
-                // animator.SetTrigger("BlockHit");
-                onHitBlocked(10f);
+                onHitBlocked(weapon);
 
                 Debug.Log("Blocked Hit from " + weaponCollider.weapon + " On " + gameObject.name);
             }

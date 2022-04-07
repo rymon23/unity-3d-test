@@ -7,9 +7,9 @@ using Hybrid.Components;
 public class MoveOnAgent : MonoBehaviour
 {
 
-    NavMeshAgent agent;
-    Animator animator;
-    CombatStateData combatStateData;
+    [SerializeField] NavMeshAgent agent;
+    [SerializeField] Animator animator;
+    [SerializeField] CombatStateData combatStateData;
 
 
     void Start()

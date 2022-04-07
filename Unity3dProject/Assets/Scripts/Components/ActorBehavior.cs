@@ -1,3 +1,5 @@
+using System.Linq;
+using System;
 using UnityEngine;
 
 
@@ -34,6 +36,9 @@ namespace Hybrid.Components
 
     public class ActorBehavior : MonoBehaviour
     {
+
+        [SerializeField] private float fleeHealthThreshhold = 0f;
+        [SerializeField] private bool _shouldFlee = false;
         [SerializeField] private Behavior_Aggression _aggression = Behavior_Aggression.aggressive;
         public Behavior_Aggression aggression
         {
@@ -59,6 +64,35 @@ namespace Hybrid.Components
         {
             get => _assistance;
             set => _assistance = value;
+        }
+
+        ActorEventManger actorEventManger;
+
+
+        private void Start()
+        {
+            actorEventManger = GetComponent<ActorEventManger>();
+            if (actorEventManger != null)
+            {
+                actorEventManger.onEvaluateFleeingState += EvaluateFleeState;
+            }
+        }
+        private void OnDestroy()
+        {
+            if (actorEventManger != null) actorEventManger.onEvaluateFleeingState -= EvaluateFleeState;
+        }
+
+        public void EvaluateFleeState(float currentHealthPercent)
+        {
+
+            if (confidence == Behavior_Confidence.cowardly)
+            {
+                _shouldFlee = true;
+                fleeHealthThreshhold = 1;
+                return;
+            }
+            fleeHealthThreshhold = (1 - ((float)confidence / 5f));
+            _shouldFlee = currentHealthPercent < fleeHealthThreshhold;
         }
 
     }

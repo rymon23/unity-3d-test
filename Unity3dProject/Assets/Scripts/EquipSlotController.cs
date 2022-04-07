@@ -8,14 +8,6 @@ public enum HandEquipSide
 
 public class EquipSlotController : MonoBehaviour
 {
-
-    public HandEquipSlot[] handEquipSlots;
+    public HandEquipSlot[] handEquipSlots = new HandEquipSlot[2];
     public HandEquipSide activeHand = 0;
-
-    void Start()
-    {
-        if (handEquipSlots == null) {
-            handEquipSlots = new HandEquipSlot[2];
-        }
-    }
 }

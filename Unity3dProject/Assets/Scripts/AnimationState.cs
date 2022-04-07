@@ -16,6 +16,14 @@ public enum BlockAnimationState
     blockHitFinish = 2,
     blockfinish = 3
 }
+public enum BashAnimationState
+{
+    start = 0,
+    preHit = 1,
+    hitStart = 2,
+    hitFinish = 3,
+    finish = 4
+}
 public enum DodgeAnimationState
 {
     dodgeStart = 0,
@@ -81,6 +89,7 @@ public class AnimationState : MonoBehaviour
     public bool bDisableAttacking = false;
     public bool isAttacking = false;
     public bool isBlocking = false;
+    public bool isBashing = false;
     public bool isDodging = false;
     public bool isCasting = false;
     public bool isWeaponDrawn = false;
@@ -104,14 +113,15 @@ public class AnimationState : MonoBehaviour
         set
         {
             _attackAnimationState = value;
-            if (_attackAnimationState > AttackAnimationState.attackHitFinish)
-            {
-                isAttacking = false;
-            }
-            else
-            {
-                isAttacking = true;
-            }
+            isAttacking = (_attackAnimationState < AttackAnimationState.attackfinish);
+            // if (_attackAnimationState >= AttackAnimationState.attackHitFinish)
+            // {
+            //     isAttacking = false;
+            // }
+            // else
+            // {
+            //     isAttacking = true;
+            // }
         }
     }
 
@@ -129,6 +139,16 @@ public class AnimationState : MonoBehaviour
             // }
         }
     }
+    private BashAnimationState _bashAnimationState = 0;
+    public BashAnimationState bashAnimationState
+    {
+        get => _bashAnimationState;
+        set
+        {
+            _bashAnimationState = value;
+            isBashing = (_bashAnimationState < BashAnimationState.finish);
+        }
+    }
 
     private DrawAnimationState _drawAnimationState = DrawAnimationState.finish;
     public DrawAnimationState drawAnimationState
@@ -137,14 +157,15 @@ public class AnimationState : MonoBehaviour
         set
         {
             _drawAnimationState = value;
-            if (_drawAnimationState >= DrawAnimationState.weaponReady)
-            {
-                isWeaponDrawn = true;
-            }
-            else
-            {
-                isWeaponDrawn = false;
-            }
+            isWeaponDrawn = (_drawAnimationState >= DrawAnimationState.weaponReady);
+            // if (_drawAnimationState >= DrawAnimationState.weaponReady)
+            // {
+            //     isWeaponDrawn = true;
+            // }
+            // else
+            // {
+            //     isWeaponDrawn = false;
+            // }
         }
     }
 
@@ -155,10 +176,7 @@ public class AnimationState : MonoBehaviour
         set
         {
             _sheathAnimationState = value;
-            if (_sheathAnimationState > SheathAnimationState.start)
-            {
-                isWeaponDrawn = false;
-            }
+            if (_sheathAnimationState > SheathAnimationState.start) isWeaponDrawn = false;
         }
     }
     private DodgeAnimationState _dodgeAnimationState = 0;
@@ -168,14 +186,7 @@ public class AnimationState : MonoBehaviour
         set
         {
             _dodgeAnimationState = value;
-            if (_dodgeAnimationState < DodgeAnimationState.dodgefinish)
-            {
-                isDodging = true;
-            }
-            else
-            {
-                isDodging = false;
-            }
+            isDodging = (_dodgeAnimationState < DodgeAnimationState.dodgefinish);
         }
     }
 
@@ -186,14 +197,7 @@ public class AnimationState : MonoBehaviour
         set
         {
             _castAnimationState = value;
-            if (_castAnimationState < AnimState_Casting.castfinish)
-            {
-                isCasting = true;
-            }
-            else
-            {
-                isCasting = false;
-            }
+            isCasting = (_castAnimationState < AnimState_Casting.castfinish);
         }
     }
 
@@ -204,23 +208,18 @@ public class AnimationState : MonoBehaviour
         set
         {
             _animState_Stagger = value;
-            if (_animState_Stagger < AnimState_Stagger.finish)
-            {
-                isCasting = true;
-            }
-            else
-            {
-                isCasting = false;
-            }
+            isStaggered = (_animState_Stagger < AnimState_Stagger.finish);
         }
     }
 
     AttackWeaponType attackWeaponType = 0;
     public bool IsInAttackHitFame() => isAttacking && attackAnimationState == AttackAnimationState.attackHitStart;
     public bool IsInBlockHitFame() => isBlocking && blockAnimationState == BlockAnimationState.blockHitStart;
+    public bool IsInBashHitFame() => isBashing && bashAnimationState == BashAnimationState.hitStart;
     public bool IsInCastFireFame() => isCasting && castAnimationState == AnimState_Casting.castingFireStart;
     public bool IsInDodgeEvadeFame() => isDodging && dodgeAnimationState == DodgeAnimationState.dodgeEvadeStart;
     public bool isSheathingWeapon() => sheathAnimationState < SheathAnimationState.finish;
     public bool isDrawingWeapon() => drawAnimationState < DrawAnimationState.finish;
     public bool IsStaggered() => isStaggered && animState_Stagger < AnimState_Stagger.finish;
+    public bool IsAbleToAttack() => !bDisableAttacking && !isAttacking && !IsInBlockHitFame() && !IsStaggered() && !IsInBashHitFame() && !isSheathingWeapon() && !isDrawingWeapon();
 }

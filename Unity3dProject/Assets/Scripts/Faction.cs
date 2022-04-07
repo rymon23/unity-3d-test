@@ -24,13 +24,13 @@ public class Faction : ScriptableObject
     // PUBLIC FACING FOR THE EDITOR 
     // TO DO: Find a better way
     public Faction[] allies;
-    public Faction[] enemys;
+    public Faction[] enemies;
 
 
     public static FactionRelationship GetFactionRelationship(Faction factionA, Faction factionB)
     {
-        Debug.Log("FactionA enemies: " + factionA.enemyRelations.Count);
-        Debug.Log("FactionA allies: " + factionA.allyRelations.Count);
+        Debug.Log("Faction - "  + factionA.name  +": enemies: " + factionA.enemyRelations.Count);
+        Debug.Log("Faction - "  + factionA.name  +": allies: " + factionA.allyRelations.Count);
 
         if (factionA.enemyRelations.Contains(factionB.GetInstanceID())) return FactionRelationship.enemy;
         if (factionA.allyRelations.Contains(factionB.GetInstanceID())) return FactionRelationship.ally;
@@ -69,11 +69,11 @@ public class Faction : ScriptableObject
                 allyRelations.Add(allyFaction.GetInstanceID());
             }
         }
-        if (enemys != null && enemys.Length > 0)
+        if (enemies != null && enemies.Length > 0)
         {
-            foreach (var enemyFaction in allies)
+            foreach (var enemyFaction in enemies)
             {
-                allyRelations.Add(enemyFaction.GetInstanceID());
+                enemyRelations.Add(enemyFaction.GetInstanceID());
             }
         }
         Debug.Log("Faction: SetupRelations!");

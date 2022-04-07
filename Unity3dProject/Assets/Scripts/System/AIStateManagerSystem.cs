@@ -36,18 +36,18 @@ namespace Hybrid.Systems
                             Debug.Log("targeting _id: " + targeting.refId);
                         }
 
-                        if (actorAIStateData.aiState != AIState.combat)
+                        if (actorAIStateData.aiBehaviorState != AIState_Behavior.combat)
                         {
-                            if (combatStateData.IsInCombat())
+                            if (combatStateData.combatState != CombatState.inactive)
                             {
-                                actorAIStateData.aiState = AIState.combat;
+                                actorAIStateData.aiBehaviorState = AIState_Behavior.combat;
                             }
                         }
                         else
                         {
-                            if (!combatStateData.IsInCombat())
+                            if (combatStateData.combatState == CombatState.inactive)
                             {
-                                actorAIStateData.aiState = AIState.idle;
+                                actorAIStateData.aiBehaviorState = AIState_Behavior.idle;
                             }
                         }
                     });

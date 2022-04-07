@@ -1,19 +1,42 @@
+using UnityEngine;
+using UnityEngine.Events;
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
+using System;
 
 public class Spell : MonoBehaviour
 {
-    private Vector3 shootDir;
+    public Delegate onDamageHealth;
+    // public void DamageHealth() => onDamageHealth?.Invoke();
+    public UnityEvent[] unityEvent;
 
-    public void Setup(Vector3 shootDir)
+    [SerializeField] public List<IMagicEffect> array;
+    public UnityAction<GameObject>[] unityAction;
+    public ScriptableObject[] scriptableObjects;
+
+    [SerializeField] public IMagicEffect[] imagicEffects;
+    // [SerializeField] public [] objects;
+
+    public float damage = 33f;
+    // public float speed = 24f;
+    public Weapon weapon;
+    [SerializeField] private MagicEffect[] effects;
+
+
+    private Vector3 shootDir;
+    private Rigidbody rigidbody;
+    private void Start()
     {
-        this.shootDir = shootDir;
+        rigidbody = GetComponent<Rigidbody>();
+        // rigidbody.velocity = transform.forward * speed;
     }
 
-    private void Update()
+    private void OnTriggerEnter(Collider other)
     {
-        float moveSpeed = 100f;
-        transform.position += shootDir * moveSpeed * Time.deltaTime;
+        Destroy(gameObject);
+    }
+
+    public void TestMethod()
+    {
     }
 }

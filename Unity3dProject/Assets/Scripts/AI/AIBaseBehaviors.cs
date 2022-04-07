@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using Hybrid.Components;
-using Panda;
 
 public class AIBaseBehaviors : MonoBehaviour
 {
@@ -30,30 +29,30 @@ public class AIBaseBehaviors : MonoBehaviour
      }
 
 
-    [Task]
-    public void Task_UpdateWanderDestination()
-    {   
-        Vector3 destination;
+    // [Task]
+    // public void Task_UpdateWanderDestination()
+    // {   
+    //     Vector3 destination;
 
-        if (myNavData) {
-            destination = GetRandomNavmeshPosition(myNavData.wanderCenterPosition, myNavData.wanderRadius);
-        }else {
-            destination = GetRandomNavmeshPosition(transform.position, 15f);
-        }
-        myNavData.travelPosition = destination;
-        agent.SetDestination(destination);
-        Task.current.Succeed();
-    }
+    //     if (myNavData) {
+    //         destination = GetRandomNavmeshPosition(myNavData.wanderCenterPosition, myNavData.wanderRadius);
+    //     }else {
+    //         destination = GetRandomNavmeshPosition(transform.position, 15f);
+    //     }
+    //     myNavData.travelPosition = destination;
+    //     agent.SetDestination(destination);
+    //     Task.current.Succeed();
+    // }
 
-    [Task]
-    public void Task_TravelToDestination()
-    {
-        if( Task.isInspected )
-                Task.current.debugInfo = string.Format("t={0:0.00}", Time.time);
+    // [Task]
+    // public void Task_TravelToDestination()
+    // {
+    //     if( Task.isInspected )
+    //             Task.current.debugInfo = string.Format("t={0:0.00}", Time.time);
 
-        if(agent.remainingDistance <= agent.stoppingDistance && !agent.pathPending)
-        {
-            Task.current.Succeed();
-        }     
-    }
+    //     if(agent.remainingDistance <= agent.stoppingDistance && !agent.pathPending)
+    //     {
+    //         Task.current.Succeed();
+    //     }     
+    // }
 }

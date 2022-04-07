@@ -57,13 +57,15 @@ namespace Hybrid.Systems
                         if (hasGun)
                         {
                             animationState.isBlocking = false;
-                            animationState.isWeaponDrawn = true;
                             blockingCollider?.SetActive(false);
+                            combatStateData.combatMovementBehaviorType = CombatMovementBehaviorType.shooter;
                             animator.SetBool("Blocking", false);
-                            animator.SetBool("IsWeaponOut", true);
                             animator.SetFloat("IdleType", 2f);
                             animator.SetFloat("animWeaponType", 2);
                             animator.SetInteger("animMovementType", 2);
+
+                            animationState.isWeaponDrawn = combatStateData.combatState >= CombatState.active;
+                            animator.SetBool("IsWeaponOut", animationState.isWeaponDrawn);
                             return;
                         }
 

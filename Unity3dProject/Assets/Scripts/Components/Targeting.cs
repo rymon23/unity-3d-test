@@ -31,6 +31,12 @@ namespace Hybrid.Components
         public Transform currentNavGoal = null;
         public HashSet<string> trackedTargets = null;
         public Hashtable trackedTargetStats = null;
+        public Hashtable allies = null;
+        public Vector3 alertedPosition = Vector3.zero;
+        public Vector3 searchCenterPos = Vector3.zero;
+        public Vector3 fallbackPosition = Vector3.zero;
+        public Vector3 attackPos = Vector3.zero;
+
         public int allycount = 0;
         public int enemycount = 0;
 
@@ -39,12 +45,9 @@ namespace Hybrid.Components
         public Transform closestTarget = null;
         public float targetDistance;
         public float targetAttackDistance;
-        public Vector3 attackPos;
-
 
         public bool hasTargetInFOV = false;
         public Transform lastTarget = null;
-        public Vector3 searchCenterPos;
         public float searchRadius;
         public float targetLostTimer;
     }

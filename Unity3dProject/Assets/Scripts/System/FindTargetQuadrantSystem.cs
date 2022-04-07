@@ -103,8 +103,19 @@ namespace Hybrid.Systems
                     if (closestTargetEntity != Entity.Null)
                     {
                         Entities.WithAll<IsActor, Targeting, ActorFOV, ActorFactions>()
-                        .ForEach((Entity targetEntity, Transform targetTransform) =>
+                        .ForEach((Entity targetEntity, Transform targetTransform, CombatStateData combatStateData, Targeting targeting) =>
                         {
+                            if (combatStateData.IsAlerted())
+                            {
+                                Debug.Log("alerted entity: " + targetTransform.gameObject.name);
+                                if (myTargeting.trackedTargets != null)
+                                {
+                                    Debug.Log("alerted entity: " + targetTransform.gameObject.name + " - trackedTargetStats: " + myTargeting.trackedTargetStats.Count);
+                                    Debug.Log("alerted entity: " + targetTransform.gameObject.name + " - trackedTargets: " + myTargeting.trackedTargets.Count);
+                                }
+                            }
+
+
                             if (targetEntity.Equals(closestTargetEntity))
                             {
                                 // myFOV.currentTarget = targetTransform.gameObject;

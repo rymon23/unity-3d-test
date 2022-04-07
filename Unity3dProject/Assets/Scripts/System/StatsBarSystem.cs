@@ -31,15 +31,13 @@ namespace Hybrid.Systems
 
                         if (actorHealth.deathState < DeathState.dying)
                         {
-                            float healthPerc = actorHealth.GetHealthPercentage();
-
                             // Debug.Log("healthPerc: " + healthPerc + " IsInCombat: " + combatStateData.IsInCombat());
 
-                            if (combatStateData.IsInCombat() || healthPerc < 0.98)
+                            if (combatStateData.IsInCombat() || actorHealth.healthPercent < 0.98)
                             {
                                 actorHealth.healthBar.gameObject.SetActive(true);
                                 actorHealth.healthBar.transform.LookAt(Camera.main.transform);
-                                actorHealth.healthBar.UpdateBar(healthPerc);
+                                actorHealth.healthBar.UpdateBar(actorHealth.healthPercent);
                             }
                             else
                             {

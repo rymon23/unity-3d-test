@@ -12,6 +12,7 @@ public class HitDamageController : MonoBehaviour
         if (actorEventManger != null)
         {
             actorEventManger.onTakeWeaponHit += TakeWeaponHit;
+            actorEventManger.onTakeBulletHit += TakeBulletHit;
         }
     }
 
@@ -30,9 +31,28 @@ public class HitDamageController : MonoBehaviour
         }
     }
 
+    void TakeBulletHit(Projectile projectile, HitPositionType hitPosition = 0)
+    {
+        Debug.Log("HitDamageController => TakeBulletHit: position: " + hitPosition);
+        if (projectile == null) return;
+
+        if (hitPosition == HitPositionType.head)
+        {
+            actorEventManger.DamageHealth(projectile.damage * 2);
+        }
+        else
+        {
+            actorEventManger.DamageHealth(projectile.damage);
+        }
+    }
+
     private void OnDestroy()
     {
-        if (actorEventManger != null) actorEventManger.onTakeWeaponHit -= TakeWeaponHit;
+        if (actorEventManger != null)
+        {
+            actorEventManger.onTakeWeaponHit -= TakeWeaponHit;
+            actorEventManger.onTakeBulletHit -= TakeBulletHit;
+        }
     }
 
 }
