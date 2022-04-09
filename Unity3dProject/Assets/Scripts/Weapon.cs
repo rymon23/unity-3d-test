@@ -182,7 +182,7 @@ public class Weapon : MonoBehaviour
         {
             Collider col = raycastHits[0].collider;
             Debug.Log("PreFireRayCheck => First Hit : " + col.name + " Layer: " + LayerMask.LayerToName(col.gameObject.layer));
-            Debug.DrawRay(firePoint.position, col.gameObject.transform.position, Color.yellow);
+            // Debug.DrawRay(firePoint.position, col.gameObject.transform.position, Color.yellow);
 
             ParryHitBox parryHitBox = col.gameObject.GetComponent<ParryHitBox>();
             if (parryHitBox != null)

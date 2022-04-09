@@ -8,13 +8,20 @@ namespace Hybrid.Components
     {
         public float wanderRadius = 25f;
         public float positionReachedDistanceMin = 5f;
-        public Vector3 wanderCenterPosition = Vector3.zero;
-        public Vector3 travelPosition = Vector3.zero;
+        public Transform wanderCenterPosition;
+        public Transform travelPosition;
 
-        private void Start() {
-            if (wanderCenterPosition == Vector3.zero) {
-                wanderCenterPosition = transform.position;
+        private void Start()
+        {
+            if (wanderCenterPosition == null)
+            {
+                wanderCenterPosition = transform;
             }
         }
+
+        //TEMP
+
+        bool bShouldHoldPosition = true;
+        public float holdPositionRadius = 8f;
     }
 }

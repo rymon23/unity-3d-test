@@ -33,6 +33,20 @@ namespace Hybrid.Systems
                         if (actorHealth.regenRate > 0 && actorHealth.health < actorHealth.healthMax) actorHealth.health += actorHealth.regenRate;
                         if (actorHealth.staminaRegenRate > 0 && actorHealth.stamina < actorHealth.staminaMax) actorHealth.stamina += actorHealth.staminaRegenRate;
                         if (actorHealth.magicRegenRate > 0 && actorHealth.magic < actorHealth.magicMax) actorHealth.magic += actorHealth.magicRegenRate;
+
+
+                        //Energy Armor
+                        if (actorHealth.energyArmorMax > 0 && actorHealth.energyArmor < actorHealth.energyArmorMax)
+                        {
+                            actorHealth.energyArmorRegenDelayTimer -= 1;
+
+                            if (actorHealth.energyArmorRegenDelayTimer <= 0)
+                            {
+                                actorHealth.energyArmor += actorHealth.energyArmorRegenRate;
+                                actorHealth.energyArmorRegenDelayTimer = 0;
+                            }
+                        }
+
                     });
             }
         }

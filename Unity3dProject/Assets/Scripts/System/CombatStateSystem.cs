@@ -70,7 +70,7 @@ namespace Hybrid.Systems
                     ActorSpells actorSpells = actor.GetComponent<ActorSpells>();
                     if (actorSpells != null && actorSpells.spellsTemp != null && actorSpells.spellsTemp.Length > 0)
                     {
-                        if (!animationState.isCasting && actorHealth.magic >= actorSpells.spellsTemp[0].baseMagicCost)
+                        if (attackDistance > 1.6f && !animationState.isCasting && actorHealth.magic >= actorSpells.spellsTemp[0].baseMagicCost)
                         {
                             animator.SetTrigger("tCastSpell");
                             return;
@@ -154,6 +154,18 @@ namespace Hybrid.Systems
         private void UpdateActorCombatMovement(float targetDistance, CombatStateData combatStateData, NavMeshAgent myNavAgent, AIDecisionController myDecisionController, AnimationState animationState)
         {
             combatStateData.movementUpdateTimer -= updateTime;
+
+
+            ActorNavigationData actorNavigationData = combatStateData.gameObject.GetComponent<ActorNavigationData>();
+            if (combatStateData.combatNavigationState == CombatNavigationState.holdPosition && actorNavigationData.travelPosition != null)
+            {
+                if (Vector3.Distance(combatStateData.gameObject.transform.position, actorNavigationData.travelPosition.position) > actorNavigationData.holdPositionRadius)
+                {
+                    combatStateData.combatMovementType = CombatMovementType.fallBack;
+                    Debug.Log("Need to hold position!");
+                    return;
+                }
+            }
 
             float keepDistMin;
             // float keepDistMin = combatStateData.keepDistanceMin > combatStateData.meleeAttackRange ? combatStateData.keepDistanceMin : combatStateData.meleeAttackRange;

@@ -65,6 +65,7 @@ namespace Hybrid.Systems
                                 Transform priorityTarget = null;
                                 float priorityLevel = 0;
                                 float priorityDistance = -1;
+                                int priorityDistanceUpdates = 0;
 
                                 string priorityTargetRefId = null;
                                 float priorityTargetLostTimer = 0f;
@@ -131,6 +132,7 @@ namespace Hybrid.Systems
                                             bool hasTargetLOS = UtilityHelpers.IsTargetDetectable(myFOV.viewPoint, targetActor.transform.position, myFOV.maxAngle, myFOV.maxRadius);
 
                                             float distance = Vector3.Distance(myActor.transform.position, targetActor.transform.position);
+
                                             // TrackedTarget trackedTarget;
                                             if (isHostile && !targetLost && myTargeting.trackedTargetStats.ContainsKey(targetRefId))
                                             {
@@ -169,6 +171,8 @@ namespace Hybrid.Systems
                                                 // int priority = -(int)Math.Floor(distance + FindTargetQuadrantSystem.getFOVAngle(myActor.transform, targetActor.transform.position, myFOV.maxAngle, myFOV.maxRadius) );
                                                 AnimationState targetCombatState = targetActor.gameObject.GetComponent<AnimationState>();
 
+                                                bool targetHasLOS = UtilityHelpers.IsTargetDetectable(tarFOV.viewPoint, myActor.transform.position, tarFOV.maxAngle, tarFOV.maxRadius);
+
                                                 bool prioritize = false;
                                                 bool distanceUpdated = false;
                                                 float newPriority = 2f;
@@ -176,11 +180,14 @@ namespace Hybrid.Systems
                                                 {
                                                     distanceUpdated = true;
                                                     priorityDistance = distance;
-                                                    newPriority += 8;
+                                                    priorityDistanceUpdates++;
+                                                    newPriority += (6 + (priorityDistanceUpdates * 2));
                                                 }
 
                                                 if (hasTargetLOS) newPriority += 6f;
                                                 // Is targetting me
+                                                if (targetHasLOS) newPriority += 6f;
+                                                
                                                 if (tarTargeting != null && tarTargeting.currentTargetRefId == myRefId)
                                                 {
                                                     newPriority += 6;

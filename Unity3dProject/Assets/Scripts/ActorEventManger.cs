@@ -4,11 +4,12 @@ using Hybrid.Components;
 
 public class ActorEventManger : MonoBehaviour
 {
-    public event Action onActorDeath;
-    public void ActorDeath() => onActorDeath?.Invoke();
+    public event Action<GameObject> onActorDeath;
+    public void ActorDeath() => onActorDeath?.Invoke(this.gameObject);
 
     public event Action<Weapon, HitPositionType> onTakeWeaponHit;
     public void TakeWeaponHit(Weapon weapon, HitPositionType hitPosition) => onTakeWeaponHit?.Invoke(weapon, hitPosition);
+
     public event Action<Projectile, HitPositionType> onTakeBulletHit;
     public void TakeBulletHit(Projectile projectile, HitPositionType hitPosition) => onTakeBulletHit?.Invoke(projectile, hitPosition);
 

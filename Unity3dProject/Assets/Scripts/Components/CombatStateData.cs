@@ -91,6 +91,12 @@ namespace Hybrid.Components
             get => _combatMovementBehaviorType;
             set => _combatMovementBehaviorType = value;
         }
+        [SerializeField] private CombatNavigationState _combatNavigationState = 0;
+        public CombatNavigationState combatNavigationState
+        {
+            get => _combatNavigationState;
+            set => _combatNavigationState = value;
+        }
         public bool _shouldAttack = false;
 
         public Hashtable movementBehaviors;

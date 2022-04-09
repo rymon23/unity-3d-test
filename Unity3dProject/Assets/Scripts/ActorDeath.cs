@@ -11,7 +11,7 @@ public class ActorDeath : MonoBehaviour
         if (actorEventManger != null) actorEventManger.onActorDeath += onDeath;
     }
 
-    void onDeath()
+    void onDeath(GameObject thisActor)
     {
         ActorHealth actorHealth = this.GetComponent<ActorHealth>();
         Animator animator = this.GetComponentInChildren<Animator>();

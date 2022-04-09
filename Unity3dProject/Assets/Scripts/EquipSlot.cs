@@ -1,14 +1,13 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 
-public enum ItemType 
+public enum ItemType
 {
     weapon = 0,
     gear = 1,
     throwable = 2,
-    consumable = 3
+    consumable = 3,
+    other = 4
 }
 public enum EquipSlotType
 {
@@ -17,13 +16,23 @@ public enum EquipSlotType
     bothHands = 2,
     eitherHand = 3
 }
+public enum WeaponWearSlot
+{
+    sword = 0,
+    axe = 1,
+    rifle = 2,
+    dagger,
+    bow,
+    pistol,
+    pack
+}
 
 public class EquipSlot : MonoBehaviour
 {
 
     void Start()
     {
-        
+
     }
 
 }

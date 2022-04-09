@@ -3,7 +3,12 @@ using System;
 
 namespace Hybrid.Components
 {
-
+    public enum RagdollState
+    {
+        knockdown = 0,
+        unconscious = 1,
+        dead = 2,
+    }
     public enum DeathState
     {
         alive = 0,
@@ -29,7 +34,7 @@ namespace Hybrid.Components
                     _health = value;
                     _health = Mathf.Clamp(_health, 0, (float)healthMax);
                 }
-                _healthPercent = ((float)health / (float)healthMax);
+                _healthPercent = ((float)health / (float)healthMax + 0.001f);
             }
         }
         public int healthMax = 100;
@@ -102,13 +107,21 @@ namespace Hybrid.Components
         }
 
 
-        private void DamageHealth(float fDamage)
+        private void DamageHealth(float fDamage) //, bool ignoreArmor = false)
         {
             if (!isInvincible && deathState < DeathState.dying)
             {
                 Debug.Log("ActorHealth => DamageHealth: " + fDamage);
                 float previousHealth = health;
-                health -= Math.Abs(fDamage);
+
+                float currentArmor = energyArmor;
+                currentArmor -= fDamage;
+
+                DamageEnergyArmor(fDamage);
+
+                float postArmordamage = currentArmor > 0 ? 0 : -currentArmor;
+
+                health -= Math.Abs(postArmordamage);
                 actorEventManger.UpdateStatBar_Health(health / (float)healthMax);
                 if (health <= 0)
                 {
@@ -138,15 +151,8 @@ namespace Hybrid.Components
             get => _stamina;
             set
             {
-                if (immortal)
-                {
-                    _stamina = Mathf.Clamp(value, 10f, (float)staminaMax);
-                }
-                else
-                {
-                    _stamina = value;
-                    _stamina = Mathf.Clamp(_stamina, 0, (float)staminaMax);
-                }
+                _stamina = value;
+                _stamina = Mathf.Clamp(_stamina, 0, (float)staminaMax);
                 _staminaPercent = ((float)stamina / (float)staminaMax);
             }
         }
@@ -179,15 +185,8 @@ namespace Hybrid.Components
             get => _magic;
             set
             {
-                if (immortal)
-                {
-                    _magic = Mathf.Clamp(value, 10f, (float)magicMax);
-                }
-                else
-                {
-                    _magic = value;
-                    _magic = Mathf.Clamp(_magic, 0, (float)magicMax);
-                }
+                _magic = value;
+                _magic = Mathf.Clamp(_magic, 0, (float)magicMax);
                 _magicPercent = ((float)magic / (float)magicMax);
             }
         }
@@ -212,6 +211,50 @@ namespace Hybrid.Components
             actorEventManger.UpdateStatBar_Magic(magic / (float)magicMax);
         }
 
-    }
 
+        // ENERGY ARMOR
+        [SerializeField] private float _energyArmor = 0;
+        public float energyArmor
+        {
+            get => _energyArmor;
+            set
+            {
+                _energyArmor = value;
+                _energyArmor = Mathf.Clamp(_energyArmor, 0, (float)energyArmorMax);
+                _energyArmorPercent = energyArmorMax <= 0 ? 0 : ((float)energyArmor / (float)energyArmorMax);
+            }
+        }
+        public int energyArmorMax = 0;
+        public float energyArmorRegenRate = 8f;
+        public float energyArmorRegenDelay = 6f;
+        public float energyArmorRegenDelayTimer = 0f;
+        [SerializeField] private float _energyArmorPercent = 0f;
+        public float energyArmorPercent
+        {
+            get => _energyArmorPercent;
+            private set
+            {
+                _energyArmorPercent = value;
+            }
+        }
+        private void DamageEnergyArmor(float fDamage)
+        {
+            if (isDead())
+                return;
+
+            Debug.Log("ActorHealth => DamageEnergyArmor: " + fDamage);
+            energyArmor -= Math.Abs(fDamage);
+            // actorEventManger.UpdateStatBar_Stamina(energyArmor / (float)energyArmorMax);
+
+            if (energyArmor <= 0)
+            {
+                energyArmorRegenDelayTimer = energyArmorRegenDelay;
+            }
+            else
+            {
+                //Should evaluate flee state
+            }
+        }
+
+    }
 }
