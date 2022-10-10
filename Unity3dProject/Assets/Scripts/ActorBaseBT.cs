@@ -1,15 +1,22 @@
 using System.Collections;
 using System.Collections.Generic;
+using Hybrid.Components;
+using Panda;
 using UnityEngine;
 using UnityEngine.AI;
-using Panda;
 
 public class ActorBaseBT : MonoBehaviour
 {
+    public bool allowPandaBTTasks = true;
+
     NavMeshAgent agent;
+
+    ActorNavigationData actorNavigationData;
+
     void Start()
     {
         agent = this.GetComponent<NavMeshAgent>();
+        actorNavigationData = this.GetComponent<ActorNavigationData>();
     }
 
     // private void OnDrawGizmos()
@@ -20,6 +27,20 @@ public class ActorBaseBT : MonoBehaviour
     //         Gizmos.DrawWireSphere(agent.destination, agent.stoppingDistance);
     //     }
     // }
+    [Task]
+    public bool CanExecuteBTTasks()
+    {
+        if (allowPandaBTTasks)
+        {
+            Task.current.Succeed();
+            return true;
+        }
+        else
+        {
+            Task.current.Fail();
+            return false;
+        }
+    }
 
     public Vector3 RandomNavmeshLocation(float radius, Vector3 center)
     {
@@ -34,7 +55,6 @@ public class ActorBaseBT : MonoBehaviour
         return finalPosition;
     }
 
-
     // [Task]
     // public void PickDestination(float x, float z)
     // {
@@ -42,14 +62,66 @@ public class ActorBaseBT : MonoBehaviour
     //     agent.SetDestination(dest);
     //     Task.current.Succeed();
     // }
-
     float wanderRadius = 100.0f;
 
     [Task]
     public void PickRandomDestination()
     {
-        Vector3 dest = RandomNavmeshLocation(wanderRadius, transform.position);
-        agent.SetDestination(dest);
+        if (!CanExecuteBTTasks()) return;
+
+        float wRadius = wanderRadius;
+        if (actorNavigationData != null)
+            wRadius = actorNavigationData.wanderRadius;
+
+        Vector3 dest = RandomNavmeshLocation(wRadius, transform.position);
+        agent.SetDestination (dest);
+        Task.current.Succeed();
+    }
+
+    [Task]
+    public void PickRandomDestinationAhead()
+    {
+        if (!CanExecuteBTTasks()) return;
+
+        float wRadius = wanderRadius;
+        if (actorNavigationData != null)
+            wRadius = actorNavigationData.wanderRadius;
+
+        Vector3 dest =
+            UtilityHelpers
+                .GetRandomNavmeshPoint(wRadius,
+                UtilityHelpers.GetFrontPosition(this.transform, wRadius));
+
+        agent.SetDestination (dest);
+        Task.current.Succeed();
+    }
+
+    [Task]
+    public void EvaluateCurrentTravelDestination()
+    {
+        if (!CanExecuteBTTasks()) return;
+
+        if (actorNavigationData == null)
+        {
+            Task.current.Fail();
+            return;
+        }
+        if (actorNavigationData.travelPosition == null)
+        {
+            Task.current.Fail();
+            return;
+        }
+        if (
+            agent.destination == actorNavigationData.travelPosition.position &&
+            agent.remainingDistance <= agent.stoppingDistance &&
+            !agent.pathPending
+        )
+        {
+            Task.current.Succeed();
+            return;
+        }
+
+        agent.SetDestination(actorNavigationData.travelPosition.position);
         Task.current.Succeed();
     }
 
@@ -59,7 +131,10 @@ public class ActorBaseBT : MonoBehaviour
         if (Task.isInspected)
             Task.current.debugInfo = string.Format("t={0:0.00}", Time.time);
 
-        if (agent.remainingDistance <= agent.stoppingDistance && !agent.pathPending)
+        if (
+            agent.remainingDistance <= agent.stoppingDistance &&
+            !agent.pathPending
+        )
         {
             Task.current.Succeed();
         }
