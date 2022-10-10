@@ -1,10 +1,11 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-public interface IMagicEffect
+namespace Hybrid.Components
 {
-    public void OnEffectStart(GameObject target, GameObject sender);
-    public void OnEffectUpdate(GameObject target, GameObject sender);
-    public void OnEffectFinish(GameObject target, GameObject sender);
+    public interface IMagicEffect
+    {
+        public void OnEffectStart(SpellInstanceData spellInstanceData);
+        public void OnEffectUpdate(SpellInstanceData spellInstanceData);
+        public void OnEffectFinish(SpellInstanceData spellInstanceData);
+    }
 }

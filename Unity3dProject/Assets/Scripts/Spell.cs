@@ -1,42 +1,54 @@
-using UnityEngine;
-using UnityEngine.Events;
+using System;
 using System.Collections;
 using System.Collections.Generic;
-using System;
+using UnityEngine;
+using UnityEngine.Events;
 
-public class Spell : MonoBehaviour
+namespace Hybrid.Components
 {
-    public Delegate onDamageHealth;
-    // public void DamageHealth() => onDamageHealth?.Invoke();
-    public UnityEvent[] unityEvent;
-
-    [SerializeField] public List<IMagicEffect> array;
-    public UnityAction<GameObject>[] unityAction;
-    public ScriptableObject[] scriptableObjects;
-
-    [SerializeField] public IMagicEffect[] imagicEffects;
-    // [SerializeField] public [] objects;
-
-    public float damage = 33f;
-    // public float speed = 24f;
-    public Weapon weapon;
-    [SerializeField] private MagicEffect[] effects;
-
-
-    private Vector3 shootDir;
-    private Rigidbody rigidbody;
-    private void Start()
+    public class Spell : MonoBehaviour
     {
-        rigidbody = GetComponent<Rigidbody>();
-        // rigidbody.velocity = transform.forward * speed;
-    }
+        public Delegate onDamageHealth;
 
-    private void OnTriggerEnter(Collider other)
-    {
-        Destroy(gameObject);
-    }
+        // public void DamageHealth() => onDamageHealth?.Invoke();
+        public UnityEvent[] unityEvent;
 
-    public void TestMethod()
-    {
+        [SerializeField]
+        public List<IMagicEffect> array;
+
+        public UnityAction<GameObject>[] unityAction;
+
+        public ScriptableObject[] scriptableObjects;
+
+        [SerializeField]
+        public IMagicEffect[] imagicEffects;
+
+        // [SerializeField] public [] objects;
+        public float damage = 33f;
+
+        // public float speed = 24f;
+        public Weapon weapon;
+
+        [SerializeField]
+        private MagicEffect[] effects;
+
+        private Vector3 shootDir;
+
+        private Rigidbody rigidbody;
+
+        private void Start()
+        {
+            rigidbody = GetComponent<Rigidbody>();
+            // rigidbody.velocity = transform.forward * speed;
+        }
+
+        private void OnTriggerEnter(Collider other)
+        {
+            Destroy (gameObject);
+        }
+
+        public void TestMethod()
+        {
+        }
     }
 }

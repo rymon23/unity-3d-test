@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b9f968d5a0edb34395f1ade4cb73b49, type: 3}
+  m_Name: DamageHealthSpell
+  m_EditorClassIdentifier: 
+  name: TestSpell
+  effects:
+  - m_PersistentCalls:
+      m_Calls: []
+  projectile: {fileID: 5611925594747986782, guid: 052a7889289f0d74384127785cd100c7, type: 3}
+  spellPrefab: {fileID: 3034659299876578536, guid: abb208b0772e80b4782a73fcc8f35ff2, type: 3}
+  _castingType: 1
+  _deliveryType: 2
+  baseMagicCost: 60
+  baseStaminaCost: 2
