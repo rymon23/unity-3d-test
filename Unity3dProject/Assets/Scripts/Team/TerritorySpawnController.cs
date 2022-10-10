@@ -5,6 +5,15 @@ using UnityEngine;
 public class TerritorySpawnController : MonoBehaviour
 {
     [SerializeField]
+    private Territory territory;
+
+    [SerializeField]
+    private bool keepSpawning = true;
+
+    [SerializeField]
+    private bool bForceAssignFaction = false;
+
+    [SerializeField]
     private int spawnLimit = 3;
 
     [SerializeField]
@@ -45,7 +54,8 @@ public class TerritorySpawnController : MonoBehaviour
 
     private void ScanForSpawnPoints()
     {
-        SpawnPoint[] found = this.transform.parent.GetComponentsInChildren<SpawnPoint>();
+        SpawnPoint[] found =
+            this.transform.parent.GetComponentsInChildren<SpawnPoint>();
         spawnPoints = new SpawnPoint[found.Length];
         if (found != null && found.Length > 0)
         {
@@ -146,10 +156,19 @@ public class TerritorySpawnController : MonoBehaviour
         if (spawn == null) return;
         UnsubscribeFromSpawnEvents (spawn);
         spawns.Remove (spawn);
+
+        if (territory != null)
+        {
+            Debug.Log("Territory Spawn Controller: OnSpawnDeath");
+            territory.Damage(0.1f, 1);
+        }
     }
 
     private void Start()
     {
+        territory = GetComponent<Territory>();
+        if (territory != null) radius = territory.GetRadius();
+
         spawns = new List<GameObject>();
         ScanForSpawnPoints();
     }
@@ -164,7 +183,7 @@ public class TerritorySpawnController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (prefabs != null && currentSpawnCount < spawnLimit)
+        if (prefabs != null && keepSpawning && currentSpawnCount < spawnLimit)
         {
             currentSpawnCount++;
 
