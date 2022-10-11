@@ -6,7 +6,8 @@ public enum AttackAnimationState
     attackPreHit = 1,
     attackHitStart = 2,
     attackHitFinish = 3,
-    attackfinish = 4
+    attackRecoverStart = 4,
+    attackfinish = 5
 }
 
 public enum BlockAnimationState
@@ -14,7 +15,8 @@ public enum BlockAnimationState
     blockStart = 0,
     blockHitStart = 1,
     blockHitFinish = 2,
-    blockfinish = 3
+    blockRecoverStart = 3,
+    blockfinish = 4
 }
 public enum BashAnimationState
 {
@@ -61,6 +63,22 @@ public enum AnimState_Stagger
     mid = 1,
     finish = 2
 }
+public enum AnimState_Knockdown
+{
+    knockdownStart = 0,
+    knockdownMid = 1,
+    knockdownFinish = 2,
+
+    getUpStart = 3,
+    getUpRecoverStart = 4,
+    getUpFinish = 5,
+}
+public enum AnimState_GetUp
+{
+    start = 0,
+    mid = 1,
+    finish = 2
+}
 
 public enum AttackWeaponType
 {
@@ -87,14 +105,18 @@ public enum AttackSlotType
 public class AnimationState : MonoBehaviour
 {
     public bool bDisableAttacking = false;
+    public bool bDisableBlocking = false;
     public bool isAttacking = false;
     public bool isBlocking = false;
     public bool isBashing = false;
     public bool isDodging = false;
     public bool isCasting = false;
     public bool isWeaponDrawn = false;
+    public bool isMoving = false;
+    public bool isSprinting = false;
     public bool isStaggered = false;
-
+    public bool isKnockedDown = false;
+    public bool isRagdolled = false;
 
     private AttackSlotType _attackSlotType;
     public AttackSlotType attackSlotType
@@ -106,14 +128,14 @@ public class AnimationState : MonoBehaviour
         }
     }
 
-    private AttackAnimationState _attackAnimationState = 0;
+    [SerializeField] private AttackAnimationState _attackAnimationState = 0;
     public AttackAnimationState attackAnimationState
     {
         get => _attackAnimationState;
         set
         {
             _attackAnimationState = value;
-            isAttacking = (_attackAnimationState < AttackAnimationState.attackfinish);
+            isAttacking = (_attackAnimationState < AttackAnimationState.attackHitFinish);
             // if (_attackAnimationState >= AttackAnimationState.attackHitFinish)
             // {
             //     isAttacking = false;
@@ -125,7 +147,7 @@ public class AnimationState : MonoBehaviour
         }
     }
 
-    private BlockAnimationState _blockAnimationState = 0;
+     [SerializeField] private BlockAnimationState _blockAnimationState = 0;
     public BlockAnimationState blockAnimationState
     {
         get => _blockAnimationState;
@@ -150,26 +172,18 @@ public class AnimationState : MonoBehaviour
         }
     }
 
-    private DrawAnimationState _drawAnimationState = DrawAnimationState.finish;
+    [SerializeField] private DrawAnimationState _drawAnimationState = DrawAnimationState.finish;
     public DrawAnimationState drawAnimationState
     {
         get => _drawAnimationState;
         set
         {
             _drawAnimationState = value;
-            isWeaponDrawn = (_drawAnimationState >= DrawAnimationState.weaponReady);
-            // if (_drawAnimationState >= DrawAnimationState.weaponReady)
-            // {
-            //     isWeaponDrawn = true;
-            // }
-            // else
-            // {
-            //     isWeaponDrawn = false;
-            // }
+            isWeaponDrawn = (_drawAnimationState > DrawAnimationState.weaponOut);
         }
     }
 
-    private SheathAnimationState _sheathAnimationState = SheathAnimationState.finish;
+    [SerializeField] private SheathAnimationState _sheathAnimationState = SheathAnimationState.finish;
     public SheathAnimationState sheathAnimationState
     {
         get => _sheathAnimationState;
@@ -201,7 +215,7 @@ public class AnimationState : MonoBehaviour
         }
     }
 
-    private AnimState_Stagger _animState_Stagger = 0;
+    [SerializeField]private AnimState_Stagger _animState_Stagger = 0;
     public AnimState_Stagger animState_Stagger
     {
         get => _animState_Stagger;
@@ -212,7 +226,19 @@ public class AnimationState : MonoBehaviour
         }
     }
 
+    [SerializeField]private AnimState_Knockdown _anim_knockdownstate = AnimState_Knockdown.getUpFinish;
+    public AnimState_Knockdown anim_knockdownstate
+    {
+        get => _anim_knockdownstate;
+        set
+        {
+            _anim_knockdownstate = value;
+            isKnockedDown = (_anim_knockdownstate < AnimState_Knockdown.getUpRecoverStart);
+        }
+    }
+
     AttackWeaponType attackWeaponType = 0;
+
     public bool IsInAttackHitFame() => isAttacking && attackAnimationState == AttackAnimationState.attackHitStart;
     public bool IsInBlockHitFame() => isBlocking && blockAnimationState == BlockAnimationState.blockHitStart;
     public bool IsInBashHitFame() => isBashing && bashAnimationState == BashAnimationState.hitStart;
@@ -221,5 +247,6 @@ public class AnimationState : MonoBehaviour
     public bool isSheathingWeapon() => sheathAnimationState < SheathAnimationState.finish;
     public bool isDrawingWeapon() => drawAnimationState < DrawAnimationState.finish;
     public bool IsStaggered() => isStaggered && animState_Stagger < AnimState_Stagger.finish;
-    public bool IsAbleToAttack() => !bDisableAttacking && !isAttacking && !IsInBlockHitFame() && !IsStaggered() && !IsInBashHitFame() && !isSheathingWeapon() && !isDrawingWeapon();
+    public bool IsAbleToAttack() => !isCasting && !bDisableAttacking && !IsInAttackHitFame() && !IsInBlockHitFame() && !IsStaggered() && !IsInBashHitFame() && !isSheathingWeapon() && !isDrawingWeapon();
+    public bool IsAbleToBlock() =>  !isCasting && !bDisableBlocking && !IsInAttackHitFame() && !IsInBashHitFame() && !isSheathingWeapon() && !isDrawingWeapon();
 }

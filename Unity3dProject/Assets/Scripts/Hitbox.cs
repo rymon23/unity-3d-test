@@ -1,28 +1,39 @@
-using UnityEngine;
 using Hybrid.Components;
+using UnityEngine;
 
 public enum HitPositionType
 {
     body = 0,
-    head = 1,
+    head = 1
 }
 
 public enum HitDirectionType
 {
     front = 0,
     back = 1,
-    side = 2,
+    side = 2
 }
 
-
-[RequireComponent(typeof(BoxCollider))]
+[RequireComponent(typeof (BoxCollider))]
 public class Hitbox : MonoBehaviour
 {
-    [SerializeField] IsActor actor;
-    [SerializeField] GameObject myGameObject;
-    [SerializeField] BoxCollider myCollider;
-    [SerializeField] ActorEventManger actorEventManger;
-    [SerializeField] HitPositionType bodyPosition = 0;
+    [SerializeField]
+    IsActor actor;
+
+    [SerializeField]
+    GameObject myGameObject;
+
+    [SerializeField]
+    BoxCollider myCollider;
+
+    [SerializeField]
+    ActorEventManger actorEventManger;
+
+    [SerializeField]
+    HitPositionType bodyPosition = 0;
+
+    [SerializeField]
+    bool bIsPlayer = false;
 
     private void Awake()
     {
@@ -34,36 +45,60 @@ public class Hitbox : MonoBehaviour
 
     void onWeaponHit(Weapon weapon, HitPositionType hitPosition)
     {
+        Debug
+            .Log("onWeaponHit - Weapon: " +
+            weapon +
+            ", hitPosition: " +
+            hitPosition);
+
         if (actorEventManger != null)
         {
-            actorEventManger.TriggerAnim_Stagger(hitPosition);
-            actorEventManger.TakeWeaponHit(weapon, hitPosition);
+            actorEventManger.TriggerAnim_Stagger (hitPosition);
+            actorEventManger.TakeWeaponHit (weapon, hitPosition);
+
+            if (bIsPlayer) actorEventManger.RumbleFire();
         }
     }
+
     void onBulletHit(Projectile projectile, HitPositionType hitPosition)
     {
         if (actorEventManger != null)
         {
-            actorEventManger.TriggerAnim_Stagger(hitPosition);
-            actorEventManger.TakeBulletHit(projectile, hitPosition);
+            actorEventManger.TriggerAnim_Stagger (hitPosition);
+            actorEventManger.TakeBulletHit (projectile, hitPosition);
+
+            if (bIsPlayer) actorEventManger.RumbleFire();
         }
     }
 
     private void OnTriggerEnter(Collider col)
     {
-        Debug.Log("onTriggerEnter: " + gameObject.name + "| Collider: " + col.gameObject.name);
-
+        Debug
+            .Log("onTriggerEnter - Object: " +
+            gameObject.name +
+            ", Collider: " +
+            col.gameObject.name +
+            ", Tag: " +
+            col.tag);
 
         if (col.CompareTag("WeaponHitBox"))
         {
-            Debug.Log("onTriggerEnter: " + gameObject.name + "| Collider: " + col.gameObject.name);
-
             WeaponCollider weaponCollider = col.GetComponent<WeaponCollider>();
+            Debug
+                .Log("Weapon HitBox: " +
+                col.gameObject.name +
+                ", Owner: " +
+                weaponCollider.weapon._ownerRefId);
+
             if (weaponCollider.weapon != null)
             {
                 if (weaponCollider.weapon._ownerRefId == actor.refId)
                 {
-                    Debug.Log("Ignore my own weapon hit" + weaponCollider.weapon + " On " + gameObject.name);
+                    Debug
+                        .Log("Ignore my own weapon hit" +
+                        weaponCollider.weapon +
+                        " On " +
+                        gameObject.name);
                     return;
                 }
 
@@ -72,9 +107,25 @@ public class Hitbox : MonoBehaviour
                 //     Debug.Log("Ignore Blocked Hit: " + weaponCollider.weapon + " On " + gameObject.name);
                 //     return;
                 // }
-
-                Debug.Log("Weapon Hit: " + weaponCollider.weapon + " On " + gameObject.name);
+                Debug
+                    .Log("Weapon Hit: " +
+                    weaponCollider.weapon +
+                    " On " +
+                    gameObject.name);
                 onWeaponHit(weaponCollider.weapon, bodyPosition);
+
+                // TODO IMPROVE THIS:
+                IsActor attacker =
+                    weaponCollider
+                        .transform
+                        .root
+                        .GetComponentInChildren<IsActor>();
+                if (attacker != null && attacker.IsPlayer)
+                {
+                    ActorEventManger attackerEventManager =
+                        attacker.gameObject.GetComponent<ActorEventManger>();
+                    attackerEventManager.RumbleFire();
+                }
             }
             else
             {
@@ -88,13 +139,12 @@ public class Hitbox : MonoBehaviour
             if (projectile.projectileType == ProjectileType.spell)
             {
                 Debug.Log("ProjectileType: Spell");
-                projectile.InvokeSpells(projectile.sender, actor.gameObject);
+                projectile.FireMagicEffects(actor.gameObject);
             }
             else
             {
-                onBulletHit(projectile, bodyPosition);
+                onBulletHit (projectile, bodyPosition);
             }
         }
-
     }
 }

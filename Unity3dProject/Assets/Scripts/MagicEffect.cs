@@ -2,6 +2,27 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+namespace Hybrid.Components
+
+{
+public enum MagicEffectType
+{
+    RestoreStat,
+    DamageStat,
+    SummonActor,
+    SummonItem,
+    Armor,
+    Teleport,
+    Fly,
+    EnhanceStat,
+    ElementalDamage,
+    Force,
+    Absorb,
+    Shapeshift,
+    Influence,
+    Posession
+}
+
 public enum SpellCastingType
 {
     hold = 0,
@@ -31,5 +52,5 @@ public class MagicEffect : MonoBehaviour //, IMagicEffect
     {
         get => _deliveryType;
     }
-
+}
 }

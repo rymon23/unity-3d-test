@@ -10,6 +10,7 @@ public class MoveOnAgent : MonoBehaviour
     [SerializeField] NavMeshAgent agent;
     [SerializeField] Animator animator;
     [SerializeField] CombatStateData combatStateData;
+    [SerializeField] AnimationState animationState;
 
 
     void Start()
@@ -17,6 +18,7 @@ public class MoveOnAgent : MonoBehaviour
         agent = GetComponent<NavMeshAgent>();
         animator = GetComponentInChildren<Animator>();
         combatStateData = GetComponent<CombatStateData>();
+        animationState = GetComponent<AnimationState>();
     }
 
     // Update is called once per frame
@@ -24,7 +26,12 @@ public class MoveOnAgent : MonoBehaviour
     {
         if (animator != null)
         {
-            animator.SetBool("move", agent.velocity.magnitude > 0.01f);
+            bool bIsMoving = agent.velocity.magnitude > 0.01f;
+
+            animator.SetBool("move", bIsMoving);
+            animator.SetFloat("Speed", Mathf.Abs(agent.velocity.magnitude));
+
+            animationState.isMoving = bIsMoving;
 
             if (combatStateData != null)
             {

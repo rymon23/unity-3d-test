@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.Events;
+using  Hybrid.Components;
 
 [CreateAssetMenu(fileName = "New Magic Spell", menuName = "Magic Spell")]
 public class MagicSpell : ScriptableObject
@@ -9,6 +10,8 @@ public class MagicSpell : ScriptableObject
 
     // [SerializeField] public Projectile projectile { get; private set; }
     public Transform projectile;
+    public GameObject spellPrefab;
+
     [SerializeField] private SpellCastingType _castingType = SpellCastingType.fire;
     public SpellCastingType castingType
     {

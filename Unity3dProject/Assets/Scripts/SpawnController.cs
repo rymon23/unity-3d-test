@@ -10,32 +10,39 @@ public class SpawnController : MonoBehaviour
     public static SpawnController current;
 
     private Entity entity;
-    private EntityManager entityManager;
+    public EntityManager entityManager;
     private BlobAssetStore blobAssetStore;
 
     private void Awake()
     {
         current = this;
 
-        // entityManager = World.DefaultGameObjectInjectionWorld.EntityManager;
-        // blobAssetStore = new BlobAssetStore();
-        // GameObjectConversionSettings settings = GameObjectConversionSettings.FromWorld(World.DefaultGameObjectInjectionWorld, blobAssetStore);
-        // entity = GameObjectConversionUtility.ConvertGameObjectHierarchy(prefab, settings);
+        entityManager = World.DefaultGameObjectInjectionWorld.EntityManager;
+        blobAssetStore = new BlobAssetStore();
+        GameObjectConversionSettings settings = GameObjectConversionSettings.FromWorld(World.DefaultGameObjectInjectionWorld, blobAssetStore);
+        entity = GameObjectConversionUtility.ConvertGameObjectHierarchy(prefab, settings);
     }
+
+
+    [SerializeField] private bool bSpawn = false;
     private void Update()
     {
         // Debug.Log("RUNNING!");
-        if (Input.GetKeyDown(KeyCode.P))
+        if (bSpawn)
+        // if (Input.GetKeyDown(KeyCode.P))
         {
-            Debug.Log("SPAWN!");
-            // Entity newEntity = entityManager.Instantiate(entity);
+            bSpawn = false;
 
-            Vector3 spawnPos = UtilityHelpers.GetRandomNavmeshPoint(radius, this.transform.position);
-            Instantiate(prefab, new Vector3(spawnPos.x, 3, spawnPos.z), Quaternion.identity);
+            Entity newEntity = entityManager.Instantiate(entity);
+            Debug.Log("SPAWN!");
+
+
+            // Vector3 spawnPos = UtilityHelpers.GetRandomNavmeshPoint(radius, this.transform.position);
+            // Instantiate(prefab, new Vector3(spawnPos.x, 3, spawnPos.z), Quaternion.identity);
         }
     }
-    // private void OnDestroy()
-    // {
-    //     blobAssetStore.Dispose();
-    // }
+    private void OnDestroy()
+    {
+        blobAssetStore.Dispose();
+    }
 }

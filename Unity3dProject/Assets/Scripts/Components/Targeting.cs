@@ -23,8 +23,9 @@ namespace Hybrid.Components
     {
         [SerializeField]
         public string refId = "-";
+        public Transform closestTarget = null;
+        public Transform closestEnemy = null;
         public Transform currentTarget = null;
-
         public string currentTargetRefId; // Temporary for debugging
         public float currentTargetLostTimer; // Temporary for debugging
 
@@ -37,12 +38,13 @@ namespace Hybrid.Components
         public Vector3 fallbackPosition = Vector3.zero;
         public Vector3 attackPos = Vector3.zero;
 
+        public List<Follower> followers;
+
         public int allycount = 0;
         public int enemycount = 0;
 
         public int trackedTargetCount;
         // public HashSet<string> trackedGoals = null;
-        public Transform closestTarget = null;
         public float targetDistance;
         public float targetAttackDistance;
 

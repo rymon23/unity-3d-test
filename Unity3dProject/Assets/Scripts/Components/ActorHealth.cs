@@ -3,12 +3,7 @@ using System;
 
 namespace Hybrid.Components
 {
-    public enum RagdollState
-    {
-        knockdown = 0,
-        unconscious = 1,
-        dead = 2,
-    }
+
     public enum DeathState
     {
         alive = 0,
@@ -73,8 +68,9 @@ namespace Hybrid.Components
         }
 
         public bool isDead() => (deathState >= DeathState.dying);
-
-        public HealthBar healthBar;
+        public StatBar healthBar;
+        public StatBar staminaBar;
+        public StatBar magicBar;
         ActorEventManger actorEventManger;
 
 
@@ -87,7 +83,7 @@ namespace Hybrid.Components
 
         private void Start()
         {
-            healthBar = GetComponentInChildren<HealthBar>();
+            // healthBar = GetComponentInChildren<Sta>();
             actorEventManger = GetComponent<ActorEventManger>();
             if (actorEventManger != null)
             {

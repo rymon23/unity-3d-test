@@ -27,6 +27,48 @@ namespace Hybrid.Systems
                 Entities.WithAll<IsActor, ActorHealth, CombatStateData>()
                     .ForEach((Entity entity, IsActor actor, ActorHealth actorHealth, CombatStateData combatStateData) =>
                     {
+
+                        if (actor.gameObject.tag == "Player")
+                        {
+                            if (actorHealth.healthBar != null)
+                            {
+                                if (actorHealth.healthPercent < 0.98)
+                                {
+                                    actorHealth.healthBar.gameObject.SetActive(true);
+                                    actorHealth.healthBar.UpdateBar(actorHealth.healthPercent);
+                                }
+                                else
+                                {
+                                    actorHealth.healthBar.gameObject.SetActive(false);
+                                }
+                            }
+                            if (actorHealth.staminaBar != null)
+                            {
+                                if (actorHealth.staminaPercent < 0.98)
+                                {
+                                    actorHealth.staminaBar.gameObject.SetActive(true);
+                                    actorHealth.staminaBar.UpdateBar(actorHealth.staminaPercent);
+                                }
+                                else
+                                {
+                                    actorHealth.staminaBar.gameObject.SetActive(false);
+                                }
+                            }
+                            if (actorHealth.magicBar != null)
+                            {
+                                if (actorHealth.magicPercent < 0.98)
+                                {
+                                    actorHealth.magicBar.gameObject.SetActive(true);
+                                    actorHealth.magicBar.UpdateBar(actorHealth.magicPercent);
+                                }
+                                else
+                                {
+                                    actorHealth.magicBar.gameObject.SetActive(false);
+                                }
+                            }
+                            return;
+                        }
+
                         if (actorHealth.healthBar == null) return;
 
                         if (actorHealth.deathState < DeathState.dying)

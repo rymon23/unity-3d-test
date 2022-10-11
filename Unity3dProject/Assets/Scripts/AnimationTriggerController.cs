@@ -13,6 +13,8 @@ public class AnimationTriggerController : MonoBehaviour
         {
             actorEventManger.onTriggerAnim_Stagger += TriggerAnim_Stagger;
             actorEventManger.onTriggerAnim_Block += TriggerAnim_Block;
+            actorEventManger.onTriggerAnim_Sheath += TriggerAnim_SheathWeapoon;
+            actorEventManger.onTriggerAnim_Draw += TriggerAnim_DrawWeapoon;
         }
     }
 
@@ -35,6 +37,14 @@ public class AnimationTriggerController : MonoBehaviour
         animator.SetFloat("fAnimBlockType", (float)nextVariant);
         animator.SetTrigger("tBlockHit");
     }
+    void TriggerAnim_SheathWeapoon()
+    {
+        animator.SetTrigger("SheathWeapon");
+    }
+    void TriggerAnim_DrawWeapoon()
+    {
+        animator.SetTrigger("DrawWeapon");
+    }
 
     private void OnDestroy()
     {
@@ -42,6 +52,8 @@ public class AnimationTriggerController : MonoBehaviour
         {
             actorEventManger.onTriggerAnim_Stagger -= TriggerAnim_Stagger;
             actorEventManger.onTriggerAnim_Block -= TriggerAnim_Block;
+            actorEventManger.onTriggerAnim_Sheath -= TriggerAnim_SheathWeapoon;
+            actorEventManger.onTriggerAnim_Draw -= TriggerAnim_DrawWeapoon;
         }
     }
 }
