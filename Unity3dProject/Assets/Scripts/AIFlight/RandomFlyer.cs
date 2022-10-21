@@ -79,6 +79,9 @@ public class RandomFlyer : MonoBehaviour
             distanceFromBase,
             distanceFromTarget;
 
+    [SerializeField]
+    private bool debug_gizmo = false;
+
     void Start()
     {
         animator = GetComponent<Animator>();
@@ -282,5 +285,15 @@ public class RandomFlyer : MonoBehaviour
         }
 
         return newDir.normalized;
+    }
+
+    private void OnDrawGizmos()
+    {
+        if (!debug_gizmo) return;
+
+        Gizmos.color = Color.white;
+        Gizmos.DrawWireSphere(homeTarget.position, radiusMinMax.y);
+        Gizmos.color = Color.black;
+        Gizmos.DrawWireSphere(flyingTarget.position, radiusMinMax.y);
     }
 }
