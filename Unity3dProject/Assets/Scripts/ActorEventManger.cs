@@ -18,12 +18,13 @@ public class ActorEventManger : MonoBehaviour
     public void TakeWeaponHit(Weapon weapon, HitPositionType hitPosition) =>
         onTakeWeaponHit?.Invoke(weapon, hitPosition);
 
-    public event Action<Projectile, HitPositionType> onTakeBulletHit;
+    public event Action<Weapon, HitPositionType, Projectile> onTakeBulletHit;
 
     public void TakeBulletHit(
-        Projectile projectile,
-        HitPositionType hitPosition
-    ) => onTakeBulletHit?.Invoke(projectile, hitPosition);
+        Weapon weapon,
+        HitPositionType hitPosition,
+        Projectile projectile = null
+    ) => onTakeBulletHit?.Invoke(weapon, hitPosition, projectile); // Use projectile if weapon fires multiple types of projectile
 
     public event Action<Weapon> onBlockWeaponHit;
 

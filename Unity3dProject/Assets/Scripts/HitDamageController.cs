@@ -22,7 +22,9 @@ namespace Hybrid.Components
         {
             Debug
                 .Log("HitDamageController => TakeWeaponHit: position: " +
-                hitPosition);
+                hitPosition +
+                " | Damage: " +
+                weapon.damage);
             if (weapon == null) return;
 
             if (hitPosition == HitPositionType.head)
@@ -36,22 +38,29 @@ namespace Hybrid.Components
         }
 
         void TakeBulletHit(
-            Projectile projectile,
-            HitPositionType hitPosition = 0
+            Weapon weapon,
+            HitPositionType hitPosition,
+            Projectile projectile
         )
         {
+            float totalDamage = weapon.damage;
+            if (projectile != null) totalDamage += projectile.damage;
+
             Debug
                 .Log("HitDamageController => TakeBulletHit: position: " +
-                hitPosition);
+                hitPosition +
+                " | Damage: " +
+                totalDamage);
+
             if (projectile == null) return;
 
             if (hitPosition == HitPositionType.head)
             {
-                actorEventManger.DamageHealth(projectile.damage * 2);
+                actorEventManger.DamageHealth(totalDamage * 2);
             }
             else
             {
-                actorEventManger.DamageHealth(projectile.damage);
+                actorEventManger.DamageHealth (totalDamage);
             }
         }
 

@@ -23,7 +23,8 @@ namespace Hybrid.Systems
                     // Check if actor is Dead OR the Player
                     if (
                         actorHealth.deathState >= DeathState.dying ||
-                        actor.gameObject.tag == "Player"
+                        actor.gameObject.tag == "Player" ||
+                        animationState.isFlying
                     )
                     {
                         return;
@@ -52,10 +53,14 @@ namespace Hybrid.Systems
                             actor
                                 .gameObject
                                 .GetComponentInChildren<NavMeshAgent>();
-                        animator
-                            .SetFloat("velocity",
-                            agent.velocity.magnitude *
-                            combatStateData.currentVelocityZ);
+
+                        if (agent != null)
+                        {
+                            animator
+                                .SetFloat("velocity",
+                                agent.velocity.magnitude *
+                                combatStateData.currentVelocityZ);
+                        }
                     }
 
                     if (animationState != null && equipSlotController != null)

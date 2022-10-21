@@ -60,12 +60,24 @@ public class Hitbox : MonoBehaviour
         }
     }
 
-    void onBulletHit(Projectile projectile, HitPositionType hitPosition)
+    // void onBulletHit(Projectile projectile)
+    // {
+    //     if (actorEventManger != null)
+    //     {
+    //         actorEventManger.TriggerAnim_Stagger (bodyPosition);
+    //         actorEventManger.TakeBulletHit (projectile, bodyPosition);
+    //         if (bIsPlayer) actorEventManger.RumbleFire();
+    //     }
+    // }
+    public void onBulletHit(Weapon weapon, Projectile projectile = null)
     {
         if (actorEventManger != null)
         {
-            actorEventManger.TriggerAnim_Stagger (hitPosition);
-            actorEventManger.TakeBulletHit (projectile, hitPosition);
+            actorEventManger.TriggerAnim_Stagger (bodyPosition);
+            actorEventManger
+                .TakeBulletHit(weapon,
+                bodyPosition,
+                projectile ? projectile : weapon.GetDefaultProjectile());
 
             if (bIsPlayer) actorEventManger.RumbleFire();
         }
@@ -143,7 +155,7 @@ public class Hitbox : MonoBehaviour
             }
             else
             {
-                onBulletHit (projectile, bodyPosition);
+                onBulletHit(projectile.weapon, projectile);
             }
         }
     }

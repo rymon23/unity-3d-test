@@ -115,7 +115,14 @@ public class Weapon : MonoBehaviour
 
                 if (bShouldFire)
                 {
-                    Shoot();
+                    if (bShootWithRaycasts)
+                    {
+                        RaycastShoot();
+                    }
+                    else
+                    {
+                        Shoot();
+                    }
 
                     float noiseRange = (int) noiseLevel * 30f;
                     GlobalEventManager
@@ -133,14 +140,147 @@ public class Weapon : MonoBehaviour
         {
             bulletsShot = 0;
 
+            readyToShoot = false;
+
+            if (bShootWithRaycasts)
+            {
+                RaycastShoot();
+                return;
+            }
             Shoot();
         }
     }
 
+
+#region Shooting With Raycast
+    [SerializeField]
+    private Projectile projectile;
+
+    public Projectile GetDefaultProjectile() => projectile;
+
+    [SerializeField]
+    private bool bShootWithRaycasts = true;
+
+    [SerializeField]
+    private Vector3 bulletSpeedVariance = new Vector3(0.1f, 0.1f, 0.1f);
+
+    [SerializeField]
+    private ParticleSystem shootingSystem;
+
+    [SerializeField]
+    private ParticleSystem impactParticleSystem;
+
+    // [SerializeField]
+    // private Transform bulletSpawnPoint;
+    [SerializeField]
+    private TrailRenderer bulletTrail;
+
+    [SerializeField]
+    private float shootDelay = 0.3f;
+
+    [SerializeField]
+    private LayerMask mask;
+
+    [SerializeField]
+    private float lastShootTime = 0f;
+
+    public void RaycastShoot()
+    {
+        if (lastShootTime + shootDelay < Time.time)
+        {
+            // TODO: use object pooing
+            // animate here
+            // play sound
+            shootingSystem.Play();
+            Vector3 direction = transform.forward;
+
+            float x = Random.Range(-spread, spread);
+            float y = Random.Range(-spread, spread);
+
+            Vector3 directionWithSpread = direction + new Vector3(x, y, 0);
+
+            if (
+                Physics
+                    .Raycast(firePoint.position,
+                    direction,
+                    out RaycastHit hit,
+                    float.MaxValue,
+                    mask)
+            )
+            {
+                // Debug.DrawRay(firePoint.position, direction, Color.magenta);
+                if (bulletTrail != null)
+                {
+                    Debug.Log("bullet trail");
+
+                    TrailRenderer trail =
+                        Instantiate(bulletTrail,
+                        firePoint.position,
+                        Quaternion.identity);
+
+                    StartCoroutine(SpawnTrail(trail,
+                    directionWithSpread,
+                    firePoint.position,
+                    hit));
+                }
+
+                lastShootTime = Time.time;
+            }
+        }
+    }
+
+    private IEnumerator
+    SpawnTrail(
+        TrailRenderer trail,
+        Vector3 fireDir,
+        Vector3 firePos,
+        RaycastHit hit
+    )
+    {
+        float time = 0f;
+        Vector3 startPos = trail.transform.position;
+
+        while (time < 1)
+        {
+            trail.transform.position = Vector3.Lerp(startPos, hit.point, time);
+            time += Time.deltaTime / trail.time;
+
+            yield return null;
+        }
+
+        // animator.setbool isshooting false
+        trail.transform.position = hit.point;
+
+        int layerMask = LayerMask.GetMask("Hitbox");
+
+        if (
+            Physics
+                .Raycast(firePos,
+                fireDir,
+                out RaycastHit impactHit,
+                float.MaxValue,
+                layerMask)
+        )
+        {
+            Instantiate(impactParticleSystem,
+            hit.point,
+            Quaternion.LookRotation(hit.normal));
+
+            Collider col = impactHit.collider;
+            Hitbox hitbox = col.gameObject.GetComponent<Hitbox>();
+            if (hitbox != null)
+            {
+                hitbox.onBulletHit(this);
+            }
+        }
+
+        Destroy(trail.gameObject, trail.time);
+    }
+#endregion
+
+
     public void Shoot()
     {
-        readyToShoot = false;
-
         if (ammunition != null && firePoint != null)
         {
             Vector3 frontPos = firePoint.position + (firePoint.forward * 10);
