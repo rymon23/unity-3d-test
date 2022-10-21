@@ -1,19 +1,42 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Hybrid.Components;
 using UnityEngine;
 using UnityEngine.AI;
 using Unity.Entities;
 
 static class UtilityHelpers
 {
-
-
     public static string GetUnsetActorEntityRefId() => "-";
 
     public static string getActorEntityRefId(Entity entity)
     {
         return $"ref#{entity.Version}{entity.Index}";
+    }
+
+    public static bool
+    GeCloseNavMeshPoint(Vector3 center, float range, out Vector3 result)
+    {
+        for (int i = 0; i < 30; i++)
+        {
+            Vector3 randomPoint =
+                center + UnityEngine.Random.insideUnitSphere * range;
+            NavMeshHit hit;
+            if (
+                NavMesh
+                    .SamplePosition(randomPoint,
+                    out hit,
+                    1.0f,
+                    NavMesh.AllAreas)
+            )
+            {
+                result = hit.position;
+                return true;
+            }
+        }
+        result = Vector3.zero;
+        return false;
     }
 
     public static Vector3 GetRandomNavmeshPoint(float radius, Vector3 center)
@@ -29,12 +52,14 @@ static class UtilityHelpers
         return finalPosition;
     }
 
-    public static Vector3 GetFrontPosition(Transform target, float distanceAhead)
+    public static Vector3
+    GetFrontPosition(Transform target, float distanceAhead)
     {
         return target.position + (target.forward * distanceAhead);
     }
 
-    public static Vector3 GetBehindPosition(Transform target, float distanceBehind)
+    public static Vector3
+    GetBehindPosition(Transform target, float distanceBehind)
     {
         return target.position - (target.forward * distanceBehind);
     }
@@ -45,22 +70,31 @@ static class UtilityHelpers
         directionBetween.y *= 0;
         return Vector3.Angle(viewer.forward, directionBetween);
     }
-    public static bool HasFOVAngle(Transform viewer, Vector3 targetPos, float maxAngle, float maxRadius)
+
+    public static bool
+    HasFOVAngle(
+        Transform viewer,
+        Vector3 targetPos,
+        float maxAngle,
+        float maxRadius
+    )
     {
         float angle = getFOVAngle(viewer, targetPos);
         return (angle <= maxAngle);
     }
+
     public static bool HasShotLinedUp(Transform viewer, Vector3 targetPos)
     {
         float angle = getFOVAngle(viewer, targetPos);
+
         // Vector3 fovLine1 = Quaternion.AngleAxis(angle, viewer.transform.up) * viewer.transform.forward * 10;
         // Vector3 fovLine2 = Quaternion.AngleAxis(-angle, viewer.transform.up) * viewer.transform.forward * 10;
         // Gizmos.color = Color.yellow;
         // Debug.DrawRay(viewer.transform.position, fovLine1);
         // Debug.DrawRay(viewer.transform.position, fovLine2);
-
         return (angle <= 12f) && HasLOS(viewer, targetPos);
     }
+
     public static bool HasLOS(Transform viewer, Vector3 targetPos)
     {
         int layerMask = LayerMask.GetMask("BlockLOS");
@@ -68,24 +102,39 @@ static class UtilityHelpers
         Vector3 tarPos = targetPos + (Vector3.up * 1.2f);
         Vector3 direction = (targetPos - viewer.position);
 
-        RaycastHit[] raycastHits = Physics.RaycastAll(viewer.position, direction, Mathf.Infinity, layerMask);
+        RaycastHit[] raycastHits =
+            Physics
+                .RaycastAll(viewer.position,
+                direction,
+                Mathf.Infinity,
+                layerMask);
         if (raycastHits.Length > 0)
         {
             float targetDist = Vector3.Distance(viewer.position, targetPos);
-            if (LayerMask.LayerToName(raycastHits[0].transform.gameObject.layer) != "Actor")
+            if (
+                LayerMask
+                    .LayerToName(raycastHits[0].transform.gameObject.layer) !=
+                "Actor"
+            )
             {
                 // Debug.Log("IsInFOVScope => First Hit : " + raycastHits[0].transform.name + " Layer: " + LayerMask.LayerToName(raycastHits[0].transform.gameObject.layer));
                 // Debug.DrawRay(viewer.position, direction, Color.blue);
                 return false;
             }
         }
+
         // Debug.DrawRay(viewer.position, direction, Color.yellow);
         return true;
     }
 
-    public static bool IsInFOVScope(Transform viewer, Vector3 targetPos, float maxAngle, float maxRadius)
+    public static bool
+    IsInFOVScope(
+        Transform viewer,
+        Vector3 targetPos,
+        float maxAngle,
+        float maxRadius
+    )
     {
-
         float angle = getFOVAngle(viewer, targetPos);
 
         if (angle <= maxAngle)
@@ -99,32 +148,42 @@ static class UtilityHelpers
             // int layerMask = LayerMask.GetMask("BlockLOS", "Ground", "Actor");
             int layerMask = LayerMask.GetMask("BlockLOS");
 
-
             // This would cast rays only against colliders in layer 8.
             // But instead we want to collide against everything except layer 8. The ~ operator does this, it inverts a bitmask.
             // layerMask = ~layerMask;
-
             Vector3 tarPos = targetPos + (Vector3.up * 1.2f);
             Vector3 direction = (targetPos - viewer.position);
 
+            RaycastHit[] raycastHits =
+                Physics
+                    .RaycastAll(viewer.position,
+                    direction,
+                    Mathf.Infinity,
+                    layerMask);
 
-            RaycastHit[] raycastHits = Physics.RaycastAll(viewer.position, direction, Mathf.Infinity, layerMask);
             // Debug.Log("IsInFOVScope => Did Hits : " + raycastHits.Length);
             if (raycastHits.Length > 0)
             {
                 float targetDist = Vector3.Distance(viewer.position, targetPos);
-                // Debug.Log("IsInFOVScope => distance compare - Hit:  " + raycastHits[0].distance + " / target: " + targetDist);
 
+                // Debug.Log("IsInFOVScope => distance compare - Hit:  " + raycastHits[0].distance + " / target: " + targetDist);
                 // if (raycastHits[0].distance < targetDist && LayerMask.LayerToName(raycastHits[0].transform.gameObject.layer) != "Actor")
-                if (LayerMask.LayerToName(raycastHits[0].transform.gameObject.layer) != "Actor")
+                if (
+                    LayerMask
+                        .LayerToName(raycastHits[0]
+                            .transform
+                            .gameObject
+                            .layer) !=
+                    "Actor"
+                )
                 {
                     // Debug.Log("IsInFOVScope => First Hit : " + raycastHits[0].transform.name + " Layer: " + LayerMask.LayerToName(raycastHits[0].transform.gameObject.layer));
                     // Debug.DrawRay(viewer.position, direction, Color.blue);
                     return false;
                 }
             }
-            // Debug.Log("IsInFOVScope => Layer: " + LayerMask.NameToLayer("BlockLOS"));
 
+            // Debug.Log("IsInFOVScope => Layer: " + LayerMask.NameToLayer("BlockLOS"));
             // int layerMask = LayerMask.GetMask("BlockLOS", "Ground");
             // RaycastHit hit;
             // // Does the ray intersect any objects excluding the player layer
@@ -144,17 +203,26 @@ static class UtilityHelpers
             //     }
             //     return true;
             // }
-
             // Debug.DrawRay(viewer.position, direction, Color.green);
             return true;
         }
+
         //TO DO: fix LOS
         // return (angle <= maxAngle);
         return false;
     }
-    public static bool IsTargetDetectable(Transform viewer, Vector3 target, float maxAngle, float maxRadius)
-    {
-        return (Vector3.Distance(viewer.position, target) < 3.5f || IsInFOVScope(viewer, target, maxAngle, maxRadius));
-    }
 
+    public static bool
+    IsTargetDetectable(
+        Transform viewer,
+        Vector3 target,
+        float maxAngle,
+        float maxRadius
+    )
+    {
+        return (
+        Vector3.Distance(viewer.position, target) < 3.5f ||
+        IsInFOVScope(viewer, target, maxAngle, maxRadius)
+        );
+    }
 }

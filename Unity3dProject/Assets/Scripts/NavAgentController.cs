@@ -44,6 +44,8 @@ public class NavAgentController : MonoBehaviour
     //     groundNavigationSpeed = ActorGroundNavigationSpeed.walk;
 
     [SerializeField] private ActorGroundNavigationSpeed _groundNavigationSpeed = ActorGroundNavigationSpeed.walk;
+    public bool bDebugMode = false;
+
     public ActorGroundNavigationSpeed groundNavigationSpeed
     {
         get => _groundNavigationSpeed;

@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using Hybrid.Components;
@@ -5,7 +6,121 @@ using UnityEngine;
 
 public class TeamGroup : MonoBehaviour
 {
-    // [SerializeField] private List<Faction> factions;
+    public TeamGroup(
+        TeamRole _role,
+        Territory _territory,
+        bool _territoryManaged,
+        Vector3 _goalPos
+    )
+    {
+        role = _role;
+        territoryOwner = _territory;
+        bTerritoryManaged = _territoryManaged;
+        currentGoalPosition = _goalPos;
+    }
+
+    public enum Status
+    {
+        active = 0,
+        inactive = 1,
+        dead = 2
+    }
+
+    [SerializeField]
+    private Status currentStatus = Status.active;
+
+    public Status GetStatus() => currentStatus;
+
+
+#region Role
+    public enum TeamRole
+    {
+        defend = 0,
+        assault = 1
+    }
+
+    [SerializeField]
+    private TeamRole role = TeamRole.assault;
+
+    public void SetTeamRole(bool assault = false)
+    {
+        role = assault ? TeamRole.assault : TeamRole.defend;
+    }
+
+    public TeamRole GetTeamRole() => role;
+#endregion
+
+
+
+#region Events
+    public event Action<TeamGroup> onTeamGroupDeath;
+
+    public void TeamGroupDeath() => onTeamGroupDeath?.Invoke(this);
+#endregion
+
+
+
+#region Territory Controls
+    private Vector4 assignedColor = Vector4.zero;
+
+    [SerializeField]
+    private bool bTerritoryManaged = true;
+
+    public bool IsTerrioryManaged() => bTerritoryManaged;
+
+    [SerializeField]
+    private Territory territoryOwner;
+
+    public Territory GetTerritoryOwer() => territoryOwner;
+
+    public void SetTerritoryOwner(Territory territory)
+    {
+        if (territory != null)
+        {
+            territoryOwner = territory;
+            assignedColor = territory.GetAssignedColor();
+        }
+    }
+#endregion
+
+
+
+#region Team Goal Controls
+    [SerializeField]
+    private float goalDistanceMin = 3f;
+
+    [SerializeField]
+    private Vector3 currentGoalPosition;
+
+    public Vector3 GetGoalPosition() => currentGoalPosition;
+
+    public void SetGoalPosition(Vector3 newPos)
+    {
+        currentGoalPosition = newPos;
+    }
+
+    private void EvaluateTeamGoal()
+    {
+        if (!bTerritoryManaged) return;
+
+        if (
+            currentGoalPosition == Vector3.zero ||
+            Vector3.Distance(currentGoalPosition, this.transform.position) <
+            goalDistanceMin
+        )
+        {
+            SetGoalPosition(territoryOwner.GetRandomAttackPoint());
+        }
+        else
+        {
+            return;
+        }
+    }
+#endregion
+
+
+
+#region Member Controls
     [SerializeField]
     private List<GameObject> members;
 
@@ -42,23 +157,38 @@ public class TeamGroup : MonoBehaviour
         }
     }
 
+    private void OnMemberDeath(GameObject member)
+    {
+        RemoveMember (member);
+        member.GetComponent<ActorEventManger>().onActorDeath -= OnMemberDeath;
+        Debug.Log("TeamGroup: " + this.name + " - Member died: " + member.name);
+        if (leader == member)
+        {
+            leader = null;
+            EvaluateTeamLeader();
+        }
+    }
+
     public GameObject GetTeamLeader(GameObject actor) => leader;
 
     private void SetTeamLeader(GameObject actor)
     {
         leader = actor;
+
+        TerritoryUnit territoryUnit = leader.GetComponent<TerritoryUnit>();
+        if (territoryUnit != null)
+        {
+            territoryUnit.SetTeamGroup(this);
+        }
     }
 
     private void EvaluateTeamLeader()
     {
         memberCount = members.Count;
-        if (memberCount > 1)
+        if (memberCount >= 1)
         {
-            // leader = members[Random.Range(0, memberCount - 1) % memberCount];
-            // }
-            // else
-            // {
-            leader = members[0];
+            SetTeamLeader(members[0]);
+
             Debug
                 .Log("TeamGroup:" +
                 this.name +
@@ -108,18 +238,11 @@ public class TeamGroup : MonoBehaviour
             }
         }
     }
+#endregion
 
-    private void OnMemberDeath(GameObject member)
-    {
-        RemoveMember (member);
-        member.GetComponent<ActorEventManger>().onActorDeath -= OnMemberDeath;
-        Debug.Log("TeamGroup: " + this.name + " - Member died: " + member.name);
-        if (leader == member)
-        {
-            leader = null;
-            EvaluateTeamLeader();
-        }
-    }
+
+    [SerializeField]
+    private float morale = 1f;
 
     private void Awake()
     {
@@ -150,19 +273,35 @@ public class TeamGroup : MonoBehaviour
 
     private void FixedUpdate()
     {
-        timer -= Time.deltaTime;
+        if (currentStatus == Status.dead) return;
+
+        timer -= Time.fixedDeltaTime;
 
         if (timer < 0)
         {
             timer = updateTime;
 
-            if (memberCount > 1 && leader == null)
+            if (memberCount >= 1)
             {
-                EvaluateTeamLeader();
+                if (leader == null)
+                {
+                    EvaluateTeamLeader();
+                }
+                else
+                {
+                    this.transform.position = leader.transform.position;
+                }
+
+                EvaluateTeamGoal();
             }
             else
             {
                 // SELF DESTRUCT
+                if (members.Count < 1)
+                {
+                    currentStatus = Status.dead;
+                    TeamGroupDeath();
+                }
             }
         }
     }
@@ -180,11 +319,11 @@ public class TeamGroup : MonoBehaviour
             {
                 if (member == leader)
                 {
-                    Gizmos.color = Color.magenta;
+                    Gizmos.color = assignedColor; //Color.mmgenta
                     Gizmos.DrawWireSphere(leader.transform.position, 0.4f);
                 }
 
-                Gizmos.color = Color.yellow;
+                Gizmos.color = assignedColor; //Color.yellow;
                 Transform sourceTransform;
 
                 if (leader != null && member != leader)

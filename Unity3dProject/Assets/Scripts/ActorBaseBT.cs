@@ -13,20 +13,15 @@ public class ActorBaseBT : MonoBehaviour
 
     ActorNavigationData actorNavigationData;
 
+    TerritoryUnit territoryUnit;
+
     void Start()
     {
         agent = this.GetComponent<NavMeshAgent>();
         actorNavigationData = this.GetComponent<ActorNavigationData>();
+        territoryUnit = GetComponent<TerritoryUnit>();
     }
 
-    // private void OnDrawGizmos()
-    // {
-    //     if (agent != null && agent.destination != null)
-    //     {
-    //         Gizmos.color = Color.yellow;
-    //         Gizmos.DrawWireSphere(agent.destination, agent.stoppingDistance);
-    //     }
-    // }
     [Task]
     public bool CanExecuteBTTasks()
     {
@@ -37,9 +32,23 @@ public class ActorBaseBT : MonoBehaviour
         }
         else
         {
+            Task.current.debugInfo =
+                string.Format("allowPandaBTTasks : " + allowPandaBTTasks);
             Task.current.Fail();
             return false;
         }
+    }
+
+    [Task]
+    public bool HasValidAgent()
+    {
+        if (agent == null | !agent.enabled)
+        {
+            Task.current.Fail();
+            return false;
+        }
+        Task.current.Succeed();
+        return true;
     }
 
     public Vector3 RandomNavmeshLocation(float radius, Vector3 center)
@@ -55,15 +64,83 @@ public class ActorBaseBT : MonoBehaviour
         return finalPosition;
     }
 
-    // [Task]
-    // public void PickDestination(float x, float z)
-    // {
-    //     Vector3 dest = new Vector3(x, 0, z);
-    //     agent.SetDestination(dest);
-    //     Task.current.Succeed();
-    // }
     float wanderRadius = 100.0f;
 
+
+#region Territory Tasks
+    [Task]
+    public void PickTerritoryNextWaypoint()
+    {
+        if (!CanExecuteBTTasks()) return;
+
+        Transform newWaypoint = territoryUnit.EvaluateBorderWaypoint();
+        if (newWaypoint)
+        {
+            actorNavigationData.currentWaypoint = newWaypoint;
+        }
+        else
+        {
+            Task.current.Fail();
+            return;
+        }
+
+        Task.current.debugInfo = string.Format("Travel to next Waypoint");
+
+        agent.SetDestination(actorNavigationData.currentWaypoint.position);
+        Task.current.Succeed();
+    }
+
+    [Task]
+    public void EvaluateTeamGroupGoal()
+    {
+        if (!CanExecuteBTTasks()) return;
+
+        if (!HasValidAgent()) return;
+
+        if (territoryUnit != null)
+        {
+            TeamGroup teamGroup = territoryUnit.GetTeamGroup();
+            if (teamGroup != null)
+            {
+                if (
+                    teamGroup.IsTerrioryManaged() &&
+                    teamGroup.GetTeamRole() == TeamGroup.TeamRole.defend
+                )
+                {
+                    PickTerritoryNextWaypoint();
+                    Task.current.Succeed();
+                }
+                else
+                {
+                    if (teamGroup.GetGoalPosition() != Vector3.zero)
+                    {
+                        Vector3 pos =
+                            RandomNavmeshLocation(2f,
+                            teamGroup.GetGoalPosition());
+                        agent.SetDestination (pos);
+
+                        Task.current.Succeed();
+                    }
+                    else
+                    {
+                        Task.current.debugInfo =
+                            string.Format("No TeamGroup Goal");
+                        Task.current.Fail();
+                    }
+                }
+            }
+            else
+            {
+                Task.current.debugInfo = string.Format("No TeamGroup");
+                Task.current.Fail();
+            }
+        }
+    }
+#endregion
+
+
+
+#region Random Destination
     [Task]
     public void PickRandomDestination()
     {
@@ -95,6 +172,8 @@ public class ActorBaseBT : MonoBehaviour
         agent.SetDestination (dest);
         Task.current.Succeed();
     }
+#endregion
+
 
     [Task]
     public void EvaluateCurrentTravelDestination()
@@ -106,7 +185,10 @@ public class ActorBaseBT : MonoBehaviour
             Task.current.Fail();
             return;
         }
-        if (actorNavigationData.travelPosition == null)
+        if (
+            actorNavigationData.travelPosition == null ||
+            agent == null | !agent.enabled
+        )
         {
             Task.current.Fail();
             return;
@@ -139,4 +221,13 @@ public class ActorBaseBT : MonoBehaviour
             Task.current.Succeed();
         }
     }
+
+    // private void OnDrawGizmos()
+    // {
+    //     if (agent != null && agent.destination != null)
+    //     {
+    //         Gizmos.color = Color.yellow;
+    //         Gizmos.DrawWireSphere(agent.destination, agent.stoppingDistance);
+    //     }
+    // }
 }

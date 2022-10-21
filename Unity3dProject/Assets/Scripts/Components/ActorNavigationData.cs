@@ -7,9 +7,16 @@ namespace Hybrid.Components
     public class ActorNavigationData : MonoBehaviour
     {
         public float wanderRadius = 25f;
+
         public float positionReachedDistanceMin = 5f;
+
         public Transform wanderCenterPosition;
+
         public Transform travelPosition;
+
+        public List<Transform> pastWaypoints = new List<Transform>();
+
+        public Transform currentWaypoint;
 
         private void Start()
         {
@@ -20,8 +27,8 @@ namespace Hybrid.Components
         }
 
         //TEMP
-
         bool bShouldHoldPosition = true;
+
         public float holdPositionRadius = 8f;
     }
 }
