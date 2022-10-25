@@ -26,6 +26,8 @@ public class Faction : ScriptableObject
 
     public Faction[] enemies;
 
+    public Vector4 color = Vector4.zero;
+
     public static FactionRelationship
     GetFactionRelationship(Faction factionA, Faction factionB)
     {
@@ -92,10 +94,27 @@ public class Faction : ScriptableObject
         Debug.Log("Faction: SetupRelations!");
     }
 
+    public void AssigneColor(Vector4 newcolor)
+    {
+        if (color == Vector4.zero)
+        {
+            if (newcolor != Vector4.zero)
+            {
+                color = newcolor;
+                return;
+            }
+
+            color =
+                new Vector4(Random.Range(0.0f, 1.0f),
+                    Random.Range(0.0f, 1.0f),
+                    Random.Range(0.0f, 1.0f),
+                    1f);
+        }
+    }
+
     private void Awake()
     {
-        Debug.Log("Faction: Awake");
-
+        // Debug.Log("Faction: Awake");
         SetupRelations();
     }
 }

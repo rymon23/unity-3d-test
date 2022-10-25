@@ -14,6 +14,12 @@ namespace Hybrid.Components
     public class ActorHealth : MonoBehaviour
 
     {
+
+    #region Killer
+        [SerializeField] private GameObject killer; 
+        public GameObject GetKiller () => killer;
+    #endregion
+    
         [SerializeField] private float _health = 100f;
         public float health
         {
@@ -103,7 +109,7 @@ namespace Hybrid.Components
         }
 
 
-        private void DamageHealth(float fDamage) //, bool ignoreArmor = false)
+        private void DamageHealth(float fDamage, GameObject source) //, bool ignoreArmor = false)
         {
             if (!isInvincible && deathState < DeathState.dying)
             {
@@ -121,7 +127,10 @@ namespace Hybrid.Components
                 actorEventManger.UpdateStatBar_Health(health / (float)healthMax);
                 if (health <= 0)
                 {
-                    actorEventManger.ActorDeath();
+                    if (!killer) {
+                        killer = source;
+                    }
+                    actorEventManger.ActorDeath(source);
                 }
                 else
                 {
@@ -242,14 +251,16 @@ namespace Hybrid.Components
             energyArmor -= Math.Abs(fDamage);
             // actorEventManger.UpdateStatBar_Stamina(energyArmor / (float)energyArmorMax);
 
-            if (energyArmor <= 0)
-            {
                 energyArmorRegenDelayTimer = energyArmorRegenDelay;
-            }
-            else
-            {
-                //Should evaluate flee state
-            }
+                
+            // if (energyArmor <= 0)
+            // {
+            //     energyArmorRegenDelayTimer = energyArmorRegenDelay;
+            // }
+            // else
+            // {
+            //     //Should evaluate flee state
+            // }
         }
 
     }

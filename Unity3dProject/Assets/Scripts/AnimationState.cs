@@ -111,6 +111,7 @@ public class AnimationState : MonoBehaviour
     public bool isBashing = false;
     public bool isDodging = false;
     public bool isCasting = false;
+    public bool isFlying = false;
     public bool isWeaponDrawn = false;
     public bool isMoving = false;
     public bool isSprinting = false;

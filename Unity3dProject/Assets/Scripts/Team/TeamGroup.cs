@@ -45,6 +45,7 @@ public class TeamGroup : MonoBehaviour
     public void SetTeamRole(bool assault = false)
     {
         role = assault ? TeamRole.assault : TeamRole.defend;
+        if (leader) SetTeamLeader(leader); //To update leader's role
     }
 
     public TeamRole GetTeamRole() => role;
@@ -61,13 +62,6 @@ public class TeamGroup : MonoBehaviour
 
 
 #region Territory Controls
-    private Vector4 assignedColor = Vector4.zero;
-
-    [SerializeField]
-    private bool bTerritoryManaged = true;
-
-    public bool IsTerrioryManaged() => bTerritoryManaged;
-
     [SerializeField]
     private Territory territoryOwner;
 
@@ -81,11 +75,41 @@ public class TeamGroup : MonoBehaviour
             assignedColor = territory.GetAssignedColor();
         }
     }
+
+    [SerializeField]
+    private Territory currentTerritoryLocation;
+
+    public Territory GetLocalTerritory() => currentTerritoryLocation;
+
+    public void SetLocalTerritory(Territory localTerritory)
+    {
+        if (currentTerritoryLocation != localTerritory)
+        {
+            currentTerritoryLocation = localTerritory;
+
+            if (currentTerritoryLocation != null)
+            {
+                currentTerritoryLocation.TeamGroupDetected(this);
+            }
+        }
+    }
+
+    private Vector4 assignedColor = Vector4.zero;
+
+    [SerializeField]
+    private bool bTerritoryManaged = true;
+
+    public bool IsTerrioryManaged() => bTerritoryManaged;
 #endregion
 
 
 
 #region Team Goal Controls
+    [SerializeField]
+    private float holdPositionRadius = 12f;
+
+    public float GetHoldPositionRadius() => holdPositionRadius;
+
     [SerializeField]
     private float goalDistanceMin = 3f;
 
@@ -157,7 +181,7 @@ public class TeamGroup : MonoBehaviour
         }
     }
 
-    private void OnMemberDeath(GameObject member)
+    private void OnMemberDeath(GameObject member, GameObject killer)
     {
         RemoveMember (member);
         member.GetComponent<ActorEventManger>().onActorDeath -= OnMemberDeath;
@@ -169,7 +193,9 @@ public class TeamGroup : MonoBehaviour
         }
     }
 
-    public GameObject GetTeamLeader(GameObject actor) => leader;
+
+#region Leader Controls
+    public GameObject GetTeamLeader() => leader;
 
     private void SetTeamLeader(GameObject actor)
     {
@@ -179,6 +205,8 @@ public class TeamGroup : MonoBehaviour
         if (territoryUnit != null)
         {
             territoryUnit.SetTeamGroup(this);
+            territoryUnit.SetUnitRole(role == TeamRole.assault);
+            territoryUnit.EvaluateHoldPositionData (leader);
         }
     }
 
@@ -198,7 +226,11 @@ public class TeamGroup : MonoBehaviour
             UpdateTeamFollowers();
         }
     }
+#endregion
 
+
+
+#region Follower Controls
     private void EvaluateTeamFollower(GameObject member)
     {
         if (leader != null && member != leader && memberCount > 1)
@@ -221,23 +253,34 @@ public class TeamGroup : MonoBehaviour
                 if (member != leader)
                 {
                     Follower follower = member.GetComponent<Follower>();
-                    if (follower != null)
-                    {
-                        follower.SetTarget(leader.transform);
-                        follower.EvaluateFollowBehavior();
-                    }
-                    else
+                    if (follower == null)
                     {
                         Debug
                             .Log("TeamGroup: " +
                             this.name +
                             " - NO Follower Component Found: " +
                             member.name);
+                        return;
+                    }
+
+                    follower.SetTarget(leader.transform);
+                    follower.EvaluateFollowBehavior();
+
+                    TerritoryUnit territoryUnit =
+                        member.GetComponent<TerritoryUnit>();
+                    if (territoryUnit != null)
+                    {
+                        territoryUnit.EvaluateHoldPositionData (leader);
                     }
                 }
             }
         }
     }
+
+
+#endregion
+
+
 #endregion
 
 
@@ -271,40 +314,52 @@ public class TeamGroup : MonoBehaviour
 
     private float timer;
 
+    private float delayStart = 1f;
+
     private void FixedUpdate()
     {
         if (currentStatus == Status.dead) return;
 
-        timer -= Time.fixedDeltaTime;
-
-        if (timer < 0)
+        if (delayStart > 0f)
         {
-            timer = updateTime;
+            delayStart -= Time.fixedDeltaTime;
+            return;
+        }
 
-            if (memberCount >= 1)
+        if (timer > 0f)
+        {
+            timer -= Time.fixedDeltaTime;
+            return;
+        }
+
+        timer = updateTime;
+
+        if (memberCount >= 1)
+        {
+            if (leader == null)
             {
-                if (leader == null)
-                {
-                    EvaluateTeamLeader();
-                }
-                else
-                {
-                    this.transform.position = leader.transform.position;
-                }
-
-                EvaluateTeamGoal();
+                EvaluateTeamLeader();
             }
             else
             {
-                // SELF DESTRUCT
-                if (members.Count < 1)
-                {
-                    currentStatus = Status.dead;
-                    TeamGroupDeath();
-                }
+                this.transform.position = leader.transform.position;
+            }
+
+            EvaluateTeamGoal();
+        }
+        else
+        {
+            // SELF DESTRUCT
+            if (members.Count < 1)
+            {
+                currentStatus = Status.dead;
+                TeamGroupDeath();
             }
         }
     }
+
+
+#region Debugging
 
     [SerializeField]
     private bool bDebug = true;
@@ -339,6 +394,14 @@ public class TeamGroup : MonoBehaviour
                     (member.transform.position - sourceTransform.position);
                 Gizmos.DrawRay(sourceTransform.position, direction);
             }
+
+            if (holdPositionRadius > 0)
+            {
+                Gizmos.color = Color.white;
+                Gizmos.DrawWireSphere(transform.position, holdPositionRadius);
+            }
         }
     }
+#endregion
+
 }

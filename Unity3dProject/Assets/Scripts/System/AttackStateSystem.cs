@@ -81,6 +81,7 @@ namespace Hybrid.Systems
                             )
                             {
                                 weapon._ownerRefId = actor.refId;
+                                weapon.owner = actor.gameObject;
                             }
                             hasGun = (weapon.weaponType == WeaponType.gun);
                             animator

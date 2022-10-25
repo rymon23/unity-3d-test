@@ -260,24 +260,39 @@ namespace Hybrid.Systems
 
             ActorNavigationData actorNavigationData =
                 combatStateData.gameObject.GetComponent<ActorNavigationData>();
-            if (
+
+            float holdPositionDistance;
+            bool isOutOfHoldRadius = false;
+            bool shouldHoldPosition =
                 combatStateData.combatNavigationState ==
                 CombatNavigationState.holdPosition &&
-                actorNavigationData.travelPosition != null
-            )
+                actorNavigationData.holdPositionCenter != null;
+            if (shouldHoldPosition)
             {
-                if (
+                holdPositionDistance =
                     Vector3
                         .Distance(combatStateData.gameObject.transform.position,
-                        actorNavigationData.travelPosition.position) >
-                    actorNavigationData.holdPositionRadius
-                )
-                {
-                    combatStateData.combatMovementType =
-                        CombatMovementType.fallBack;
-                    Debug.Log("Need to hold position!");
-                    return;
-                }
+                        actorNavigationData.holdPositionCenter.position);
+
+                isOutOfHoldRadius =
+                    holdPositionDistance >
+                    actorNavigationData.holdPositionRadius;
+
+                // if (
+                //     holdPositionDistance >
+                //     actorNavigationData.holdPositionRadius
+                // )
+                // {
+                //     combatStateData.combatMovementType =
+                //         CombatMovementType.fallBack;
+
+                //     combatStateData
+                //         .UpdateMovementTimer(combatStateData
+                //             .combatMovementType);
+
+                //     Debug.Log("Need to hold position!");
+                //     return;
+                // }
             }
 
             float keepDistMin;
@@ -303,6 +318,7 @@ namespace Hybrid.Systems
 
             // Override other movements if out of the buffer range
             if (
+                isOutOfHoldRadius ||
                 targetDistance < keepDistMin ||
                 navStopped ||
                 animationState.IsStaggered()
@@ -310,13 +326,30 @@ namespace Hybrid.Systems
             {
                 combatStateData.combatMovementType =
                     CombatMovementType.fallBack;
-                // combatStateData.UpdateMovementTimer(combatStateData.combatMovementType, 0.5f);
+
+                if (isOutOfHoldRadius)
+                {
+                    combatStateData
+                        .UpdateMovementTimer(combatStateData
+                            .combatMovementType);
+                }
             }
             else if (targetDistance > keepDistMax)
             {
-                combatStateData.combatMovementType =
-                    CombatMovementType.pressAttack;
-                // combatStateData.UpdateMovementTimer(combatStateData.combatMovementType, 0.5f);
+                if (
+                    !shouldHoldPosition ||
+                    combatStateData.movementUpdateTimer < 0
+                )
+                {
+                    combatStateData.combatMovementType =
+                        CombatMovementType.pressAttack;
+                    if (shouldHoldPosition)
+                    {
+                        combatStateData
+                            .UpdateMovementTimer(combatStateData
+                                .combatMovementType);
+                    }
+                }
             }
 
             // Update movment type if timmer complete

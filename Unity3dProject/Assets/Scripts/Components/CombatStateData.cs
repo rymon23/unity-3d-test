@@ -157,21 +157,21 @@ namespace Hybrid.Components
         public bool CanBeAlerted() => IsAlerted() || combatState == CombatState.inactive;
         public bool ShouldAttack() => IsInCombat();
 
-        public void UpdateMovementTimer(CombatMovementType movementType, float timeerOverride = -1f)
+        public void UpdateMovementTimer(CombatMovementType movementType, float timerOverrideMax = -1f)
         {
             switch (movementType)
             {
                 case CombatMovementType.fallBack:
-                    movementUpdateTimer = UnityEngine.Random.Range(fallBackTimeMin, timeerOverride == -1f ? fallBackTimeMax : timeerOverride);
+                    movementUpdateTimer = UnityEngine.Random.Range(fallBackTimeMin, timerOverrideMax == -1f ? fallBackTimeMax : timerOverrideMax);
                     break;
                 case CombatMovementType.pressAttack:
-                    movementUpdateTimer = UnityEngine.Random.Range(advanceTimeMin, timeerOverride == -1f ? advanceTimeMax : timeerOverride);
+                    movementUpdateTimer = UnityEngine.Random.Range(advanceTimeMin, timerOverrideMax == -1f ? advanceTimeMax : timerOverrideMax);
                     break;
                 case CombatMovementType.holdPosition:
-                    movementUpdateTimer = UnityEngine.Random.Range(holdPositionMin, timeerOverride == -1f ? holdPositionMax : timeerOverride);
+                    movementUpdateTimer = UnityEngine.Random.Range(holdPositionMin, timerOverrideMax == -1f ? holdPositionMax : timerOverrideMax);
                     break;
                 default:
-                    movementUpdateTimer = UnityEngine.Random.Range(flankTimeMin, timeerOverride == -1f ? flankTimeMax : timeerOverride);
+                    movementUpdateTimer = UnityEngine.Random.Range(flankTimeMin, timerOverrideMax == -1f ? flankTimeMax : timerOverrideMax);
                     break;
             }
         }

@@ -473,6 +473,9 @@ namespace Hybrid.Systems
                                         .currentTarget
                                         .gameObject
                                         .GetComponent<ActorHealth>();
+                                ActorEventManger actorEventManger =
+                                    myActor.GetComponent<ActorEventManger>();
+
                                 if (targetHealth.isDead())
                                 {
                                     myTargeting.currentTarget = null;
@@ -481,9 +484,6 @@ namespace Hybrid.Systems
                                     myTargeting.enemycount = enemies;
                                     myFOV.currentTarget = null;
 
-                                    ActorEventManger actorEventManger =
-                                        myActor
-                                            .GetComponent<ActorEventManger>();
                                     if (actorEventManger != null)
                                         actorEventManger
                                             .CombatTargetUpdate(null);
@@ -494,6 +494,11 @@ namespace Hybrid.Systems
                                     {
                                         myCombatStateData.combatState =
                                             CombatState.active;
+
+                                        if (actorEventManger)
+                                            actorEventManger
+                                                .CombatStateChange(myCombatStateData
+                                                    .combatState);
                                     }
                                 }
                             }

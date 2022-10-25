@@ -15,7 +15,9 @@ public class ActorBaseBT : MonoBehaviour
 
     TerritoryUnit territoryUnit;
 
-    void Start()
+    TeamGroup teamGroup;
+
+    void Awake()
     {
         agent = this.GetComponent<NavMeshAgent>();
         actorNavigationData = this.GetComponent<ActorNavigationData>();
@@ -99,7 +101,6 @@ public class ActorBaseBT : MonoBehaviour
 
         if (territoryUnit != null)
         {
-            TeamGroup teamGroup = territoryUnit.GetTeamGroup();
             if (teamGroup != null)
             {
                 if (
@@ -108,6 +109,8 @@ public class ActorBaseBT : MonoBehaviour
                 )
                 {
                     PickTerritoryNextWaypoint();
+                    Task.current.debugInfo =
+                        string.Format("PickTerritoryNextWaypoint");
                     Task.current.Succeed();
                 }
                 else
@@ -119,6 +122,8 @@ public class ActorBaseBT : MonoBehaviour
                             teamGroup.GetGoalPosition());
                         agent.SetDestination (pos);
 
+                        Task.current.debugInfo =
+                            string.Format("Travel to team goal");
                         Task.current.Succeed();
                     }
                     else
@@ -131,6 +136,8 @@ public class ActorBaseBT : MonoBehaviour
             }
             else
             {
+                teamGroup = territoryUnit.GetTeamGroup();
+
                 Task.current.debugInfo = string.Format("No TeamGroup");
                 Task.current.Fail();
             }

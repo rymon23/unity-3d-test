@@ -11,15 +11,9 @@ public class TerritorySpawnController : MonoBehaviour
     private bool keepSpawning = true;
 
     [SerializeField]
-    private bool bForceAssignFaction = false;
-
-    [SerializeField]
     private int spawnLimit = 4;
 
     public int GetSpawnLimit() => spawnLimit;
-
-    [SerializeField]
-    private float radius = 32f;
 
     [SerializeField]
     private int teamGroupCount = 0;
@@ -29,8 +23,6 @@ public class TerritorySpawnController : MonoBehaviour
 
     [SerializeField]
     private Transform[] spawnMarkers;
-
-    public Faction[] factions;
 
     [SerializeField]
     private SpawnPoint[] spawnPoints;
@@ -43,26 +35,7 @@ public class TerritorySpawnController : MonoBehaviour
 
     public bool bHoldPosition = true;
 
-    [SerializeField]
-    public float delayStart = 1f;
-
-    [SerializeField]
-    private Vector4 assignedColor = Vector4.zero;
-
-    public void SetAsignedColor(Vector4 newColor)
-    {
-        assignedColor = newColor;
-    }
-
-    private void OnDrawGizmos()
-    {
-        if (territory != null) radius = territory.GetRadius();
-        if (assignedColor != Vector4.zero)
-        {
-            Gizmos.color = assignedColor;
-        }
-        Gizmos.DrawWireSphere(this.transform.position, radius);
-    }
+    private float delayStart = 1f;
 
     public GameObject[] prefabs;
 
@@ -89,9 +62,6 @@ public class TerritorySpawnController : MonoBehaviour
 
     public SpawnPoint RandomSpawnPoint()
     {
-        // int ix = prefabs.Length;
-        // int x = Random.Range(0, ix);
-        // Debug.Log("RandomPrefab: " + x);
         return spawnPoints[Random.Range(0, spawnPoints.Length)];
     }
 
@@ -116,6 +86,8 @@ public class TerritorySpawnController : MonoBehaviour
     {
         teamGroupCount = teamGroups.Count;
     }
+
+    public int GetTeamGroups() => teamGroups.Count;
 
     // private void EvaluateTeamGroups()
     // {
@@ -169,15 +141,15 @@ public class TerritorySpawnController : MonoBehaviour
 
         territory.ResetTeamGroupDeathCooldown();
 
-        Debug
-            .Log("Spawn Controller: " +
-            this.name +
-            " - TeamGroup Lost: " +
-            teamGroup.name);
+        // Debug
+        //     .Log("Spawn Controller: " +
+        //     this.name +
+        //     " - TeamGroup Lost: " +
+        //     teamGroup.name);
     }
 
     public void UpdateTeamSpawns(
-        float attackUnitAllocation = .5f,
+        float attackUnitAllocation,
         int maxTeamGroups = 4,
         int minTeamGroupSize = 2
     )
@@ -190,36 +162,88 @@ public class TerritorySpawnController : MonoBehaviour
 
         int teamGroupSizeMax = Mathf.FloorToInt(spawnLimit / maxTeamGroups);
 
-        if (
-            teamGroupCount < maxTeamGroups &&
-            teamGroupDefenders < maxDefenderTeams
-        )
+        // Reassign team group roles as needed
+        if (teamGroupCount == maxTeamGroups)
         {
-            Debug.Log("EvaluateTeams - Spawn Defender Team");
-            TeamGroup newTeam =
-                SpawnTeamGroup(RandomSpawnPoint().gameObject.transform.position,
-                teamGroupSizeMax,
-                TeamGroup.TeamRole.defend);
-            if (newTeam != null)
+            if (
+                teamGroupDefenders < maxDefenderTeams ||
+                teamGroupAttackers < maxAttackerTeams
+            )
             {
-                AddTeamGroup (newTeam);
-                teamGroupDefenders++;
+                int attackers = 0;
+                int defenders = 0;
+
+                foreach (TeamGroup team in teamGroups)
+                {
+                    if (teamGroupDefenders < maxDefenderTeams)
+                    {
+                        if (team.GetTeamRole() != TeamGroup.TeamRole.defend)
+                        {
+                            team.SetTeamRole(false);
+                            teamGroupDefenders++;
+                        }
+                    }
+                    else if (teamGroupAttackers < maxAttackerTeams)
+                    {
+                        if (team.GetTeamRole() != TeamGroup.TeamRole.assault)
+                        {
+                            team.SetTeamRole(true);
+                            teamGroupAttackers++;
+                        }
+                    }
+
+                    if (team.GetTeamRole() == TeamGroup.TeamRole.defend)
+                        defenders++;
+                    if (team.GetTeamRole() == TeamGroup.TeamRole.assault)
+                        attackers++;
+                }
+
+                teamGroupAttackers = attackers;
+                teamGroupDefenders = defenders;
             }
         }
-        if (
-            teamGroupCount < maxTeamGroups &&
-            teamGroupAttackers < maxAttackerTeams
-        )
+        else
         {
-            Debug.Log("EvaluateTeams - Spawn Attacker Team");
-            TeamGroup newTeam =
-                SpawnTeamGroup(RandomSpawnPoint().gameObject.transform.position,
-                teamGroupSizeMax,
-                TeamGroup.TeamRole.assault);
-            if (newTeam != null)
+            if (
+                teamGroupCount < maxTeamGroups &&
+                teamGroupDefenders < maxDefenderTeams
+            )
             {
-                AddTeamGroup (newTeam);
-                teamGroupAttackers++;
+                Debug.Log("EvaluateTeams - Spawn Defender Team");
+                TeamGroup newTeam =
+                    SpawnTeamGroup(territory
+                        .GetRandomWaypoint()
+                        .gameObject
+                        .transform
+                        .position,
+                    teamGroupSizeMax,
+                    TeamGroup.TeamRole.defend);
+                if (newTeam != null)
+                {
+                    AddTeamGroup (newTeam);
+                    teamGroupDefenders++;
+                    territory.totalReinforcements -= teamGroupSizeMax;
+                }
+            }
+            if (
+                teamGroupCount < maxTeamGroups &&
+                teamGroupAttackers < maxAttackerTeams
+            )
+            {
+                Debug.Log("EvaluateTeams - Spawn Attacker Team");
+                TeamGroup newTeam =
+                    SpawnTeamGroup(RandomSpawnPoint()
+                        .gameObject
+                        .transform
+                        .position,
+                    teamGroupSizeMax,
+                    TeamGroup.TeamRole.assault);
+                if (newTeam != null)
+                {
+                    AddTeamGroup (newTeam);
+                    teamGroupAttackers++;
+                    territory.totalReinforcements -= teamGroupSizeMax;
+                }
             }
         }
     }
@@ -250,6 +274,10 @@ public class TerritorySpawnController : MonoBehaviour
         TeamGroup newTeamGroup =
             newTeamGroupTransform.GetComponent<TeamGroup>();
 
+        newTeamGroup.SetTeamRole(role == TeamGroup.TeamRole.assault);
+        newTeamGroup.SetTerritoryOwner (territory);
+        newTeamGroup.SetGoalPosition(territory.GetRandomAttackPoint());
+
         for (int i = 0; i < members; i++)
         {
             GameObject newSpawn =
@@ -262,7 +290,7 @@ public class TerritorySpawnController : MonoBehaviour
             if (actorFactions != null)
             {
                 actorFactions.factions = new Faction[1];
-                actorFactions.factions[0] = factions[0];
+                actorFactions.factions[0] = territory.owner;
             }
 
             ActorEventManger actorEventManger =
@@ -274,16 +302,13 @@ public class TerritorySpawnController : MonoBehaviour
                 newSpawn.GetComponent<TerritoryUnit>();
             if (territoryUnit != null)
             {
+                territoryUnit.SetTeamGroup (newTeamGroup);
                 territoryUnit.SetSourceTerritory (territory);
+                territoryUnit.EvaluateHoldPositionData(null);
             }
 
-            spawns.Add (newSpawn);
             newTeamGroup.AddMember (newSpawn);
-
-            // TEMP
-            newTeamGroup.SetTeamRole(role == TeamGroup.TeamRole.assault);
-            newTeamGroup.SetTerritoryOwner (territory);
-            newTeamGroup.SetGoalPosition(territory.GetRandomAttackPoint());
+            spawns.Add (newSpawn);
         }
         return newTeamGroup;
     }
@@ -296,14 +321,15 @@ public class TerritorySpawnController : MonoBehaviour
             Transform spawnPoint = RandomSpawnPoint().GetComponent<Transform>();
             spawnPos =
                 UtilityHelpers.GetRandomNavmeshPoint(1.5f, spawnPoint.position);
-            Debug.Log("SPAWN at SpawnPoint: " + spawnPoint.name);
+            // Debug.Log("SPAWN at SpawnPoint: " + spawnPoint.name);
         }
         else
         {
-            Debug.Log("SPAWN!");
+            // Debug.Log("SPAWN!");
             spawnPos =
                 UtilityHelpers
-                    .GetRandomNavmeshPoint(radius, this.transform.position);
+                    .GetRandomNavmeshPoint(territory.GetRadius(),
+                    this.transform.position);
         }
 
         GameObject newSpawn =
@@ -314,7 +340,7 @@ public class TerritorySpawnController : MonoBehaviour
         if (actorFactions != null)
         {
             actorFactions.factions = new Faction[1];
-            actorFactions.factions[0] = factions[0];
+            actorFactions.factions[0] = territory.owner;
         }
 
         spawns.Add (newSpawn);
@@ -342,7 +368,7 @@ public class TerritorySpawnController : MonoBehaviour
             ActorNavigationData actorNavigationData =
                 newSpawn.GetComponent<ActorNavigationData>();
             actorNavigationData.travelPosition = this.transform;
-            actorNavigationData.holdPositionRadius = radius;
+            actorNavigationData.holdPositionRadius = territory.GetRadius();
             combatStateData.combatNavigationState =
                 CombatNavigationState.holdPosition;
         }
@@ -361,7 +387,7 @@ public class TerritorySpawnController : MonoBehaviour
         }
     }
 
-    private void OnSpawnDeath(GameObject spawn)
+    private void OnSpawnDeath(GameObject spawn, GameObject killer)
     {
         currentSpawnCount--;
         deaths++;
@@ -371,15 +397,38 @@ public class TerritorySpawnController : MonoBehaviour
 
         if (territory != null)
         {
-            Debug.Log("Territory Spawn Controller: OnSpawnDeath");
-            territory.Damage(0.1f, 1);
+            string str = "TerritorySpawnController: OnSpawnDeath";
+
+            Faction killerFaction = null;
+
+            if (killer)
+            {
+                ActorFactions killerFactions =
+                    killer.gameObject.GetComponent<ActorFactions>();
+
+                str += "\nkiller: " + killer.name;
+
+                if (killerFactions != null)
+                {
+                    killerFaction = killerFactions.GetFirstFaction();
+
+                    str += "\nkillerFaction: " + killerFaction?.name;
+
+                    territory
+                        .UnitLost(killerFaction, killer.transform.position);
+                    territory.InvasionStatusAlert(killer.transform.position);
+                }
+            }
+
+            territory
+                .UnitLost(killerFaction, spawn.gameObject.transform.position);
+            Debug.Log (str);
         }
     }
 
     private void Awake()
     {
         territory = GetComponent<Territory>();
-        if (territory != null) radius = territory.GetRadius();
     }
 
     private void Start()

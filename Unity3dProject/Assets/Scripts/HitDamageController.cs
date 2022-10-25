@@ -29,11 +29,11 @@ namespace Hybrid.Components
 
             if (hitPosition == HitPositionType.head)
             {
-                actorEventManger.DamageHealth(weapon.damage * 2);
+                actorEventManger.DamageHealth(weapon.damage * 2, weapon.owner);
             }
             else
             {
-                actorEventManger.DamageHealth(weapon.damage);
+                actorEventManger.DamageHealth(weapon.damage, weapon.owner);
             }
         }
 
@@ -56,11 +56,11 @@ namespace Hybrid.Components
 
             if (hitPosition == HitPositionType.head)
             {
-                actorEventManger.DamageHealth(totalDamage * 2);
+                actorEventManger.DamageHealth(totalDamage * 2, weapon.owner);
             }
             else
             {
-                actorEventManger.DamageHealth (totalDamage);
+                actorEventManger.DamageHealth(totalDamage, weapon.owner);
             }
         }
 

@@ -13,7 +13,12 @@ public enum WeaponType
 
 public class Weapon : MonoBehaviour
 {
+#region Owner
     public string _ownerRefId = "-";
+
+    public GameObject owner;
+#endregion
+
 
     public WeaponType weaponType;
 

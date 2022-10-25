@@ -15,10 +15,21 @@ static class UtilityHelpers
         return $"ref#{entity.Version}{entity.Index}";
     }
 
+    public static Vector4 GenerateRandomRGB() =>
+        new Vector4(UnityEngine.Random.Range(0.0f, 1.0f),
+            UnityEngine.Random.Range(0.0f, 1.0f),
+            UnityEngine.Random.Range(0.0f, 1.0f),
+            1f);
+
     public static bool
-    GeCloseNavMeshPoint(Vector3 center, float range, out Vector3 result)
+    GeCloseNavMeshPoint(
+        Vector3 center,
+        float range,
+        out Vector3 result,
+        int attempts = 30
+    )
     {
-        for (int i = 0; i < 30; i++)
+        for (int i = 0; i < attempts; i++)
         {
             Vector3 randomPoint =
                 center + UnityEngine.Random.insideUnitSphere * range;

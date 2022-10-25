@@ -10,5 +10,10 @@ namespace Hybrid.Components
             get => _factions;
             set => _factions = value;
         }
+
+        public Faction GetFirstFaction () {
+            if (_factions?.Length == 0) return null;
+            return _factions[0];
+        }
     }
 }

@@ -192,6 +192,8 @@ namespace Hybrid.Systems
                         return;
                     }
 
+                    Debug.Log("Actor: " + myTransform.gameObject.name);
+
                     float3 unitPosition = myTransform.position;
                     Entity closestTargetEntity = Entity.Null;
                     float closestTargetDistance = float.MaxValue;

@@ -6,6 +6,7 @@ using UnityEngine.AI;
 public class ActorDeath : MonoBehaviour
 {
     ActorEventManger actorEventManger;
+
     Rigidbody rb;
 
     private void Start()
@@ -20,7 +21,7 @@ public class ActorDeath : MonoBehaviour
         if (actorEventManger != null) actorEventManger.onActorDeath -= onDeath;
     }
 
-    void onDeath(GameObject thisActor)
+    void onDeath(GameObject thisActor, GameObject killer)
     {
         ActorHealth actorHealth = this.GetComponent<ActorHealth>();
         Animator animator = this.GetComponentInChildren<Animator>();

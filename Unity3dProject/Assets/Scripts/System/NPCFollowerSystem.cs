@@ -62,6 +62,13 @@ namespace Hybrid.Systems
                         //Match or exceed the speed or the followed target
                         if (target != null)
                         {
+                            CombatStateData combatStateData =
+                                actor
+                                    .gameObject
+                                    .GetComponent<CombatStateData>();
+
+                            if (combatStateData.IsInCombat()) return;
+
                             NavAgentController targetNavAgentController =
                                 target.GetComponent<NavAgentController>();
                             NavAgentController myNavAgentController =
@@ -71,12 +78,6 @@ namespace Hybrid.Systems
                                 myNavAgentController != null
                             )
                             {
-                                // if (
-                                //     myNavAgentController.groundNavigationSpeed <
-                                //     targetNavAgentController
-                                //         .groundNavigationSpeed
-                                // )
-                                // {
                                 if (
                                     follower.followBehavior ==
                                     FollowBehavior.take_point
@@ -105,13 +106,6 @@ namespace Hybrid.Systems
                                         targetNavAgentController
                                             .groundNavigationSpeed;
 
-                                    // ActorGroundNavigationSpeed navigationSpeed =
-                                    //     targetNavAgentController
-                                    //         .groundNavigationSpeed +
-                                    //     1 %
-                                    //     Enum
-                                    //         .GetNames(typeof (FollowBehavior))
-                                    //         .Length;
                                     if (
                                         navigationSpeed <
                                         targetNavAgentController

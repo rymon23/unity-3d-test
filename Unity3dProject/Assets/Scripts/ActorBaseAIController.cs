@@ -73,7 +73,7 @@ public class ActorBaseAIController : MonoBehaviour
 
     public Vector3 attackPos;
 
-    public AttackPosColor attackPosColor = AttackPosColor.yellow;
+    public AttackPosColor attackPosColor = AttackPosColor.red;
 
     void Start()
     {
@@ -144,9 +144,14 @@ public class ActorBaseAIController : MonoBehaviour
         if (follower != null && follower.HasTarget())
         {
             currentdefaultBehaviorState = DefaultBehaviorState.follow;
+
+            if (actorBaseBT != null) actorBaseBT.allowPandaBTTasks = false;
+
             FollowTarget();
             return;
         }
+
+        if (actorBaseBT != null) actorBaseBT.allowPandaBTTasks = true;
 
         currentdefaultBehaviorState = DefaultBehaviorState.idle;
 
@@ -181,31 +186,31 @@ public class ActorBaseAIController : MonoBehaviour
                 actorFOV.maxAngle,
                 actorFOV.maxRadius);
 
+        bool bShouldHoldPosition = false;
+
         //HOLD POSITION BEHAVIOR
         if (
             combatStateData.combatNavigationState ==
             CombatNavigationState.holdPosition &&
-            actorNavigationData.travelPosition != null
+            actorNavigationData.holdPositionCenter != null
         )
         {
-            if (
+            float holdPositionDistance =
                 Vector3
-                    .Distance(this.transform.position,
-                    actorNavigationData.travelPosition.position) >
-                actorNavigationData.holdPositionRadius
-            )
-            {
-                // if (combatStateData.combatMovementType != CombatMovementType.fallBack)
-                // {
-                // Vector3 newFallbackPos = UtilityHelpers.GetRandomNavmeshPoint(6, actorNavigationData.travelPosition);
-                // agent.SetDestination(actorNavigationData.travelPosition);
-                targeting.fallbackPosition =
-                    actorNavigationData.travelPosition.position;
-                Fallback(combatTarget.transform.position);
+                    .Distance(gameObject.transform.position,
+                    actorNavigationData.holdPositionCenter.position);
 
-                Debug.Log("Fallback to hold position!");
-                return;
-                // }
+            bShouldHoldPosition =
+                holdPositionDistance > actorNavigationData.holdPositionRadius;
+
+            if (bShouldHoldPosition)
+            {
+                targeting.fallbackPosition =
+                    actorNavigationData.holdPositionCenter.position;
+                Fallback(actorNavigationData.holdPositionCenter.position);
+
+                // Debug.Log("Fallback to hold position!");
+                // return;
             }
         }
 
@@ -225,36 +230,42 @@ public class ActorBaseAIController : MonoBehaviour
                 }
             }
 
-            if (
-                combatStateData.combatMovementType >=
-                CombatMovementType.flankRight
-            )
+            if (!bShouldHoldPosition)
             {
-                Strafe(combatStateData.combatMovementType ==
-                CombatMovementType.flankRight);
-            }
-            else if (
-                combatStateData.combatMovementType ==
-                CombatMovementType.fallBack
-            )
-            {
-                Fallback(combatTarget.transform.position);
-            }
-            else
-            {
-                if (distance < combatStateData.meleeAttackRange)
+                if (
+                    combatStateData.combatMovementType >=
+                    CombatMovementType.flankRight
+                )
                 {
-                    Fallback(combatTarget.transform.position);
+                    Strafe(combatStateData.combatMovementType ==
+                    CombatMovementType.flankRight);
+                }
+                else if (
+                    combatStateData.combatMovementType ==
+                    CombatMovementType.fallBack
+                )
+                {
+                    Fallback(Vector3.zero);
                 }
                 else
                 {
-                    Seek(combatTarget.transform.position);
+                    if (distance < combatStateData.meleeAttackRange)
+                    {
+                        Fallback(Vector3.zero);
+                    }
+                    else
+                    {
+                        Seek(combatTarget.transform.position);
+                    }
                 }
             }
         }
         else
         {
-            Seek(combatTarget.transform.position);
+            if (!bShouldHoldPosition)
+            {
+                Seek(combatTarget.transform.position);
+            }
             UpdateRotation();
         }
     }
@@ -406,11 +417,6 @@ public class ActorBaseAIController : MonoBehaviour
         //         follower.SetGoal(newPos);
         //     }
         // }
-        if (actorBaseBT != null)
-        {
-            actorBaseBT.allowPandaBTTasks = false;
-        }
-
         if (
             agent.destination == follower.GetGoal() &&
             agent.remainingDistance <= agent.stoppingDistance &&
@@ -450,8 +456,16 @@ public class ActorBaseAIController : MonoBehaviour
             agent.remainingDistance <= agent.stoppingDistance
         )
         {
-            Vector3 newFallbackPos = getFallbackPosition(this.transform, 14f);
-            targeting.fallbackPosition = newFallbackPos;
+            if (location != Vector3.zero)
+            {
+                targeting.fallbackPosition = location;
+            }
+            else
+            {
+                Vector3 newFallbackPos =
+                    getFallbackPosition(this.transform, 14f);
+                targeting.fallbackPosition = newFallbackPos;
+            }
         }
         agent.updateRotation = false;
         agent.SetDestination(targeting.fallbackPosition);
@@ -497,27 +511,54 @@ public class ActorBaseAIController : MonoBehaviour
                 rotationSpeed_Strafe * Time.deltaTime);
     }
 
+
+#region Debugging
+
+    Vector4 debugDestinationColor;
+
     private void OnDrawGizmos()
     {
         if (!debug_gizmo) return;
 
+        if (debugDestinationColor == Vector4.zero)
+            debugDestinationColor = UtilityHelpers.GenerateRandomRGB();
+
         if (agent != null)
         {
-            Gizmos.color = Color.yellow;
+            Gizmos.color = debugDestinationColor;
             Gizmos.DrawWireSphere(agent.destination, agent.stoppingDistance);
         }
 
-        if (attackPosColor == AttackPosColor.green)
+        if (
+            combatStateData != null &&
+            actorNavigationData != null &&
+            actorNavigationData.travelPosition
+        )
         {
-            Gizmos.color = Color.green;
+            if (
+                combatStateData.combatNavigationState ==
+                CombatNavigationState.holdPosition &&
+                actorNavigationData.travelPosition != null
+            )
+            {
+                Gizmos.color = Color.white;
+                Gizmos
+                    .DrawWireSphere(actorNavigationData.travelPosition.position,
+                    actorNavigationData.holdPositionRadius);
+            }
         }
-        if (attackPosColor == AttackPosColor.yellow)
+
+        switch (attackPosColor)
         {
-            Gizmos.color = Color.yellow;
-        }
-        if (attackPosColor == AttackPosColor.red)
-        {
-            Gizmos.color = Color.red;
+            case AttackPosColor.green:
+                Gizmos.color = Color.green;
+                break;
+            case AttackPosColor.yellow:
+                Gizmos.color = Color.yellow;
+                break;
+            default:
+                Gizmos.color = Color.red;
+                break;
         }
 
         if (combatTarget != null)
@@ -527,14 +568,7 @@ public class ActorBaseAIController : MonoBehaviour
                 .DrawRay(transform.position,
                 (targeting.attackPos - transform.position));
         }
-        // if (castPos != null)
-        // {
-        //     Gizmos.DrawWireSphere(castPos, 0.5f);
-        // }
-        // if (aimDir != null)
-        // {
-        //     Gizmos.color = Color.red;
-        //     Gizmos.DrawWireSphere(aimDir, 0.1f);
-        // }
     }
+#endregion
+
 }
