@@ -8,6 +8,14 @@ TagManager:
   - Vaultable_2m
   - Vaultable_1m
   - PlayerTrigger
+  - Weapon
+  - WeaponHitBox
+  - BulletHitBox
+  - CinemachineTarget
+  - Projectile
+  - Marker
+  - EquipSocket
+  - Ward
   layers:
   - Default
   - TransparentFX
@@ -16,12 +24,12 @@ TagManager:
   - Water
   - UI
   - Ground
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
+  - Hitbox
+  - Actor
+  - BlockLOS
+  - Hurtbox
+  - Marker
+  - Ward
   - 
   - 
   - 

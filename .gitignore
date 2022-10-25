@@ -49,6 +49,7 @@ ExportedObj/
 *.mdb.meta
 
 *.cs.meta
+*.meta
 
 # Unity3D generated file on crash reports
 sysinfo.txt
@@ -59,4 +60,20 @@ sysinfo.txt
 
 # Crashlytics generated file
 crashlytics-build.properties
+
+#Everything
+# *
+!/Unity3dProject/Assets/
+/Unity3dProject/Assets/*
+!/Unity3dProject/Assets/Scripts
+
+Standard Assets/*
+/Unity3dProject/Assets/Animations/
+
+#Except
+!/Unity3dProject/Assets/Scripts
+!/Unity3dProject/Assets/Scripts/**/*.cs
+!/Unity3dProject/Assets/Scripts/**/*.BT.txt
+!/Unity3dProject/Assets/Scripts/**/*.txt
+!\Unity3dProject\Assets\Prefabs
 
