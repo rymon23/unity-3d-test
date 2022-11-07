@@ -52,116 +52,101 @@ namespace Hybrid.Systems
                         }
 
                         Transform currentTarget = targeting.currentTarget;
-
-                        if (currentTarget != null)
+                        if (currentTarget == null)
                         {
-                            ActorEventManger myEventManger =
-                                actor
-                                    .gameObject
-                                    .GetComponent<ActorEventManger>();
+                            detectionStateData.targetTrackingState = 0;
+                            return;
+                        }
 
-                            // Debug.Log(actor.name + " distance from : " + currentTarget.name + ": " + distance);
-                            // float distance = Vector3.Distance(actor.transform.position, currentTarget.position);
-                            if (
-                                UtilityHelpers
-                                    .IsTargetDetectable(myFOV.viewPoint,
-                                    currentTarget.transform.position,
-                                    myFOV.maxAngle,
-                                    myFOV.maxRadius)
-                            )
+                        ActorEventManger myEventManger =
+                            actor.gameObject.GetComponent<ActorEventManger>();
+
+                        // Debug.Log(actor.name + " distance from : " + currentTarget.name + ": " + distance);
+                        // float distance = Vector3.Distance(actor.transform.position, currentTarget.position);
+                        if (
+                            UtilityHelpers
+                                .IsTargetDetectable(myFOV.viewPoint,
+                                currentTarget.transform.position,
+                                myFOV.maxAngle,
+                                myFOV.maxRadius)
+                        )
+                        {
+                            detectionStateData
+                                .ResetTimer_TargetRegainVisibility();
+
+                            if (myEventManger != null)
                             {
-                                detectionStateData
-                                    .ResetTimer_TargetRegainVisibility();
-
-                                if (myEventManger != null)
+                                if (
+                                    detectionStateData.targetTrackingState !=
+                                    TargetTrackingState.active
+                                )
                                 {
-                                    if (
-                                        detectionStateData
-                                            .targetTrackingState !=
-                                        TargetTrackingState.active
-                                    )
-                                    {
-                                        myEventManger
-                                            .TargetTrackingStateChange(TargetTrackingState
-                                                .active,
-                                            currentTarget.gameObject);
-                                    }
-                                }
-
-                                // if (combatStateData.combatState == CombatState.alerted)
-                                // {
-                                //     Debug.Log(actor.name + " was alerted and detected target!");
-                                // }
-                                detectionStateData.targetTrackingState =
-                                    TargetTrackingState.active;
-                                // combatStateData.combatState = CombatState.active;
-                            }
-                            else
-                            {
-                                switch (detectionStateData.targetTrackingState)
-                                {
-                                    case TargetTrackingState.active:
-                                        if (
-                                            detectionStateData
-                                                .targetRegainVisibilityTimer <
-                                            0
-                                        )
-                                        {
-                                            detectionStateData
-                                                .ResetTimer_TargetSearch();
-                                            detectionStateData
-                                                .targetTrackingState =
-                                                TargetTrackingState.searching;
-                                            combatStateData.combatState =
-                                                CombatState.searching;
-
-                                            if (myEventManger)
-                                                myEventManger
-                                                    .CombatStateChange(combatStateData
-                                                        .combatState);
-
-                                            targeting.searchCenterPos =
-                                                currentTarget
-                                                    .transform
-                                                    .position;
-                                        }
-                                        else
-                                        {
-                                            detectionStateData
-                                                .UpdateTimer_TargetRegainVisibility(
-                                                );
-                                        }
-                                        break;
-                                    case TargetTrackingState.searching:
-                                        if (
-                                            detectionStateData
-                                                .targetSearchTimer <
-                                            0
-                                        )
-                                        {
-                                            detectionStateData
-                                                .targetTrackingState =
-                                                TargetTrackingState.lost;
-                                        }
-                                        else
-                                        {
-                                            detectionStateData
-                                                .UpdateTimer_TargetSearch();
-                                        }
-                                        break;
-                                    case TargetTrackingState.lost:
-                                        detectionStateData.targetTrackingState =
-                                            TargetTrackingState.inactive;
-                                        break;
-                                    default:
-                                        break;
+                                    myEventManger
+                                        .TargetTrackingStateChange(TargetTrackingState
+                                            .active,
+                                        currentTarget.gameObject);
                                 }
                             }
+
+                            // if (combatStateData.combatState == CombatState.alerted)
+                            // {
+                            //     Debug.Log(actor.name + " was alerted and detected target!");
+                            // }
+                            detectionStateData.targetTrackingState =
+                                TargetTrackingState.active;
+                            // combatStateData.combatState = CombatState.active;
                         }
                         else
                         {
-                            detectionStateData.targetTrackingState = 0;
-                            // combatStateData.EvaluateCombatState();
+                            switch (detectionStateData.targetTrackingState)
+                            {
+                                case TargetTrackingState.active:
+                                    if (
+                                        detectionStateData
+                                            .targetRegainVisibilityTimer <
+                                        0
+                                    )
+                                    {
+                                        detectionStateData
+                                            .ResetTimer_TargetSearch();
+                                        detectionStateData.targetTrackingState =
+                                            TargetTrackingState.searching;
+                                        combatStateData.combatState =
+                                            CombatState.searching;
+
+                                        if (myEventManger)
+                                            myEventManger
+                                                .CombatStateChange(combatStateData
+                                                    .combatState);
+
+                                        targeting.searchCenterPos =
+                                            currentTarget.transform.position;
+                                    }
+                                    else
+                                    {
+                                        detectionStateData
+                                            .UpdateTimer_TargetRegainVisibility(
+                                            );
+                                    }
+                                    break;
+                                case TargetTrackingState.searching:
+                                    if (detectionStateData.targetSearchTimer < 0
+                                    )
+                                    {
+                                        detectionStateData.targetTrackingState =
+                                            TargetTrackingState.lost;
+                                    }
+                                    else
+                                    {
+                                        detectionStateData
+                                            .UpdateTimer_TargetSearch();
+                                    }
+                                    break;
+                                default:
+                                    detectionStateData.targetTrackingState =
+                                        TargetTrackingState.inactive;
+                                    break;
+                            }
                         }
                     });
             }

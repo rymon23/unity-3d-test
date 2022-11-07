@@ -13,6 +13,16 @@ namespace Hybrid.Systems
         [ReadOnly]
         public NativeMultiHashMap<int, QuadrantData> quadrantMultiHashMap;
 
+        private float
+
+                territoryUpdateTimerMax = 2f,
+                territoryUpdateTimer;
+
+        private float
+
+                defaultUpdate = 1f,
+                defaultUpdateTimer;
+
         protected override void OnCreate()
         {
             quadrantMultiHashMap = QuadrantSystem.quadrantMultiHashMap;
@@ -25,154 +35,43 @@ namespace Hybrid.Systems
             base.OnDestroy();
         }
 
-        private float territoryUpdateTimerMax = 1.55f;
-
-        private float territoryUpdateTimer;
-
         void Start()
         {
+            defaultUpdateTimer = defaultUpdate;
             territoryUpdateTimer = territoryUpdateTimerMax;
         }
 
         protected override void OnUpdate()
         {
             // Debug.Log("FindTargetQuadrantSystem: running");
+            if (defaultUpdateTimer > 0f)
+            {
+                defaultUpdateTimer -= Time.DeltaTime;
+            }
+            else
+            {
+                defaultUpdateTimer = defaultUpdate;
+                UpdateActorTargeting();
+            }
+
+            if (territoryUpdateTimer > 0f)
+            {
+                territoryUpdateTimer -= Time.DeltaTime;
+            }
+            else
+            {
+                territoryUpdateTimer = territoryUpdateTimerMax;
+                UpdateTerritoryTargeting();
+            }
+        }
+
+
+#region Actor Targeting
+        private void UpdateActorTargeting()
+        {
             int entityCount = 0;
             int targetCount = 0;
 
-
-#region Test Territory
-
-            territoryUpdateTimer -= Time.DeltaTime;
-
-            if (territoryUpdateTimer < 0)
-            {
-                territoryUpdateTimer = territoryUpdateTimerMax;
-
-                Entities
-                    .WithAll<Territory>()
-                    .ForEach((
-                        Entity entity,
-                        Transform myTransform,
-                        Territory territory
-                    ) =>
-                    {
-                        // Debug.Log("Territory found: ");
-                        float3 unitPosition = myTransform.position;
-
-                        HashSet<string> localEntitiesByInstanceID =
-                            new HashSet<string>();
-                        int localActorsFound = 0;
-
-                        Vector3[] myQuadrantPositions =
-                            QuadrantSystem
-                                .GetNeighoborQuadrantPositions(myTransform
-                                    .position);
-
-                        for (int i = 0; i < myQuadrantPositions.Length; i++)
-                        {
-                            int hashMapKey =
-                                QuadrantSystem
-                                    .GetPositionHashMapKey(myQuadrantPositions[i]);
-
-                            QuadrantData quadrantData;
-                            NativeMultiHashMapIterator<int
-                            > nativeMultiHashMapIterator;
-
-                            if (
-                                quadrantMultiHashMap
-                                    .TryGetFirstValue(hashMapKey,
-                                    out quadrantData,
-                                    out nativeMultiHashMapIterator)
-                            )
-                            {
-                                do
-                                {
-                                    // Make sure its not this entity
-                                    if (
-                                        !quadrantData.entity.Equals(entity) &&
-                                        !quadrantData.isDead
-                                    )
-                                    {
-                                        float distance =
-                                            Vector3
-                                                .Distance(unitPosition,
-                                                quadrantData.position);
-
-                                        if (distance < territory.GetRadius())
-                                        {
-                                            localActorsFound += 1;
-
-                                            localEntitiesByInstanceID
-                                                .Add(UtilityHelpers
-                                                    .getActorEntityRefId(quadrantData
-                                                        .entity));
-                                        }
-                                    }
-                                }
-                                while (quadrantMultiHashMap
-                                        .TryGetNextValue(out quadrantData,
-                                        ref nativeMultiHashMapIterator)
-                                );
-                            }
-                        }
-
-                        Debug
-                            .Log("Territory - " +
-                            myTransform.gameObject.name +
-                            " - localActorsFound: " +
-                            localActorsFound);
-
-                        if (localEntitiesByInstanceID.Count > 0)
-                        {
-                            Dictionary<Faction, int> newLocalStrength =
-                                new Dictionary<Faction, int>();
-
-                            Entities
-                                .WithAll<IsActor, Targeting, ActorFactions>()
-                                .ForEach((
-                                    Entity targetEntity,
-                                    Transform targetTransform,
-                                    Targeting targeting,
-                                    ActorFactions actorFactions
-                                ) =>
-                                {
-                                    string targetRefId =
-                                        UtilityHelpers
-                                            .getActorEntityRefId(targetEntity);
-
-                                    if (
-                                        localEntitiesByInstanceID
-                                            .Contains(targetRefId) &&
-                                        actorFactions.factions.Length > 0
-                                    )
-                                    {
-                                        Faction firstFaction =
-                                            actorFactions.factions[0];
-
-                                        if (
-                                            !newLocalStrength
-                                                .ContainsKey(firstFaction)
-                                        )
-                                        {
-                                            newLocalStrength
-                                                .Add(firstFaction, 1);
-                                        }
-                                        else
-                                        {
-                                            newLocalStrength[firstFaction] += 1;
-                                        }
-                                    }
-                                });
-
-                            territory.UpdateLocalStrength (newLocalStrength);
-                        }
-                    });
-            }
-#endregion
-
-
-            //
             Entities
                 .WithAll<IsActor, Targeting, ActorFOV, ActorFactions>()
                 .ForEach((
@@ -370,30 +269,140 @@ namespace Hybrid.Systems
                     // targeting.currentTarget = closestTargetTransform;
                     // targeting.navPosition = closestTargetTransform.position;
                 });
-
             Debug
                 .Log("FindTargetQuadrantSystem: \n Total Targeters: " +
                 entityCount +
                 " | Total Targets: " +
                 targetCount);
         }
+#endregion
 
-        // public static bool IsInFOVScope(Transform viewer, Vector3 targetPos, float maxAngle, float maxRadius)
-        // {
-        //     Vector3 directionBetween = (targetPos - viewer.position).normalized;
-        //     directionBetween.y *= 0;
-        //     float angle = Vector3.Angle(viewer.forward, directionBetween);
 
-        //     //TO DO: fix LOS
-        //     // if (angle <= maxAngle)
-        //     // {
-        //     //     Ray ray = new Ray(viewer.position, targetPos - viewer.position);
-        //     //     RaycastHit hit;
 
-        //     //     if (Physics.Raycast(ray, out hit, maxRadius))  return hit.transform.position == targetPos;
-        //     // }
-        //     return (angle <= maxAngle);
-        //     // return false;
-        // }
+#region Test Territory
+
+        private void UpdateTerritoryTargeting()
+        {
+            Entities
+                .WithAll<Territory>()
+                .ForEach((
+                    Entity entity,
+                    Transform myTransform,
+                    Territory territory
+                ) =>
+                {
+                    // Debug.Log("Territory found: ");
+                    float3 unitPosition = myTransform.position;
+
+                    HashSet<string> localEntitiesByInstanceID =
+                        new HashSet<string>();
+                    int localActorsFound = 0;
+
+                    Vector3[] myQuadrantPositions =
+                        QuadrantSystem
+                            .GetNeighoborQuadrantPositions(myTransform
+                                .position);
+
+                    for (int i = 0; i < myQuadrantPositions.Length; i++)
+                    {
+                        int hashMapKey =
+                            QuadrantSystem
+                                .GetPositionHashMapKey(myQuadrantPositions[i]);
+
+                        QuadrantData quadrantData;
+                        NativeMultiHashMapIterator<int
+                        > nativeMultiHashMapIterator;
+
+                        if (
+                            quadrantMultiHashMap
+                                .TryGetFirstValue(hashMapKey,
+                                out quadrantData,
+                                out nativeMultiHashMapIterator)
+                        )
+                        {
+                            do
+                            {
+                                // Make sure its not this entity
+                                if (
+                                    !quadrantData.entity.Equals(entity) &&
+                                    !quadrantData.isDead
+                                )
+                                {
+                                    float distance =
+                                        Vector3
+                                            .Distance(unitPosition,
+                                            quadrantData.position);
+
+                                    if (distance < territory.GetRadius())
+                                    {
+                                        localActorsFound += 1;
+
+                                        localEntitiesByInstanceID
+                                            .Add(UtilityHelpers
+                                                .getActorEntityRefId(quadrantData
+                                                    .entity));
+                                    }
+                                }
+                            }
+                            while (quadrantMultiHashMap
+                                    .TryGetNextValue(out quadrantData,
+                                    ref nativeMultiHashMapIterator)
+                            );
+                        }
+                    }
+
+                    Debug
+                        .Log("Territory - " +
+                        myTransform.gameObject.name +
+                        " - localActorsFound: " +
+                        localActorsFound);
+
+                    if (localEntitiesByInstanceID.Count > 0)
+                    {
+                        Dictionary<Faction, int> newLocalStrength =
+                            new Dictionary<Faction, int>();
+
+                        Entities
+                            .WithAll<IsActor, Targeting, ActorFactions>()
+                            .ForEach((
+                                Entity targetEntity,
+                                Transform targetTransform,
+                                Targeting targeting,
+                                ActorFactions actorFactions
+                            ) =>
+                            {
+                                string targetRefId =
+                                    UtilityHelpers
+                                        .getActorEntityRefId(targetEntity);
+
+                                if (
+                                    localEntitiesByInstanceID
+                                        .Contains(targetRefId) &&
+                                    actorFactions.factions.Length > 0
+                                )
+                                {
+                                    Faction firstFaction =
+                                        actorFactions.factions[0];
+
+                                    if (
+                                        !newLocalStrength
+                                            .ContainsKey(firstFaction)
+                                    )
+                                    {
+                                        newLocalStrength.Add(firstFaction, 1);
+                                    }
+                                    else
+                                    {
+                                        newLocalStrength[firstFaction] += 1;
+                                    }
+                                }
+                            });
+
+                        territory.UpdateLocalStrength (newLocalStrength);
+                    }
+                });
+        }
+#endregion
+
     }
 }

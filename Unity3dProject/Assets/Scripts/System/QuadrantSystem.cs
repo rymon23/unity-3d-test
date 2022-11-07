@@ -43,7 +43,12 @@ public class QuadrantSystem : ComponentSystem
 
     private const int quadrantYMultiplier = 1000;
 
-    private const int quadrantCellSize = 20;
+    private const int quadrantCellSize = 50;
+
+    private float
+
+            defaultUpdate = 1f,
+            defaultUpdateTimer = 0;
 
     public static int GetPositionHashMapKey(float3 position)
     {
@@ -51,28 +56,6 @@ public class QuadrantSystem : ComponentSystem
         int
         )(math.floor(position.x / quadrantCellSize) +
         (quadrantYMultiplier * math.floor(position.z / quadrantCellSize)));
-    }
-
-    private static void DebugDrawQuadrant(float3 position)
-    {
-        Vector3 lowerLeft =
-            new Vector3(math.floor(position.x / quadrantCellSize) *
-                quadrantCellSize,
-                0,
-                math.floor(position.z / quadrantCellSize) * quadrantCellSize);
-        Debug
-            .DrawLine(lowerLeft,
-            lowerLeft + new Vector3(+1, 0, +0) * quadrantCellSize);
-        Debug
-            .DrawLine(lowerLeft,
-            lowerLeft + new Vector3(+0, 0, +1) * quadrantCellSize);
-        Debug
-            .DrawLine(lowerLeft + new Vector3(+1, 0, +0) * quadrantCellSize,
-            lowerLeft + new Vector3(+1, 0, +1) * quadrantCellSize);
-        Debug
-            .DrawLine(lowerLeft + new Vector3(+0, 0, +1) * quadrantCellSize,
-            lowerLeft + new Vector3(+1, 0, +1) * quadrantCellSize);
-        // Debug.Log(GetPositionHashMapKey(position) + " " + position);
     }
 
     private static int
@@ -155,15 +138,21 @@ public class QuadrantSystem : ComponentSystem
 
     protected override void OnDestroy()
     {
-        if (quadrantMultiHashMap.IsCreated) quadrantMultiHashMap.Dispose();
+        // if (quadrantMultiHashMap.IsCreated) quadrantMultiHashMap.Dispose();
         base.OnDestroy();
     }
 
     protected override void OnUpdate()
     {
+        if (defaultUpdateTimer > 0f)
+        {
+            defaultUpdateTimer -= Time.DeltaTime;
+            return;
+        }
+        defaultUpdateTimer = defaultUpdate;
+
         EntityQuery entityQuery = GetEntityQuery(typeof (QuadrantSearchable));
 
-        // Debug.Log("Running...");
         quadrantMultiHashMap.Clear();
 
         //Expand to fit
@@ -172,9 +161,14 @@ public class QuadrantSystem : ComponentSystem
             quadrantMultiHashMap.Capacity = entityQuery.CalculateEntityCount();
         }
 
+        int iterations = 0;
+
         Entities
+            .WithAll<IsActor>() // Entities.WithAny<QuadrantSearchable, IsActor>()
             .ForEach((Entity entity, IsActor actor, ActorHealth actorHealth) =>
             {
+                iterations++;
+
                 int hashMapKey =
                     GetPositionHashMapKey(actor.gameObject.transform.position);
                 quadrantMultiHashMap
@@ -182,7 +176,7 @@ public class QuadrantSystem : ComponentSystem
                     new QuadrantData {
                         entity = entity,
                         position = actor.gameObject.transform.position,
-                        isDead = actorHealth.deathState >= DeathState.dying,
+                        isDead = actorHealth?.deathState >= DeathState.dying,
                         actorInstanceID = actor.GetInstanceID()
                         // transform = actor.gameObject.transform
                         // quadrantEntity = quadrantEntity
@@ -195,27 +189,37 @@ public class QuadrantSystem : ComponentSystem
         // };
         // JobHandle jobHandle = JobForEachExtensions.Schedule(setQuadrantDataHashMapJob, entityQuery);
         // jobHandle.Complete();
+        // DebugDrawQuadrant(Vector3.zero);
+        // DebugCheckPlayerQuadrant();
+        Debug
+            .Log("QuadrantSystem: EntityCount: " +
+            quadrantMultiHashMap.Capacity +
+            ", iterations: " +
+            iterations);
+    }
+
+
+#region Debugging
+
+    private void DebugCheckPlayerQuadrant()
+    {
         if (!playerGameObject)
         {
             Entities
                 .WithAll<Target, Transform>()
-                .ForEach((Transform tran) =>
+                .ForEach((Transform transform) =>
                 {
-                    if (tran.gameObject.tag == "Player")
-                    {
-                        playerGameObject = tran.gameObject;
-                        // Debug.Log("Player GameObject found: " + tran.gameObject.name);
-                    }
+                    if (transform.gameObject.tag == "Player")
+                        playerGameObject = transform.gameObject;
                 });
         }
-
-        if (playerGameObject)
+        else
         {
             Vector3 playerPos = playerGameObject.transform.position;
             int entityCount = 0;
 
+            // DebugDrawQuadrant(Vector3.zero);
             // // Draw player quadrant
-            // DebugDrawQuadrant(playerPos);
             // entityCount += GetEnityCountInHashMap(quadrantMultiHashMap, GetPositionHashMapKey(playerPos));
             //Draw current & neighboring quadrants
             Vector3[] neighborPositions =
@@ -235,4 +239,28 @@ public class QuadrantSystem : ComponentSystem
                 entityCount);
         }
     }
+
+    private static void DebugDrawQuadrant(float3 position)
+    {
+        Vector3 lowerLeft =
+            new Vector3(math.floor(position.x / quadrantCellSize) *
+                quadrantCellSize,
+                0,
+                math.floor(position.z / quadrantCellSize) * quadrantCellSize);
+        Debug
+            .DrawLine(lowerLeft,
+            lowerLeft + new Vector3(+1, 0, +0) * quadrantCellSize);
+        Debug
+            .DrawLine(lowerLeft,
+            lowerLeft + new Vector3(+0, 0, +1) * quadrantCellSize);
+        Debug
+            .DrawLine(lowerLeft + new Vector3(+1, 0, +0) * quadrantCellSize,
+            lowerLeft + new Vector3(+1, 0, +1) * quadrantCellSize);
+        Debug
+            .DrawLine(lowerLeft + new Vector3(+0, 0, +1) * quadrantCellSize,
+            lowerLeft + new Vector3(+1, 0, +1) * quadrantCellSize);
+        // Debug.Log(GetPositionHashMapKey(position) + " " + position);
+    }
+#endregion
+
 }

@@ -63,7 +63,11 @@ namespace Hybrid.Systems
                         }
                     }
 
-                    if (animationState != null && equipSlotController != null)
+                    if (
+                        animationState != null &&
+                        equipSlotController != null &&
+                        parryStateController != null
+                    )
                     {
                         GameObject blockingCollider =
                             parryStateController.blockingCollider;
@@ -158,20 +162,19 @@ namespace Hybrid.Systems
 
                         if (weapon == null) return;
 
-                        //Disable weapon hit collider if not in hitframe
-                        if (animationState.IsInAttackHitFame())
-                        {
-                            // Debug.Log("Enable weapon collider for "+ actor.name);
-                            // weapon.EnableWeaponCollider();
-                        }
-                        else
-                        {
-                            Debug
-                                .Log("Disable weapon collider for " +
-                                actor.name);
-                            weapon.DisableWeaponCollider();
-                        }
-
+                        // //Disable weapon hit collider if not in hitframe
+                        // if (animationState.IsInAttackHitFame())
+                        // {
+                        //     // Debug.Log("Enable weapon collider for "+ actor.name);
+                        //     // weapon.EnableWeaponCollider();
+                        // }
+                        // else
+                        // {
+                        //     Debug
+                        //         .Log("Disable weapon collider for " +
+                        //         actor.name);
+                        //     weapon.DisableWeaponCollider();
+                        // }
                         // Handle Blocking animation state & collider
                         if (
                             // !animationState.isBlocking ||
