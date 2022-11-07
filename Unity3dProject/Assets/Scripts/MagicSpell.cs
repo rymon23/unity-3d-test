@@ -1,14 +1,12 @@
 using UnityEngine;
 using UnityEngine.Events;
-using  Hybrid.Components;
+using Hybrid.Components;
 
 [CreateAssetMenu(fileName = "New Magic Spell", menuName = "Magic Spell")]
 public class MagicSpell : ScriptableObject
 {
     public new string name;
     public UnityEvent<GameObject, GameObject>[] effects;
-
-    // [SerializeField] public Projectile projectile { get; private set; }
     public Transform projectile;
     public GameObject spellPrefab;
 
@@ -23,10 +21,21 @@ public class MagicSpell : ScriptableObject
         get => _deliveryType;
     }
 
-    public float baseMagicCost = 0f;
-    public float baseStaminaCost = 0f;
+    public float baseMagicCost = 0f ;
+    public float baseStaminaCost  = 0f;
 
+    [Header("FX")]
+    [SerializeField]
+    private ParticleSystem FX_OnCast;
+    public ParticleSystem GetFX_OnCast() => FX_OnCast;
 
+    [SerializeField]
+    private ParticleSystem impactParticleSystem;
+    public ParticleSystem GetFX_OnImpact() => impactParticleSystem;
+
+    [SerializeField]
+    private TrailRenderer bulletTrail;
+    public TrailRenderer GetFX_Trail() => bulletTrail;
     public void InvokeEFfects(GameObject target, GameObject sender)
     {
         if (effects != null)

@@ -34,3 +34,6 @@ MonoBehaviour:
   _deliveryType: 2
   baseMagicCost: 60
   baseStaminaCost: 2
+  FX_OnCast: {fileID: 0}
+  impactParticleSystem: {fileID: 198000013597187216, guid: 83e55d3418297934fab882559d009285, type: 3}
+  bulletTrail: {fileID: 2494014648855516840, guid: 5fc52c6e3748e5943b12b69f304e172b, type: 3}

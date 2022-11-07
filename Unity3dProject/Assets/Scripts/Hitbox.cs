@@ -43,32 +43,25 @@ public class Hitbox : MonoBehaviour
         myCollider = GetComponent<BoxCollider>();
     }
 
-    void onWeaponHit(Weapon weapon, HitPositionType hitPosition)
+    public void onWeaponHit(Weapon weapon)
     {
         Debug
             .Log("onWeaponHit - Weapon: " +
             weapon +
             ", hitPosition: " +
-            hitPosition);
+            bodyPosition);
+
+        if (weapon._ownerRefId == actor.refId) return;
 
         if (actorEventManger != null)
         {
-            actorEventManger.TriggerAnim_Stagger (hitPosition);
-            actorEventManger.TakeWeaponHit (weapon, hitPosition);
+            actorEventManger.TriggerAnim_Stagger (bodyPosition);
+            actorEventManger.TakeWeaponHit (weapon, bodyPosition);
 
             if (bIsPlayer) actorEventManger.RumbleFire();
         }
     }
 
-    // void onBulletHit(Projectile projectile)
-    // {
-    //     if (actorEventManger != null)
-    //     {
-    //         actorEventManger.TriggerAnim_Stagger (bodyPosition);
-    //         actorEventManger.TakeBulletHit (projectile, bodyPosition);
-    //         if (bIsPlayer) actorEventManger.RumbleFire();
-    //     }
-    // }
     public void onBulletHit(Weapon weapon, Projectile projectile = null)
     {
         if (actorEventManger != null)
@@ -80,6 +73,32 @@ public class Hitbox : MonoBehaviour
                 projectile ? projectile : weapon.GetDefaultProjectile());
 
             if (bIsPlayer) actorEventManger.RumbleFire();
+        }
+    }
+
+    public void onSpellHit(MagicSpell magicSpell, GameObject sender)
+    {
+        if (actorEventManger != null)
+        {
+            actorEventManger.TriggerAnim_Stagger (bodyPosition);
+
+            // actorEventManger
+            //     .TakeBulletHit(weapon,
+            //     bodyPosition,
+            //     projectile ? projectile : weapon.GetDefaultProjectile());
+            if (bIsPlayer) actorEventManger.RumbleFire();
+
+            Transform spell = Instantiate(magicSpell.spellPrefab.transform);
+            ActiveSpellController spellController =
+                spell.gameObject.GetComponent<ActiveSpellController>();
+            if (spellController != null)
+            {
+                spellController
+                    .FireMagicEffects(new SpellInstanceData(sender,
+                        actor.gameObject,
+                        ProjectileType.spell,
+                        magicSpell));
+            }
         }
     }
 
@@ -124,7 +143,7 @@ public class Hitbox : MonoBehaviour
                     weaponCollider.weapon +
                     " On " +
                     gameObject.name);
-                onWeaponHit(weaponCollider.weapon, bodyPosition);
+                onWeaponHit(weaponCollider.weapon);
 
                 // TODO IMPROVE THIS:
                 IsActor attacker =

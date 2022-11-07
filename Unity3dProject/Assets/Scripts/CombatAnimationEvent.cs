@@ -14,6 +14,8 @@ public class CombatAnimationEvent : MonoBehaviour
 
     ActorAIEquipController aIEquipController;
 
+    CastingController castingController;
+
     Targeting targeting; // TEMP
 
     BipedIK bipedIK;
@@ -26,6 +28,7 @@ public class CombatAnimationEvent : MonoBehaviour
         equipSlotController = GetComponentInChildren<EquipSlotController>();
         bipedIK = GetComponent<BipedIK>();
         aIEquipController = GetComponent<ActorAIEquipController>();
+        castingController = GetComponent<CastingController>();
 
         // Temp
         targeting = GetComponent<Targeting>();
@@ -69,17 +72,35 @@ public class CombatAnimationEvent : MonoBehaviour
         Weapon weapon = equipSlotController.RightHandEquipSlot().weapon;
         if (
             equipSlotController != null &&
-            animationState.IsInAttackHitFame() &&
-            !animationState.IsStaggered()
+            !animationState.IsStaggered() &&
+            (
+            animationState.IsInAttackHitFame() ||
+            animationState.attackAnimationState ==
+            AttackAnimationState.attackPreHit
+            )
         )
         {
-            weapon.EnableWeaponCollider();
-            Debug.Log("Enable weapon collider");
+            if (weapon.useMeleeRaycasts)
+            {
+                weapon.raycastMeleeActive = true;
+            }
+            else
+            {
+                weapon.EnableWeaponCollider();
+                Debug.Log("Enable weapon collider");
+            }
         }
         else
         {
-            weapon.DisableWeaponCollider();
-            Debug.Log("Disable weapon collider");
+            if (weapon.useMeleeRaycasts)
+            {
+                weapon.raycastMeleeActive = false;
+            }
+            else
+            {
+                weapon.DisableWeaponCollider();
+                Debug.Log("Disable weapon collider");
+            }
         }
     }
 
@@ -158,8 +179,10 @@ public class CombatAnimationEvent : MonoBehaviour
             actorEventManger
                 .DamageMana(actorSpells.spellsTemp[0].baseMagicCost);
 
-            FireSpell(actorSpells.spellsTemp[0], spellCastPoint);
-            Debug.Log("Fire Spell - Event: OnCastRangeState - " + state);
+            castingController.FireSpellWithRaycast(spellCastPoint.position);
+
+            // FireSpell(actorSpells.spellsTemp[0], spellCastPoint);
+            // Debug.Log("Fire Spell - Event: OnCastRangeState - " + state);
         }
     }
 
@@ -243,41 +266,5 @@ public class CombatAnimationEvent : MonoBehaviour
             currentBullet.gameObject.SetActive(true);
             // }
         }
-
-        // if (magicSpell != null && spellCastPoint != null)
-        // {
-        //     // Transform prefab = magicSpell.projectile;
-        //     GameObject prefab = magicSpell.projectile.gameObject;
-        //     SpellFirePoint castPoint =
-        //         spellCastPoint.gameObject.GetComponent<SpellFirePoint>();
-        //     castPoint.Fire (prefab);
-
-        //     // Vector3 frontPos = spellCastPoint.position + (spellCastPoint.forward * 10);
-        //     Vector3 frontPos =
-        //         targeting.currentTarget
-        //             ? targeting.currentTarget.transform.position +
-        //             (Vector3.up * 1.3f)
-        //             : this.gameObject.transform.position +
-        //             (this.gameObject.transform.forward * 10);
-
-        //     Vector3 aimDir = (frontPos - spellCastPoint.position).normalized;
-
-        //     // Debug.DrawRay(spellCastPoint.TransformPoint(spellCastPoint.position), aimDir, Color.red);
-        //     // Debug.DrawRay(spellCastPoint.position, frontPos, Color.yellow);
-        //     // Debug.DrawRay(spellCastPoint.transform.position, frontPos, Color.blue);
-
-        //     // Transform currentProjectile = Instantiate(prefab, spellCastPoint.transform.position, Quaternion.identity); //, Quaternion.LookRotation(aimDir, Vector3.up));
-        //     // Transform currentProjectile = Instantiate(prefab, spellCastPoint.transform.position + new Vector3(0, -0.4f, 0), Quaternion.LookRotation(aimDir, Vector3.up));
-        //     // currentProjectile.SetParent(spellCastPoint);
-
-        //     // Projectile projectile = currentProjectile.gameObject.GetComponent<Projectile>();
-        //     // projectile.sender = this.gameObject;
-
-        //     // currentProjectile.position = spellCastPoint.position;
-        //     // currentProjectile.position = spellCastPoint.transform.position;
-        //     // currentProjectile.transform.rotation = Quaternion.identity;
-        //     // // currentProjectile.transform.forward = aimDir;
-        //     // currentProjectile.gameObject.SetActive(true);
-        // }
     }
 }

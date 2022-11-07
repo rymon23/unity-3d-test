@@ -20,6 +20,20 @@ public class Weapon : MonoBehaviour
 #endregion
 
 
+
+#region Melee Settings
+    public bool useMeleeRaycasts = false;
+
+    public bool raycastMeleeActive = false;
+
+    [SerializeField]
+    private float meleeRaycastLengthMult = 0.8f;
+#endregion
+
+
+
+#region Item Settingd
+    [Header("Item Settings")]
     public WeaponType weaponType;
 
     public EquipSlotType equipSlotType;
@@ -27,6 +41,10 @@ public class Weapon : MonoBehaviour
     public ItemType itemType = 0;
 
     public Item item;
+
+
+#endregion
+
 
     public float
 
@@ -82,7 +100,6 @@ public class Weapon : MonoBehaviour
 
     public bool bShouldFire = false;
 
-    // public HashSet<string> attackblockedList;
     private float updateTime = 0.1f;
 
     private float timer;
@@ -136,6 +153,17 @@ public class Weapon : MonoBehaviour
                     bShouldFire = false;
                 }
             }
+            // }
+            // else
+            // {
+        }
+    }
+
+    private void Update()
+    {
+        if (weaponType == WeaponType.sword && raycastMeleeActive)
+        {
+            MeleeRayHitCheck();
         }
     }
 
@@ -158,10 +186,6 @@ public class Weapon : MonoBehaviour
 
 
 #region Shooting With Raycast
-    [SerializeField]
-    private Projectile projectile;
-
-    public Projectile GetDefaultProjectile() => projectile;
 
     [SerializeField]
     private bool bShootWithRaycasts = true;
@@ -170,24 +194,27 @@ public class Weapon : MonoBehaviour
     private Vector3 bulletSpeedVariance = new Vector3(0.1f, 0.1f, 0.1f);
 
     [SerializeField]
+    private float shootDelay = 0.3f;
+
+    private float lastShootTime = 0f;
+
+    [SerializeField]
+    private Projectile projectile;
+
+    public Projectile GetDefaultProjectile() => projectile;
+
+    [SerializeField]
+    private LayerMask mask;
+
+    [Header("Shooting FX")]
+    [SerializeField]
     private ParticleSystem shootingSystem;
 
     [SerializeField]
     private ParticleSystem impactParticleSystem;
 
-    // [SerializeField]
-    // private Transform bulletSpawnPoint;
     [SerializeField]
     private TrailRenderer bulletTrail;
-
-    [SerializeField]
-    private float shootDelay = 0.3f;
-
-    [SerializeField]
-    private LayerMask mask;
-
-    [SerializeField]
-    private float lastShootTime = 0f;
 
     public void RaycastShoot()
     {
@@ -363,13 +390,13 @@ public class Weapon : MonoBehaviour
     public void EnableWeaponCollider()
     {
         boxCollider.enabled = true;
-        weaponCollider.gameObject.SetActive(true);
+        weaponCollider?.gameObject.SetActive(true);
     }
 
     public void DisableWeaponCollider()
     {
         boxCollider.enabled = false;
-        weaponCollider.gameObject.SetActive(false);
+        weaponCollider?.gameObject.SetActive(false);
     }
 
     public bool PreFireRayCheckIsBlocking(Vector3 direction)
@@ -397,13 +424,64 @@ public class Weapon : MonoBehaviour
             if (parryHitBox != null)
             {
                 Debug.Log("PreFireRayCheck => Hit Blocking Hitbox");
-                parryHitBox.onHitBlocked(null);
+                parryHitBox.onHitBlocked((Projectile) null);
                 return true;
             }
         }
         return false;
     }
 
+    public void MeleeRayHitCheck()
+    {
+        int layerMask = LayerMask.GetMask("Hitbox");
+
+        Vector3 frontPos =
+            firePoint.position + (firePoint.forward * meleeRaycastLengthMult);
+
+        RaycastHit[] raycastHits =
+            Physics
+                .RaycastAll(firePoint.position,
+                (frontPos - firePoint.position),
+                meleeRaycastLengthMult,
+                layerMask);
+
+        Debug
+            .DrawRay(firePoint.position,
+            (frontPos - firePoint.position),
+            Color.magenta);
+
+        if (raycastHits.Length > 0)
+        {
+            Collider col = raycastHits[0].collider;
+
+            ParryHitBox parryHitBox =
+                col.gameObject.GetComponent<ParryHitBox>();
+            if (
+                parryHitBox != null &&
+                parryHitBox.GetActor().refId != _ownerRefId
+            )
+            {
+                Debug.Log("melee raycast hit on ParryHitbox");
+                parryHitBox.onHitBlocked(this);
+                raycastMeleeActive = false;
+                // return;
+            }
+            else
+            {
+                Hitbox hitbox = col.gameObject.GetComponent<Hitbox>();
+                if (hitbox != null)
+                {
+                    Debug.Log("melee raycast hit on Hitbox");
+                    hitbox.onWeaponHit(this);
+                    raycastMeleeActive = false;
+                }
+            }
+        }
+    }
+
+
+#region Debugging
+    [Header("Debug")]
     public bool bDebug = false;
 
     private void OnDrawGizmos()
@@ -421,5 +499,16 @@ public class Weapon : MonoBehaviour
             // Gizmos.DrawRay(frontPos, aimDir);
             // Gizmos.DrawRay(frontPos, (currentTarget.transform.position - myPos));
         }
+
+        if (weaponType == WeaponType.sword)
+        {
+            Gizmos.color = Color.red;
+            Vector3 frontPos =
+                firePoint.position +
+                (firePoint.forward * meleeRaycastLengthMult);
+            Gizmos.DrawRay(firePoint.position, (frontPos - firePoint.position));
+        }
     }
+#endregion
+
 }

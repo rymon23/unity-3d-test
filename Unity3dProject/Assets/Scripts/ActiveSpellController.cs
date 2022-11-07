@@ -6,7 +6,8 @@ namespace Hybrid.Components
 {
     public class ActiveSpellController : MonoBehaviour
     {
-        private float lifeTimer = 1f;
+        [SerializeField]
+        private float selfDestructTimer = 6f;
 
         private float updateTimer = 0.1f;
 
@@ -36,6 +37,7 @@ namespace Hybrid.Components
             {
                 spellEventManager.EffectStart (instanceData);
             }
+            // Destroy (gameObject, selfDestructTimer);
         }
 
         // Update is called once per frame
