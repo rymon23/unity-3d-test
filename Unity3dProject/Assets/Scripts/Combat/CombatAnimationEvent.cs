@@ -34,6 +34,8 @@ public class CombatAnimationEvent : MonoBehaviour
         targeting = GetComponent<Targeting>();
     }
 
+
+#region Weapon Draw / Sheath
     public void AE_OnWeaponDrawState(DrawAnimationState state)
     {
         Debug.Log("Animation Event: OnWeaponDrawState - " + state);
@@ -62,6 +64,12 @@ public class CombatAnimationEvent : MonoBehaviour
         }
     }
 
+
+#endregion
+
+
+
+#region Melee Attack / Bash
     public void AE_OnMeleeAttackState(AttackAnimationState state)
     {
         Debug.Log("Animation Event: OnMeleeAttackState - " + state);
@@ -104,13 +112,6 @@ public class CombatAnimationEvent : MonoBehaviour
         }
     }
 
-    public void AE_OnMeleeParryState(BlockAnimationState state)
-    {
-        Debug.Log("Animation Event: OnMeleeParryState - " + state);
-        animationState.blockAnimationState = state;
-        actorEventManger.MeleeBlockState (state);
-    }
-
     public void AE_OnMeleeBashState(BashAnimationState state)
     {
         Debug.Log("Animation Event: OnMeleeBashState - " + state);
@@ -118,14 +119,33 @@ public class CombatAnimationEvent : MonoBehaviour
         animator.SetBool("bIsBashing", animationState.isBashing);
         actorEventManger.BashState (state);
     }
+#endregion
 
+
+
+#region Melee Block / Parrying
+    public void AE_OnMeleeParryState(BlockAnimationState state)
+    {
+        Debug.Log("Animation Event: OnMeleeParryState - " + state);
+        animationState.blockAnimationState = state;
+        actorEventManger.MeleeBlockState (state);
+    }
+#endregion
+
+
+
+#region Melee Dodging
     public void AE_OnMeleeDodgeState(DodgeAnimationState state)
     {
         Debug.Log("Animation Event: OnMeleeDodgeState - " + state);
         animationState.dodgeAnimationState = state;
         animator.SetBool("bIsDodging", animationState.isDodging);
     }
+#endregion
 
+
+
+#region Spell Casting
     public void AE_OnCastSelfState(AnimState_Casting state)
     {
         Debug.Log("Animation Event: AE_OnCastSelfState - " + state);
@@ -180,12 +200,13 @@ public class CombatAnimationEvent : MonoBehaviour
                 .DamageMana(actorSpells.spellsTemp[0].baseMagicCost);
 
             castingController.FireSpellWithRaycast(spellCastPoint.position);
-
-            // FireSpell(actorSpells.spellsTemp[0], spellCastPoint);
-            // Debug.Log("Fire Spell - Event: OnCastRangeState - " + state);
         }
     }
+#endregion
 
+
+
+#region Staggering / Knockdown
     public void AE_OnStaggerState(AnimState_Stagger state)
     {
         Debug.Log("Animation Event: AE_OnStaggerState - " + state);
@@ -206,65 +227,6 @@ public class CombatAnimationEvent : MonoBehaviour
 
         // actorEventManger.MeleeBlockState(state);
     }
+#endregion
 
-    private void FireSpell(MagicSpell magicSpell, Transform spellCastPoint)
-    {
-        Debug.Log("Animation Event: FireSpell - " + magicSpell.name);
-
-        if (magicSpell != null && spellCastPoint != null)
-        {
-            GameObject prefab = magicSpell.projectile.gameObject;
-
-            float spread = 1f;
-            Vector3 frontPos;
-
-            if (aIEquipController.targeter != null)
-            {
-                frontPos = aIEquipController.targeter.position;
-            }
-            else
-            {
-                frontPos =
-                    spellCastPoint.position + (spellCastPoint.forward * 10);
-            }
-
-            // Vector3 aimDir = (frontPos - spellCastPoint.position).normalized;
-            Vector3 aimDir =
-                ((frontPos + (Vector3.up * 0.2f)) - spellCastPoint.position);
-
-            // Calculate Spread
-            float x = Random.Range(-spread, spread);
-            float y = Random.Range(-spread, spread);
-
-            Vector3 directionWithSpread = aimDir + new Vector3(x, y, 0);
-
-            if (true)
-                Debug
-                    .DrawRay(spellCastPoint.position,
-                    directionWithSpread,
-                    Color.white);
-
-            // if (!PreFireRayCheckIsBlocking(directionWithSpread))
-            // {
-            // Transform spell = Instantiate(ammunition, spellCastPoint.position, Quaternion.LookRotation(aimDir, Vector3.up));
-            Transform currentBullet =
-                Instantiate(prefab.transform,
-                spellCastPoint.position,
-                Quaternion.LookRotation(directionWithSpread, Vector3.up));
-            Projectile projectile =
-                currentBullet.gameObject.GetComponent<Projectile>();
-
-            // projectile.damage += damage;
-            // projectile.weapon = this;
-            projectile.spellPrefab = magicSpell.spellPrefab;
-            projectile.magicSpellPrefab = magicSpell;
-            projectile.sender = this.gameObject;
-
-            currentBullet.gameObject.transform.position =
-                spellCastPoint.transform.position;
-            currentBullet.transform.forward = directionWithSpread;
-            currentBullet.gameObject.SetActive(true);
-            // }
-        }
-    }
 }
