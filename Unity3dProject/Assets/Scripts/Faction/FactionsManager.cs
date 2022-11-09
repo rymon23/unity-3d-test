@@ -4,10 +4,17 @@ public class FactionsManager : MonoBehaviour
 {
     public static FactionsManager current;
 
-    public Faction[] factions;
+    [SerializeField]
+    private FactionDirectory factionDirectory;
+
+    private Faction[] factions;
 
     private void Awake()
     {
+        if (factionDirectory)
+        {
+            factions = factionDirectory.factions;
+        }
         SetupFactionRelations();
     }
 
