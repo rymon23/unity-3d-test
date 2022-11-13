@@ -22,7 +22,7 @@ static class UtilityHelpers
             1f);
 
     public static bool
-    GeCloseNavMeshPoint(
+    GetCloseNavMeshPoint(
         Vector3 center,
         float range,
         out Vector3 result,
@@ -73,6 +73,16 @@ static class UtilityHelpers
     GetBehindPosition(Transform target, float distanceBehind)
     {
         return target.position - (target.forward * distanceBehind);
+    }
+
+    public static Vector3
+    GetHoldPositionBorderEdge(
+        Vector3 holdPosition,
+        Vector3 direction,
+        float radius
+    )
+    {
+        return holdPosition + (direction.normalized * radius);
     }
 
     public static float getFOVAngle(Transform viewer, Vector3 targetPos)
@@ -236,4 +246,62 @@ static class UtilityHelpers
         IsInFOVScope(viewer, target, maxAngle, maxRadius)
         );
     }
+
+    public static Vector3 FindCenterOfTransforms(List<Transform> transforms)
+    {
+        if (transforms.Count == 1) return transforms[0].position;
+
+        Bounds bound = new Bounds(transforms[0].position, Vector3.zero);
+        for (int i = 1; i < transforms.Count; i++)
+        {
+            bound.Encapsulate(transforms[i].position);
+        }
+        return bound.center;
+    }
+
+    public static Vector3 Between(Vector3 v1, Vector3 v2, float percentage)
+    {
+        return (v2 - v1) * percentage + v1;
+    }
+
+
+#region Angle Trajectory Methods
+
+    public static float
+    MagnitudeToReachXYInGravityAtAngle(Vector2 XY, float gravity, float angle)
+    {
+        float res = 0;
+        float sin2Theta = Mathf.Sin(2 * angle * Mathf.Deg2Rad);
+        float cosTheta = Mathf.Cos(angle * Mathf.Deg2Rad);
+        float inner =
+            (XY.x * XY.x * gravity) /
+            (XY.x * sin2Theta - 2 * XY.y * cosTheta * cosTheta);
+        if (inner < 0)
+        {
+            return float.NaN;
+        }
+        res = Mathf.Sqrt(inner);
+        return res;
+    }
+
+    public static float
+    AngleToReachXYInMagnitude(Vector2 XY, float gravity, float magnitude)
+    {
+        float innerSq =
+            Mathf.Pow(magnitude, 4) -
+            gravity *
+            (gravity * XY.x * XY.x + 2 * XY.y * magnitude * magnitude);
+        if (innerSq < 0)
+        {
+            return float.NaN;
+        }
+        float innerATan =
+            (magnitude * magnitude + Mathf.Sqrt(innerSq)) / (gravity * XY.x);
+        float res = Mathf.Atan(innerATan) * Mathf.Rad2Deg;
+        return res;
+    }
+
+
+#endregion
+
 }
