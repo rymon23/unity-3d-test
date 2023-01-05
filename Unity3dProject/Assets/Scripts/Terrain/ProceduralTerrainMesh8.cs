@@ -1,10 +1,12 @@
 using System.Collections.Generic;
+using System.Collections;
+using System;
 using UnityEngine;
 using UnityEditor;
 using System.Linq;
 
 [ExecuteInEditMode]
-public class ProceduralTerrainMesh6 : MonoBehaviour
+public class ProceduralTerrainMesh8 : MonoBehaviour
 {
     public FastNoiseUnity fastNoiseUnity;
 
@@ -29,18 +31,18 @@ public class ProceduralTerrainMesh6 : MonoBehaviour
     public bool bFlattenCurve;
     public AnimationCurve terrainFlattenCurve;
 
-    [Header("Point Marker Settings")]
-    [Range(0, 24)][SerializeField] private int numPoints = 4;
-    [Range(0, 12)][SerializeField] private float minPointDistance = 2f;
+    [Header("Location Marker Settings")]
+    [Range(0, 24)][SerializeField] private int locationCount = 2;
+    [Range(0, 12)][SerializeField] private float minLocationDistance = 2f;
     [SerializeField] private float minVerticePointLevelRadius = 3f;
     [SerializeField] private float maxVerticePointLevelRadius = 9f;
     [SerializeField] private float generatePointBorderXYOffeset = 2f;
     [SerializeField] private Vector2 generatePointYRange = new Vector2(0, 1);
-    [SerializeField] private Color pointColor = Color.red;
-    [SerializeField] private Vector3[] points;
+    [SerializeField] private Color locationPointColor = Color.red;
+    private Vector3[] locationPoints;
 
     #region Saved State
-    float _minPointDistance;
+    float _minLocationDistance;
     float _generatePointYRangeMin;
     float _generatePointYRangeMax;
     float _generatePointBorderXYOffeset;
@@ -48,7 +50,7 @@ public class ProceduralTerrainMesh6 : MonoBehaviour
 
     Mesh mesh;
     Vertex[] vertices;
-    float[] elevations;
+    // float[] elevations;
 
     void Start()
     {
@@ -65,7 +67,7 @@ public class ProceduralTerrainMesh6 : MonoBehaviour
             _editorUpdate = false;
 
             // Generate the mesh data
-            vertices = GenerateVertices(points);
+            vertices = GenerateVertices(locationPoints);
             mesh.vertices = GetVertexPositions(vertices);
             mesh.triangles = GenerateTriangles();
             mesh.uv = GenerateUVs();
@@ -74,6 +76,38 @@ public class ProceduralTerrainMesh6 : MonoBehaviour
             // Apply the mesh data to the MeshFilter component
             GetComponent<MeshFilter>().mesh = mesh;
         }
+    }
+
+    float GetNoiseHeightValue(float x, float z)
+    {
+        FastNoise fastNoise = fastNoiseUnity.fastNoise;
+
+        // Calculate the height of the current point
+        float noiseHeight = 0;
+        float frequency = 1;
+        float amplitude = 1;
+        float sampleX = x / noiseScale * frequency;
+
+        for (int i = 0; i < octaves; i++)
+        {
+            float sampleY = z / noiseScale * frequency;
+
+            float noiseValue = 0;
+            if (noiseType == NoiseType.Perlin)
+            {
+                noiseValue = Mathf.PerlinNoise(sampleX, sampleY);
+            }
+
+            else if (noiseType == NoiseType.Simplex)
+            {
+                noiseValue = (float)fastNoise.GetNoise(x, z);
+            }
+
+            noiseHeight += noiseValue * amplitude;
+            amplitude *= persistence;
+            frequency *= lacunarity;
+        }
+        return noiseHeight;
     }
 
     Vertex[] GenerateVertices(Vector3[] points)
@@ -88,31 +122,7 @@ public class ProceduralTerrainMesh6 : MonoBehaviour
         {
             for (int y = 0; y < terrainSize; y++)
             {
-                // Calculate the height of the current point
-                float noiseHeight = 0;
-                float frequency = 1;
-                float amplitude = 1;
-                float sampleX = x / noiseScale * frequency;
-
-                for (int i = 0; i < octaves; i++)
-                {
-                    float sampleY = y / noiseScale * frequency;
-
-                    float noiseValue = 0;
-                    if (noiseType == NoiseType.Perlin)
-                    {
-                        noiseValue = Mathf.PerlinNoise(sampleX, sampleY);
-                    }
-
-                    else if (noiseType == NoiseType.Simplex)
-                    {
-                        noiseValue = (float)fastNoise.GetNoise(x, y);
-                    }
-
-                    noiseHeight += noiseValue * amplitude;
-                    amplitude *= persistence;
-                    frequency *= lacunarity;
-                }
+                float noiseHeight = GetNoiseHeightValue(x, y);
 
                 // Set the height and color of the current point
                 vertices[x + y * terrainSize] = new Vertex
@@ -163,8 +173,6 @@ public class ProceduralTerrainMesh6 : MonoBehaviour
         }
         return vertices;
     }
-
-
 
 
     Vector3[] GetVertexPositions(Vertex[] vertices)
@@ -224,15 +232,15 @@ public class ProceduralTerrainMesh6 : MonoBehaviour
 
     void GeneratePoints()
     {
-        points = new Vector3[numPoints];
-        for (int i = 0; i < numPoints; i++)
+        locationPoints = new Vector3[locationCount];
+        for (int i = 0; i < locationCount; i++)
         {
             // Generate a random position within the bounds of the terrain
-            float xPos = Random.Range(generatePointBorderXYOffeset, terrainSize - generatePointBorderXYOffeset);
-            float zPos = Random.Range(generatePointBorderXYOffeset, terrainSize - generatePointBorderXYOffeset);
-            float yPos = Random.Range(generatePointYRange.x, generatePointYRange.y);
+            float xPos = UnityEngine.Random.Range(generatePointBorderXYOffeset, terrainSize - generatePointBorderXYOffeset);
+            float zPos = UnityEngine.Random.Range(generatePointBorderXYOffeset, terrainSize - generatePointBorderXYOffeset);
+            float yPos = UnityEngine.Random.Range(generatePointYRange.x, generatePointYRange.y);
 
-            points[i] = new Vector3(xPos, yPos, zPos);
+            locationPoints[i] = new Vector3(xPos, yPos, zPos);
 
             // Use the transform scale to check distance
             Vector3 scale = transform.lossyScale;
@@ -242,15 +250,15 @@ public class ProceduralTerrainMesh6 : MonoBehaviour
             do
             {
                 tooClose = false;
-                foreach (Vector3 point in points)
+                foreach (Vector3 point in locationPoints)
                 {
-                    if (point != points[i] && Vector3.Distance(point, points[i]) < minPointDistance * scale.x)
+                    if (point != locationPoints[i] && Vector3.Distance(point, locationPoints[i]) < minLocationDistance * scale.x)
                     {
                         tooClose = true;
-                        xPos = Random.Range(generatePointBorderXYOffeset, terrainSize - generatePointBorderXYOffeset);
-                        zPos = Random.Range(generatePointBorderXYOffeset, terrainSize - generatePointBorderXYOffeset);
-                        yPos = Random.Range(generatePointYRange.x, generatePointYRange.y);
-                        points[i] = new Vector3(xPos, 0, zPos);
+                        xPos = UnityEngine.Random.Range(generatePointBorderXYOffeset, terrainSize - generatePointBorderXYOffeset);
+                        zPos = UnityEngine.Random.Range(generatePointBorderXYOffeset, terrainSize - generatePointBorderXYOffeset);
+                        yPos = UnityEngine.Random.Range(generatePointYRange.x, generatePointYRange.y);
+                        locationPoints[i] = new Vector3(xPos, 0, zPos);
                         break;
                     }
                 }
@@ -260,31 +268,31 @@ public class ProceduralTerrainMesh6 : MonoBehaviour
 
     [Header("Debug Settings")]
     [SerializeField] private bool debug_showPoints = true;
-    [SerializeField] private bool debug_minPointDistance;
-    [SerializeField] private bool debug_pointLevelRadius;
+    [SerializeField] private bool debug_minLocationDistance;
+    [SerializeField] private bool debug_locationPointLevelRadius;
     [SerializeField] private bool debug_editorUpdateTerrainOnce;
     private bool _editorUpdate;
     void OnDrawGizmos()
     {
-        if (!debug_showPoints && !debug_pointLevelRadius && !debug_minPointDistance) return;
+        if (!debug_showPoints && !debug_locationPointLevelRadius && !debug_minLocationDistance) return;
 
         // Draw a sphere at each point's position
-        foreach (Vector3 point in points)
+        foreach (Vector3 point in locationPoints)
         {
             Vector3 scale = transform.lossyScale;
             Vector3 pointWorldPos = transform.TransformPoint(point);
-            Gizmos.color = pointColor;
+            Gizmos.color = locationPointColor;
 
             if (debug_showPoints)
             {
                 Gizmos.DrawSphere(pointWorldPos, 6f);
             }
-            if (debug_minPointDistance)
+            if (debug_minLocationDistance)
             {
                 Gizmos.color = Color.magenta;
-                Gizmos.DrawWireSphere(pointWorldPos, minPointDistance * scale.x);
+                Gizmos.DrawWireSphere(pointWorldPos, minLocationDistance * scale.x);
             }
-            if (debug_pointLevelRadius)
+            if (debug_locationPointLevelRadius)
             {
                 Gizmos.color = Color.white;
                 Gizmos.DrawWireSphere(pointWorldPos, minVerticePointLevelRadius * scale.x);
@@ -297,14 +305,14 @@ public class ProceduralTerrainMesh6 : MonoBehaviour
     {
         _editorUpdate = true;
 
-        if (numPoints != points.Length ||
-            _minPointDistance != minPointDistance ||
+        if (locationCount != locationPoints.Length ||
+            _minLocationDistance != minLocationDistance ||
             _generatePointYRangeMin != generatePointYRange.x ||
             _generatePointYRangeMax != generatePointYRange.y ||
             _generatePointBorderXYOffeset != generatePointBorderXYOffeset
             )
         {
-            _minPointDistance = minPointDistance;
+            _minLocationDistance = minLocationDistance;
             _generatePointYRangeMin = generatePointYRange.x;
             _generatePointYRangeMax = generatePointYRange.y;
 
@@ -318,6 +326,7 @@ public class ProceduralTerrainMesh6 : MonoBehaviour
             }
             _generatePointBorderXYOffeset = generatePointBorderXYOffeset;
 
+            DestroyPlaceTerrains();
             GeneratePoints();
         }
 
@@ -338,5 +347,40 @@ public class ProceduralTerrainMesh6 : MonoBehaviour
         // Save the mesh asset to the project
         AssetDatabase.CreateAsset(meshAsset, "Assets/Terrain/" + assetName + ".asset");
         AssetDatabase.SaveAssets();
+    }
+
+
+
+    [SerializeField] private bool generateProceduralPlaces;
+    [SerializeField] private GameObject proceduralPlacePrefab;
+    List<GameObject> proceduralPlaces = new List<GameObject>();
+
+    void DestroyPlaceTerrains()
+    {
+        // Destroy any existing objects in the array
+        foreach (GameObject obj in proceduralPlaces)
+        {
+            Destroy(obj);
+        }
+        // Clear the array
+        proceduralPlaces.Clear();
+    }
+
+    void InstantiatePlaceTerrains(Vector3[] locationPoints, GameObject prefab)
+    {
+        DestroyPlaceTerrains();
+
+        // Instantiate new objects at the points and store them in the array
+        foreach (Vector3 point in locationPoints)
+        {
+            GameObject newObject = Instantiate(prefab, point, Quaternion.identity);
+            proceduralPlaces.Add(newObject);
+        }
+    }
+
+
+    void UpdatePlaceTerrains()
+    {
+
     }
 }
