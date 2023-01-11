@@ -26,14 +26,13 @@ public class ProceduralTerrainMesh8 : MonoBehaviour
     [Range(-1f, 2.6f)] public float lacunarity = 2f;
     [Range(1f, 128f)] public int octaves = 6;
 
-    public AnimationCurve flattenCurve;
-
     public bool bFlattenCurve;
     public AnimationCurve terrainFlattenCurve;
 
     [Header("Location Marker Settings")]
     [Range(0, 24)][SerializeField] private int locationCount = 2;
     [Range(0, 12)][SerializeField] private float minLocationDistance = 2f;
+    public AnimationCurve locationRadiusTerrainSmoothCurve;
     [SerializeField] private float minVerticePointLevelRadius = 3f;
     [SerializeField] private float maxVerticePointLevelRadius = 9f;
     [SerializeField] private float generatePointBorderXYOffeset = 2f;
@@ -156,7 +155,7 @@ public class ProceduralTerrainMesh8 : MonoBehaviour
                         // Calculate the distance as a percentage of the minVerticePointLevelRadius
                         float distPercent = nearestDist / maxVerticePointLevelRadius;
                         // Evaluate the Animation curve using the distance percentage
-                        float curveValue = flattenCurve.Evaluate(distPercent);
+                        float curveValue = locationRadiusTerrainSmoothCurve.Evaluate(distPercent);
                         // Set the height of the vertex to be a blend of the point's y position and the original height
                         vertices[x + y * terrainSize].position.y = Mathf.Lerp(vertices[x + y * terrainSize].position.y, nearestPoint.y, curveValue);
                     }
@@ -276,26 +275,29 @@ public class ProceduralTerrainMesh8 : MonoBehaviour
     {
         if (!debug_showPoints && !debug_locationPointLevelRadius && !debug_minLocationDistance) return;
 
-        // Draw a sphere at each point's position
-        foreach (Vector3 point in locationPoints)
+        if (locationPoints != null && locationPoints.Length > 0)
         {
-            Vector3 scale = transform.lossyScale;
-            Vector3 pointWorldPos = transform.TransformPoint(point);
-            Gizmos.color = locationPointColor;
+            // Draw a sphere at each point's position
+            foreach (Vector3 point in locationPoints)
+            {
+                Vector3 scale = transform.lossyScale;
+                Vector3 pointWorldPos = transform.TransformPoint(point);
+                Gizmos.color = locationPointColor;
 
-            if (debug_showPoints)
-            {
-                Gizmos.DrawSphere(pointWorldPos, 6f);
-            }
-            if (debug_minLocationDistance)
-            {
-                Gizmos.color = Color.magenta;
-                Gizmos.DrawWireSphere(pointWorldPos, minLocationDistance * scale.x);
-            }
-            if (debug_locationPointLevelRadius)
-            {
-                Gizmos.color = Color.white;
-                Gizmos.DrawWireSphere(pointWorldPos, minVerticePointLevelRadius * scale.x);
+                if (debug_showPoints)
+                {
+                    Gizmos.DrawSphere(pointWorldPos, 6f);
+                }
+                if (debug_minLocationDistance)
+                {
+                    Gizmos.color = Color.magenta;
+                    Gizmos.DrawWireSphere(pointWorldPos, minLocationDistance * scale.x);
+                }
+                if (debug_locationPointLevelRadius)
+                {
+                    Gizmos.color = Color.white;
+                    Gizmos.DrawWireSphere(pointWorldPos, minVerticePointLevelRadius * scale.x);
+                }
             }
 
         }
@@ -305,7 +307,7 @@ public class ProceduralTerrainMesh8 : MonoBehaviour
     {
         _editorUpdate = true;
 
-        if (locationCount != locationPoints.Length ||
+        if (locationPoints == null || locationCount != locationPoints.Length ||
             _minLocationDistance != minLocationDistance ||
             _generatePointYRangeMin != generatePointYRange.x ||
             _generatePointYRangeMax != generatePointYRange.y ||
@@ -326,8 +328,14 @@ public class ProceduralTerrainMesh8 : MonoBehaviour
             }
             _generatePointBorderXYOffeset = generatePointBorderXYOffeset;
 
-            DestroyPlaceTerrains();
+            // DestroyLocations();
             GeneratePoints();
+        }
+
+        if (generateLocations && locationCount > 0)
+        {
+            generateLocations = false;
+            InstantiateLocations();
         }
 
         if (bSaveMesh)
@@ -349,35 +357,45 @@ public class ProceduralTerrainMesh8 : MonoBehaviour
         AssetDatabase.SaveAssets();
     }
 
-
-
-    [SerializeField] private bool generateProceduralPlaces;
+    [SerializeField] private bool generateLocations;
     [SerializeField] private GameObject proceduralPlacePrefab;
-    List<GameObject> proceduralPlaces = new List<GameObject>();
+    List<ProceduralCityGenerator> proceduralLocations = new List<ProceduralCityGenerator>();
 
-    void DestroyPlaceTerrains()
-    {
-        // Destroy any existing objects in the array
-        foreach (GameObject obj in proceduralPlaces)
-        {
-            Destroy(obj);
-        }
-        // Clear the array
-        proceduralPlaces.Clear();
-    }
+    // void DestroyLocations()
+    // {
+    //     // Destroy any existing objects in the array
+    //     foreach (ProceduralCityGenerator obj in proceduralLocations)
+    //     {
+    //         Destroy(obj.gameObject);
+    //     }
+    //     // Clear the array
+    //     proceduralLocations.Clear();
+    // }
 
-    void InstantiatePlaceTerrains(Vector3[] locationPoints, GameObject prefab)
+    void InstantiateLocations()
     {
-        DestroyPlaceTerrains();
+        // DestroyLocations();
 
         // Instantiate new objects at the points and store them in the array
         foreach (Vector3 point in locationPoints)
         {
-            GameObject newObject = Instantiate(prefab, point, Quaternion.identity);
-            proceduralPlaces.Add(newObject);
+            Vector3 scale = transform.lossyScale;
+            Vector3 pos = transform.TransformPoint(point);
+
+            GameObject newObject = Instantiate(proceduralPlacePrefab, pos, Quaternion.identity);
+            ProceduralCityGenerator generator = newObject.GetComponent<ProceduralCityGenerator>();
+            float halfSize = generator.terrainSize * 0.5f;
+
+            Vector3 newPos = pos - (proceduralPlacePrefab.transform.position);
+            float x = (pos.x - halfSize);
+            float z = (pos.z - halfSize);
+            newObject.transform.position = new Vector3(x, pos.y * scale.y, z);
+
+            // Debug.Log("halfSize: " + halfSize);
+            proceduralLocations.Add(generator);
+            newObject.transform.SetParent(this.gameObject.transform);
         }
     }
-
 
     void UpdatePlaceTerrains()
     {

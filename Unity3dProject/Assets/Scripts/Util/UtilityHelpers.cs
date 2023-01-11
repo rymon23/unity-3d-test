@@ -50,6 +50,40 @@ static class UtilityHelpers
         return false;
     }
 
+    public static bool
+    GetCloseNavMeshPointInsideBounds(
+        Bounds bounds,
+        out Vector3 result,
+        int attempts = 30
+    )
+    {
+        Vector3 center = bounds.center;
+        float range = Vector3.Distance(bounds.center, bounds.max);
+
+        for (int i = 0; i < attempts; i++)
+        {
+            Vector3 randomPoint =
+                center + UnityEngine.Random.insideUnitSphere * range;
+            NavMeshHit hit;
+            if (
+                NavMesh
+                    .SamplePosition(randomPoint,
+                    out hit,
+                    1.0f,
+                    NavMesh.AllAreas)
+            )
+            {
+                if (bounds.Contains(hit.position))
+                {
+                    result = hit.position;
+                    return true;
+                }
+            }
+        }
+        result = Vector3.zero;
+        return false;
+    }
+
     public static Vector3 GetRandomNavmeshPoint(float radius, Vector3 center)
     {
         Vector3 randomDirection = UnityEngine.Random.insideUnitSphere * radius;
@@ -263,6 +297,48 @@ static class UtilityHelpers
     {
         return (v2 - v1) * percentage + v1;
     }
+
+
+#region Spell Methods
+    public static void CastMagicSpellEffects(
+        MagicSpell magicSpell,
+        GameObject target,
+        GameObject sender,
+        ProjectileType projectileType = ProjectileType.spell
+    )
+    {
+        Transform spell =
+            GameObject.Instantiate(magicSpell.spellPrefab.transform);
+        ActiveSpellController spellController =
+            spell.gameObject.GetComponent<ActiveSpellController>();
+        if (spellController != null)
+        {
+            spellController
+                .FireMagicEffects(new SpellInstanceData(sender,
+                    target.transform,
+                    projectileType,
+                    magicSpell));
+        }
+    }
+
+    public static void CastMovementSpell(
+        MagicSpell magicSpell,
+        SpellInstanceData spellInstanceData
+    )
+    {
+        Transform spell =
+            GameObject.Instantiate(magicSpell.spellPrefab.transform);
+        ActiveSpellController spellController =
+            spell.gameObject.GetComponent<ActiveSpellController>();
+        if (spellController != null)
+        {
+            spellController.FireMagicEffects (spellInstanceData);
+        }
+    }
+
+
+#endregion
+
 
 
 #region Angle Trajectory Methods

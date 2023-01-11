@@ -45,7 +45,8 @@ public class ProceduralCityGenerator : MonoBehaviour
 
 
     [Header("Cluster Marker Settings")]
-    [SerializeField] private bool enableCityBlockPlotPoints;
+    [SerializeField] private bool enableLocationBlockPlotPoints;
+    [SerializeField] private bool enableRoadPlotPoints;
     [SerializeField] private bool resetCityBlockPlotPoints;
     [Range(0.1f, 48f)][SerializeField] private float clusterDistanceMax = 7f;
     [SerializeField] private int clusterCount = 0;
@@ -65,9 +66,11 @@ public class ProceduralCityGenerator : MonoBehaviour
     Vertex[] vertices;
     float[] elevations;
 
-    List<Vector3> cityLandPlotPoints = new List<Vector3>();
-    List<PointCluster> cityLandPointClusters = new List<PointCluster>();
+    List<Vector3> locationLandPlotVertices = new List<Vector3>();
+    List<PointCluster> locationLandPlotClusters = new List<PointCluster>();
+    List<Vector3> locationRoadVertices = new List<Vector3>();
 
+    public AnimationCurve slopeCurve;
 
     void Start()
     {
@@ -151,7 +154,6 @@ public class ProceduralCityGenerator : MonoBehaviour
         return noiseHeight;
     }
 
-    public AnimationCurve slopeCurve;
 
     // Adjust this value to control how close to the border the effect takes place
     public float borderDistance = 2f;
@@ -165,13 +167,13 @@ public class ProceduralCityGenerator : MonoBehaviour
         {
             for (int y = 0; y < terrainSize; y++)
             {
-                float noiseHeight = ConvertNoiseToBinary(GetNoiseHeightValue(x, y));
+                float noiseHeight = GetNoiseHeightValue(x, y);
 
                 // Set the height and color of the current point
                 vertices[x + y * terrainSize] = new Vertex
                 {
                     position = new Vector3(x, noiseHeight * terrainHeight, y),
-                    vertexType = (VertexType)noiseHeight
+                    vertexType = (VertexType)ConvertNoiseToBinary(noiseHeight)
                 };
 
                 if (points != null && points.Length > 0)
@@ -228,7 +230,15 @@ public class ProceduralCityGenerator : MonoBehaviour
         return vertices;
     }
 
-
+    public Vector3[] AnimateVertices(Vector3[] vertices)
+    {
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            float scale = slopeCurve.Evaluate(i / (float)vertices.Length);
+            vertices[i] = new Vector3(vertices[i].x * scale, vertices[i].y * scale, vertices[i].z * scale);
+        }
+        return vertices;
+    }
 
 
     Vector3[] GetVertexPositions(Vertex[] vertices)
@@ -322,54 +332,31 @@ public class ProceduralCityGenerator : MonoBehaviour
         }
     }
 
-
-    public float minHeight = 0f;
-    public float maxHeight = 1f;
-    public AnimationCurve pointHeightRange;
-
-    List<Vector3> CalculatePlacementPoints()
+    void CalculatePlacementPoints()
     {
+        List<Vector3> landPlotVertices = new List<Vector3>();
+        List<Vector3> roadVertices = new List<Vector3>();
 
-        // // Create a list to store the placement points
-        List<Vector3> placementPoints = new List<Vector3>();
-        for (int i = 0; i < vertices.Length; i++)
+        if (vertices != null && vertices.Length > 0)
         {
-            if (vertices[i].vertexType == VertexType.Block)
+            // // Create a list to store the placement points
+            for (int i = 0; i < vertices.Length; i++)
             {
-                Vector3 worldPosition = transform.TransformPoint(vertices[i].position);
-                placementPoints.Add(worldPosition);
+                if (vertices[i].vertexType == VertexType.Block)
+                {
+                    Vector3 worldPosition = transform.TransformPoint(vertices[i].position);
+                    landPlotVertices.Add(worldPosition);
+                }
+                else if (vertices[i].vertexType == VertexType.Road)
+                {
+                    Vector3 worldPosition = transform.TransformPoint(vertices[i].position);
+                    roadVertices.Add(worldPosition);
+                }
             }
         }
 
-        // // Sort the elevations and vertices arrays
-        // elevations = elevations.OrderBy(x => x).ToArray();
-        // vertices = vertices.OrderBy(x => x.position.y).ToArray();
-
-        // // Calculate the scale of the mesh transform
-        // Vector3 scale = transform.lossyScale;
-
-        // // Create a list to store the placement points
-        // List<Vector3> placementPoints = new List<Vector3>();
-
-        // // Iterate through the vertices and add the points that meet the placement rules
-        // for (int i = 0; i < vertices.Length; i++)
-        // {
-        //     Debug.Log("vertices.y: " + vertices[i].position.y);
-
-        //     // Calculate the normalized height of the vertex, taking into account the x and z scale of the mesh transform
-        //     float normalizedHeight = (vertices[i].position.y / scale.y - minHeight) / (maxHeight - minHeight);
-        //     normalizedHeight = Mathf.Clamp(normalizedHeight, 0, 1);
-
-        //     float height = pointHeightRange.Evaluate(normalizedHeight);
-        //     if (height > 0)
-        //     {
-        //         // Transform the position of the vertex to world space
-        //         Vector3 worldPosition = transform.TransformPoint(vertices[i].position);
-        //         placementPoints.Add(worldPosition);
-        //     }
-        // }
-
-        return placementPoints;
+        locationLandPlotVertices = landPlotVertices;
+        locationRoadVertices = roadVertices;
     }
 
 
@@ -402,6 +389,78 @@ public class ProceduralCityGenerator : MonoBehaviour
     }
 
     public float clusterSizeCheckDist = 0.6f;
+
+    // private List<PointCluster> ConsolidatePointsIntoClusters(List<Vector3> points)
+    // {
+    //     List<PointCluster> clusters = new List<PointCluster>();
+    //     Vector3 scale = transform.lossyScale;
+
+    //     points = points.OrderBy(pos => pos.x).ThenBy(pos => pos.z).ToList();
+
+    //     // Iterate through all of the points
+    //     for (int i = 0; i < points.Count; i++)
+    //     {
+    //         // Check if the current point is within an existing cluster
+    //         bool foundCluster = false;
+    //         foreach (PointCluster cluster in clusters)
+    //         {
+    //             // Calculate the distance between the current point and the center of the cluster
+    //             float distance = Vector2.Distance(new Vector2(cluster.center.x, cluster.center.z), new Vector2(points[i].x, points[i].z));
+    //             if (distance < clusterDistanceMax)
+    //             {
+    //                 // Add the point to the cluster and update the center
+    //                 cluster.AddPoint(points[i]);
+    //                 foundCluster = true;
+    //                 break;
+    //             }
+    //         }
+
+    //         // If the point was not within an existing cluster, create a new cluster for it
+    //         if (!foundCluster)
+    //         {
+    //             PointCluster newCluster = new PointCluster(points[i]);
+    //             clusters.Add(newCluster);
+    //         }
+    //     }
+
+    //     foreach (PointCluster cluster in clusters)
+    //     {
+    //         cluster.UpdateMaximumClusterSize(clusterSizeCheckDist);
+
+    //         List<Vector3> clusterPoints = cluster.GetPoints();
+
+    //         Vector2 clusterSize = cluster.maxRectangleSize;
+    //         // Vector2 clusterSize = GetMaximumClusterSize(clusterPoints, clusterSizeCheckDist);
+    //         Debug.Log("clusterSize: " + clusterSize + ", points: " + clusterPoints.Count);
+    //     }
+
+    //     return clusters;
+    // }
+
+    private void RemoveOverlappingPoints(List<PointCluster> clusters)
+    {
+        // Iterate through all clusters
+        for (int i = 0; i < clusters.Count; i++)
+        {
+            PointCluster currentCluster = clusters[i];
+            List<Vector3> currentPoints = currentCluster.GetPoints();
+
+            // Iterate through all other clusters
+            for (int j = 0; j < clusters.Count; j++)
+            {
+                if (i == j) continue; // Skip the current cluster
+
+                PointCluster otherCluster = clusters[j];
+                List<Vector3> otherPoints = otherCluster.GetPoints();
+
+                // Remove any points in the current cluster that are also in the other cluster
+                currentPoints.RemoveAll(otherPoints.Contains);
+
+                // Update the current cluster with the remaining points
+                currentCluster.SetPoints(currentPoints);
+            }
+        }
+    }
 
     private List<PointCluster> ConsolidatePointsIntoClusters(List<Vector3> points)
     {
@@ -449,6 +508,7 @@ public class ProceduralCityGenerator : MonoBehaviour
             }
         }
 
+        RemoveOverlappingPoints(clusters);
 
         foreach (PointCluster cluster in clusters)
         {
@@ -458,7 +518,7 @@ public class ProceduralCityGenerator : MonoBehaviour
 
             Vector2 clusterSize = cluster.maxRectangleSize;
             // Vector2 clusterSize = GetMaximumClusterSize(clusterPoints, clusterSizeCheckDist);
-            Debug.Log("clusterSize: " + clusterSize + ", points: " + clusterPoints.Count);
+            // Debug.Log("clusterSize: " + clusterSize + ", points: " + clusterPoints.Count);
         }
 
         return clusters;
@@ -466,17 +526,17 @@ public class ProceduralCityGenerator : MonoBehaviour
 
     private void UpdateCityLandPlotPoints()
     {
-        cityLandPlotPoints = CalculatePlacementPoints();
-        cityLandPointClusters = ConsolidatePointsIntoClusters(cityLandPlotPoints);
+        CalculatePlacementPoints();
+        locationLandPlotClusters = ConsolidatePointsIntoClusters(locationLandPlotVertices);
 
         // Add unique color for each cluster
-        if (cityLandPointClusters.Count > 0)
+        if (locationLandPlotClusters.Count > 0)
         {
-            clusterCount = cityLandPointClusters.Count;
+            clusterCount = locationLandPlotClusters.Count;
 
             HashSet<Color> generatedColors = new HashSet<Color>();
 
-            foreach (PointCluster cluster in cityLandPointClusters)
+            foreach (PointCluster cluster in locationLandPlotClusters)
             {
                 Color randomColor;
 
@@ -517,15 +577,15 @@ public class ProceduralCityGenerator : MonoBehaviour
         Gizmos.color = pointColor;
 
         // Draw the cluster points
-        if (enableCityBlockPlotPoints && !resetCityBlockPlotPoints)
+        if (enableLocationBlockPlotPoints && !resetCityBlockPlotPoints)
         {
             // Debug.Log("cityLandPointClusters[0]: " + cityLandPointClusters[0].GetPoints().Count);
 
 
-            if (cityLandPointClusters.Count > 0)
+            if (locationLandPlotClusters.Count > 0)
             {
 
-                foreach (PointCluster cluster in cityLandPointClusters)
+                foreach (PointCluster cluster in locationLandPlotClusters)
                 {
 
                     Gizmos.color = cluster.color;
@@ -535,16 +595,36 @@ public class ProceduralCityGenerator : MonoBehaviour
                     {
                         Gizmos.DrawSphere(point, 0.25f);
                     }
-                    List<Vector3> gridPoints = cluster.gridPoints;
-                    if (gridPoints.Count > 0)
+
+                    List<Vector3> baseGridPoints = cluster.gridPoints;
+                    if (baseGridPoints.Count > 0)
                     {
-                        foreach (Vector3 point in gridPoints)
+                        foreach (Vector3 point in baseGridPoints)
                         {
                             // Vector3 pointWorldPos = transform.TransformPoint(point);
                             // Gizmos.DrawWireSphere(point, clusterSizeCheckDist);
                             Gizmos.DrawSphere(point, clusterSizeCheckDist);
                         }
                     }
+
+                    List<PointCluster.GridPointPrototype> gridPoints = cluster.gridPointPrototypes;
+                    if (gridPoints.Count > 0)
+                    {
+                        foreach (PointCluster.GridPointPrototype point in gridPoints)
+                        {
+                            // Vector3 pointWorldPos = transform.TransformPoint(point);
+                            // Gizmos.DrawWireSphere(point, clusterSizeCheckDist);
+                            Gizmos.DrawSphere(point.position, point.radius);
+
+                            // if (point.radius > clusterSizeCheckDist)
+                            // {
+
+                            //     Gizmos.color = Color.black;
+                            //     Gizmos.DrawWireSphere(point.position, point.radius);
+                            // }
+                        }
+                    }
+
 
                     // Vector3[] points = cluster.maxRectangleBorderPoints;
                     // Gizmos.color = Color.red;
@@ -597,12 +677,21 @@ public class ProceduralCityGenerator : MonoBehaviour
 
 
             }
-            else if (cityLandPlotPoints.Count > 0)
+            else if (locationLandPlotVertices.Count > 0)
             {
-                foreach (Vector3 point in cityLandPlotPoints)
+                foreach (Vector3 point in locationLandPlotVertices)
                 {
                     Gizmos.DrawSphere(point, 0.25f);
                 }
+            }
+        }
+
+        if (enableRoadPlotPoints && !resetCityBlockPlotPoints && locationRoadVertices.Count > 0)
+        {
+            foreach (Vector3 point in locationRoadVertices)
+            {
+                Gizmos.color = Color.black;
+                Gizmos.DrawSphere(point, 0.25f);
             }
         }
 
@@ -658,33 +747,102 @@ public class ProceduralCityGenerator : MonoBehaviour
             GeneratePoints();
         }
 
-        if (enableCityBlockPlotPoints && resetCityBlockPlotPoints || _terrainHeight != terrainHeight || _terrainSize != terrainSize || _clusterDistanceMax != clusterDistanceMax)
+        if (enableLocationBlockPlotPoints && resetCityBlockPlotPoints || _terrainHeight != terrainHeight || _terrainSize != terrainSize || _clusterDistanceMax != clusterDistanceMax)
         {
             _terrainHeight = terrainHeight;
             _terrainSize = terrainSize;
             _clusterDistanceMax = clusterDistanceMax;
-            cityLandPointClusters = new List<PointCluster>();
+            locationLandPlotClusters = new List<PointCluster>();
 
             UpdateCityLandPlotPoints();
+
             resetCityBlockPlotPoints = false;
+
+            DestroyAllTiles(true);
         }
 
-        if (bSaveMesh)
+
+        if (generateBlockTiles && !resetCityBlockPlotPoints)
         {
-            bSaveMesh = false;
-            SaveMeshAsset(mesh, "New Terrain Mesh");
+            generateBlockTiles = false;
+            InstantiateTiles();
+        }
+
+        // if (bSaveMesh)
+        // {
+        //     bSaveMesh = false;
+        //     SaveMeshAsset(mesh, "New Terrain Mesh");
+        // }
+    }
+
+    // [SerializeField] private bool bSaveMesh = false;
+    // void SaveMeshAsset(Mesh mesh, string assetName)
+    // {
+    //     // Create a new mesh asset
+    //     Mesh meshAsset = Instantiate(mesh) as Mesh;
+    //     meshAsset.name = assetName;
+
+    //     // Save the mesh asset to the project
+    //     AssetDatabase.CreateAsset(meshAsset, "Assets/Terrain/" + assetName + ".asset");
+    //     AssetDatabase.SaveAssets();
+    // }
+
+    [SerializeField] private bool generateBlockTiles;
+    [SerializeField] private GameObject proceduralTilePrefab_sm;
+    [SerializeField] private GameObject proceduralTilePrefab_md;
+    // [SerializeField] private GameObject proceduralTilePrefab_lg;
+    [SerializeField] private List<GameObject> allTiles = new List<GameObject>();
+
+    void DestroyAllTiles(bool immediate = false)
+    {
+        // Destroy any existing objects in the array
+        foreach (GameObject obj in allTiles)
+        {
+            if (immediate)
+            {
+                DestroyImmediate(obj);
+            }
+            else
+            {
+                Destroy(obj);
+            }
+        }
+        // Clear the array
+        allTiles.Clear();
+    }
+
+    void InstantiateTiles()
+    {
+        DestroyAllTiles();
+
+        foreach (PointCluster cluster in locationLandPlotClusters)
+        {
+            List<PointCluster.GridPointPrototype> gridPoints = cluster.gridPointPrototypes;
+            if (gridPoints.Count > 0)
+            {
+                foreach (PointCluster.GridPointPrototype point in gridPoints)
+                {
+                    GameObject prefab;
+                    if (point.radius <= 6f)
+                    {
+                        prefab = proceduralTilePrefab_sm;
+                    }
+                    else
+                    {
+                        prefab = proceduralTilePrefab_md;
+                    }
+                    Vector3 pos = transform.TransformPoint(point.position);
+                    Vector3 scaleXZ = transform.lossyScale;
+                    Vector3 scaleY = prefab.transform.lossyScale;
+                    // GameObject newObject = Instantiate(prefab, new Vector3(pos.x * scaleXZ.x, pos.y * scaleY.y, pos.z * scaleXZ.z), Quaternion.identity);
+                    GameObject newObject = Instantiate(prefab, new Vector3(point.position.x, point.position.y + (scaleY.y * 0.5f), point.position.z), Quaternion.identity);
+
+                    allTiles.Add(newObject);
+                    newObject.transform.SetParent(this.gameObject.transform);
+                }
+            }
+
         }
     }
 
-    [SerializeField] private bool bSaveMesh = false;
-    void SaveMeshAsset(Mesh mesh, string assetName)
-    {
-        // Create a new mesh asset
-        Mesh meshAsset = Instantiate(mesh) as Mesh;
-        meshAsset.name = assetName;
-
-        // Save the mesh asset to the project
-        AssetDatabase.CreateAsset(meshAsset, "Assets/Terrain/" + assetName + ".asset");
-        AssetDatabase.SaveAssets();
-    }
 }

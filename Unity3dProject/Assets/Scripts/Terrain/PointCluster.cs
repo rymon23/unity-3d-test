@@ -37,6 +37,19 @@ public class PointCluster : MonoBehaviour
 
         UpdateBounds();
     }
+    public void SetPoints(List<Vector3> points)
+    {
+        _points = points;
+
+        center = CalculateClusterCenter();
+        _boundsRadius = GetBoundsRadius();
+
+        UpdateBounds();
+    }
+    public List<Vector3> GetPoints()
+    {
+        return _points;
+    }
 
     public void UpdateBounds()
     {
@@ -77,7 +90,6 @@ public class PointCluster : MonoBehaviour
         return borderPoints;
     }
 
-
     public Vector3 CalculateClusterCenter()
     {
         Vector3 center = Vector3.zero;
@@ -87,11 +99,6 @@ public class PointCluster : MonoBehaviour
         }
         center /= _points.Count;
         return center;
-    }
-
-    public List<Vector3> GetPoints()
-    {
-        return _points;
     }
 
     public Vector3 GetSize()
@@ -138,10 +145,12 @@ public class PointCluster : MonoBehaviour
     public Vector2 maxRectangleSize;
     public Vector3[] maxRectangleBorderPoints = new Vector3[4];
 
-    public void UpdateMaximumClusterSize(float distance)
+    public void UpdateMaximumClusterSize(float minRadius)
     {
-        GetMaximumClusterSize(distance);
-        GeneratePointsWithinCluster(distance);
+        GetMaximumClusterSize(minRadius);
+        GeneratePointsWithinCluster(minRadius);
+        gridPointPrototypes = ConsolidateNeighbors(12f);
+        gridPointPrototypes = ConsolidateNeighbors(18f);
     }
 
     public Vector2 GetMaximumClusterSize(float distance)
@@ -201,7 +210,7 @@ public class PointCluster : MonoBehaviour
 
     public List<Vector3> gridPoints;
 
-    // List<Vector3> GeneratePointsWithinCluster(float radius)
+    // List<Vector3> GeneratePointsWithinCluster(float radius = 6f)
     // {
     //     // Sort the cluster points by distance from the center
     //     Vector3 center = _points.Aggregate((a, b) => a + b) / _points.Count;
@@ -210,12 +219,22 @@ public class PointCluster : MonoBehaviour
     //     // Create a list to store the generated points
     //     List<Vector3> points = new List<Vector3>();
 
+    //     // Find the minimum and maximum x and z values of the cluster points
+    //     float minX = _points.Min(p => p.x);
+    //     float maxX = _points.Max(p => p.x);
+    //     float minZ = _points.Min(p => p.z);
+    //     float maxZ = _points.Max(p => p.z);
+
     //     // Iterate through the sorted cluster points
     //     foreach (Vector3 point in _points)
     //     {
     //         // Check if there is enough space for a new point at this position
     //         bool intersects = points.Any(p => Vector3.Distance(p, point) < radius * 2);
-    //         if (!intersects)
+
+    //         // Check if the new point's bounds fit inside the cluster bounds
+    //         bool fitsWithinBounds = point.x - radius >= minX && point.x + radius <= maxX && point.z - radius >= minZ && point.z + radius <= maxZ;
+
+    //         if (!intersects && fitsWithinBounds)
     //         {
     //             // Add a new point at this position
     //             points.Add(point);
@@ -226,11 +245,8 @@ public class PointCluster : MonoBehaviour
 
     //     return points;
     // }
-    // This method first sorts the cluster points by distance from the center, then iterates through the sorted points and adds a new point at each position if there is enough space for it(i.e. if it does not intersect with any existing points). It returns a list of the generated points.
 
-    // Note that this method assumes that the cluster points are already within the bounds of the cluster, and that the radius is a valid size for the points. You may need to add additional checks to ensure this.
-
-    List<Vector3> GeneratePointsWithinCluster(float radius)
+    void GeneratePointsWithinCluster(float radius = 6f)
     {
         // Sort the cluster points by distance from the center
         Vector3 center = _points.Aggregate((a, b) => a + b) / _points.Count;
@@ -261,16 +277,141 @@ public class PointCluster : MonoBehaviour
             }
         }
 
+        List<GridPointPrototype> prototypes = new List<GridPointPrototype>();
+        for (int i = 0; i < points.Count; i++)
+        {
+            prototypes.Add(new GridPointPrototype
+            {
+                position = points[i],
+                radius = radius,
+                id = i,
+            });
+        }
+
+        gridPointPrototypes = prototypes;
         gridPoints = points;
 
-        return points;
+        // return points;
     }
 
+    public struct GridPointPrototype
+    {
+        public Vector3 position;
+        public float radius;
+        public int id;
+
+    }
+    public List<GridPointPrototype> gridPointPrototypes;
+
+    List<GridPointPrototype> ConsolidateNeighbors(float newRadius)
+    {
+        List<GridPointPrototype> consolidatedPrototypes = new List<GridPointPrototype>();
+        List<GridPointPrototype> removedPrototypes = new List<GridPointPrototype>();
+
+        // Iterate through the prototypes
+        foreach (GridPointPrototype prototype in gridPointPrototypes)
+        {
+            // Check if this prototype has already been consolidated or removed
+            bool removedContainsId = removedPrototypes.Any(p => p.id == prototype.id);
+            if (removedContainsId)
+            {
+                continue;
+            }
+
+            // Find all neighbors of this prototype
+            List<GridPointPrototype> neighbors = gridPointPrototypes.Where(p => Vector2.Distance(new Vector2(p.position.x, p.position.z), new Vector2(prototype.position.x, prototype.position.z)) <= newRadius * 1f).ToList();
+
+            // Remove any prototypes from the neighbors list that are in the removedPrototypes list
+            neighbors.RemoveAll(p => removedPrototypes.Contains(p));
+
+            // Calculate the combined radius of the neighbors
+            float combinedRadius = neighbors.Sum(p => p.radius);
+
+            // Debug.Log("neighbors: " + neighbors.Count + ", combinedRadius: " + combinedRadius);
+
+            // Check if the combined radius fits within the new radius and that no other consolidated prototype overlaps with this one on the x and z axes
+            bool overlap = consolidatedPrototypes.Any(p => Mathf.Abs(p.position.x - prototype.position.x) < (p.radius + prototype.radius) && Mathf.Abs(p.position.z - prototype.position.z) < (p.radius + prototype.radius));
+            if (neighbors.Count > 1 && combinedRadius <= newRadius && !overlap)
+            {
+                // Calculate the center position between the neighbors
+                Vector3 combinedPosition = Vector3.zero;
+                foreach (GridPointPrototype neighbor in neighbors)
+                {
+                    combinedPosition += neighbor.position;
+                }
+                combinedPosition /= neighbors.Count;
+
+                // Create a new prototype with the combined position and radius
+                GridPointPrototype consolidatedPrototype = new GridPointPrototype { position = combinedPosition, radius = newRadius, id = prototype.id };
+
+                // Add the new prototype to the consolidated list
+                consolidatedPrototypes.Add(consolidatedPrototype);
+
+                // Add the consolidated prototypes to the removed list
+                removedPrototypes.AddRange(neighbors);
+            }
+            else
+            {
+                // Add the prototype to the consolidated list as is
+                consolidatedPrototypes.Add(prototype);
+            }
+
+        }
+
+        return consolidatedPrototypes;
+    }
+
+    // List<GridPointPrototype> ConsolidateNeighbors(float newRadius)
+    // {
+    //     List<GridPointPrototype> consolidatedPrototypes = new List<GridPointPrototype>();
+
+    //     // Iterate through the prototypes
+    //     foreach (GridPointPrototype prototype in gridPointPrototypes)
+    //     {
+    //         // Check if this prototype has already been consolidated
+    //         if (consolidatedPrototypes.Any(p => p.id == prototype.id))
+    //         {
+    //             continue;
+    //         }
+
+    //         // Find all neighbors of this prototype
+    //         // List<GridPointPrototype> neighbors = gridPointPrototypes.Where(p => Mathf.Abs(p.position.x - prototype.position.x) <= newRadius * 2 && Mathf.Abs(p.position.z - prototype.position.z) <= newRadius * 2).ToList();
+    //         List<GridPointPrototype> neighbors = gridPointPrototypes.Where(p => Vector2.Distance(new Vector2(p.position.x, p.position.z), new Vector2(prototype.position.x, prototype.position.z)) <= newRadius * 0.5f).ToList();
+
+    //         // Calculate the combined radius of the neighbors
+    //         float combinedRadius = neighbors.Sum(p => p.radius);
+
+    //         Debug.Log("neighbors: " + neighbors.Count + ", combinedRadius: " + combinedRadius);
 
 
+    //         // Check if the combined radius fits within the new radius
+    //         if (combinedRadius <= newRadius)
+    //         {
+    //             // Calculate the center position between the neighbors
+    //             Vector3 combinedPosition = Vector3.zero;
+    //             foreach (GridPointPrototype neighbor in neighbors)
+    //             {
+    //                 combinedPosition += neighbor.position;
+    //             }
+    //             combinedPosition /= neighbors.Count;
 
+    //             // Create a new prototype with the combined position and radius
+    //             GridPointPrototype consolidatedPrototype = new GridPointPrototype { position = combinedPosition, radius = newRadius, id = prototype.id };
 
+    //             // Add the new prototype to the consolidated list
+    //             consolidatedPrototypes.Add(consolidatedPrototype);
 
+    //             // Remove the consolidated prototypes from the list
+    //             // gridPointPrototypes.RemoveAll(p => neighbors.Contains(p));
+    //         }
+    //         else
+    //         {
+    //             // Add the prototype to the consolidated list as is
+    //             consolidatedPrototypes.Add(prototype);
+    //         }
+    //     }
 
+    //     return consolidatedPrototypes;
+    // }
 
 }
