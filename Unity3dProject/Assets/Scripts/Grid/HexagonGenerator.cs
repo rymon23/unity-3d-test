@@ -83,63 +83,7 @@ public class HexagonGenerator
         }
         return hexagons;
     }
-    // public static List<Vector3[]> GenerateHexagonGrid(float hexagonSize, int numHexagons, int numRows, Vector3 startPos)
-    // {
-    //     List<Vector3[]> hexagons = new List<Vector3[]>();
-    //     // int currentHexagonIndex = 0;
-    //     float angle = 60 * Mathf.Deg2Rad;
-    //     float currentX = startPos.x;
-    //     float currentZ = startPos.z;
 
-    //     for (int k = 0; k < numRows; k++)
-    //     {
-    //         currentX = startPos.x;
-    //         for (int i = 0; i < numHexagons; i++)
-    //         {
-    //             Vector3[] hexagonPoints = new Vector3[6];
-
-    //             for (int j = 0; j < 6; j++)
-    //             {
-    //                 float x = currentX + hexagonSize * Mathf.Cos(angle * j);
-    //                 float z = currentZ + hexagonSize * Mathf.Sin(angle * j);
-    //                 // if (k > 0 && j == 0) z = hexagonPoints[currentHexagonIndex - 6].z;
-    //                 if (k > 0 && j == 0) z = hexagons[k - 1][0].z;
-    //                 hexagonPoints[j] = new Vector3(x, startPos.y, z);
-    //             }
-    //             hexagons.Add(hexagonPoints);
-
-    //             currentX += hexagonSize;
-    //         }
-    //         currentZ += hexagonSize * 1.69f;
-    //     }
-    //     return hexagons;
-    // }
-    // public static Vector3[] GenerateHexagonGrid(float hexagonSize, int numHexagons, int numRows, Vector3 startPos)
-    // {
-    //     Vector3[] hexagonPoints = new Vector3[numHexagons * 6 * numRows];
-    //     int currentHexagonIndex = 0;
-    //     float angle = 60 * Mathf.Deg2Rad;
-    //     float currentX = startPos.x;
-    //     float currentZ = startPos.z;
-
-    //     for (int k = 0; k < numRows; k++)
-    //     {
-    //         currentX = startPos.x;
-    //         for (int i = 0; i < numHexagons; i++)
-    //         {
-    //             for (int j = 0; j < 6; j++)
-    //             {
-    //                 float x = currentX + hexagonSize * Mathf.Cos(angle * j);
-    //                 float z = currentZ + hexagonSize * Mathf.Sin(angle * j);
-    //                 if (k > 0 && j == 0) z = hexagonPoints[currentHexagonIndex - 6].z;
-    //                 hexagonPoints[currentHexagonIndex++] = new Vector3(x, startPos.y, z);
-    //             }
-    //             currentX += hexagonSize;
-    //         }
-    //         currentZ += hexagonSize * 1.69f;
-    //     }
-    //     return hexagonPoints;
-    // }
     public static Vector3[] GenerateHexagonChain(float hexagonSize, int numHexagons, int numRows, float elevation = 1f)
     {
         Vector3[] hexagonPoints = new Vector3[numHexagons * 6 * numRows];
@@ -166,34 +110,6 @@ public class HexagonGenerator
         }
         return hexagonPoints;
     }
-
-    // public static Vector3[] GenerateHexagonChain(float hexagonSize, int numHexagons, int numRows)
-    // {
-    //     Vector3[] hexagonPoints = new Vector3[numHexagons * 6 * numRows];
-    //     int currentHexagonIndex = 0;
-    //     float angle = 60 * Mathf.Deg2Rad;
-    //     float currentX = 0;
-    //     float currentZ = 0;
-
-    //     for (int k = 0; k < numRows; k++)
-    //     {
-    //         currentX = 0;
-    //         for (int i = 0; i < numHexagons; i++)
-    //         {
-    //             for (int j = 0; j < 6; j++)
-    //             {
-    //                 float x = currentX + hexagonSize * Mathf.Cos(angle * j);
-    //                 float z = currentZ + hexagonSize * Mathf.Sin(angle * j);
-    //                 hexagonPoints[currentHexagonIndex++] = new Vector3(x, 0, z);
-    //             }
-    //             currentX += hexagonSize;
-    //         }
-    //         currentZ += hexagonSize * 2;
-    //     }
-    //     return hexagonPoints;
-    // }
-
-
 
     public static Vector3[] GenerateHexagons(float hexagonSize, int numHexagons, int numRows)
     {

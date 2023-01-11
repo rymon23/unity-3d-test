@@ -73,7 +73,6 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
     [Range(0, 0.88f)][SerializeField] private float placeZoneCenterOffsetMult = 0.33f;
     [Range(0, 32)][SerializeField] private float locationPointZoneRadius = 12f;
     [Range(0, 24)][SerializeField] private float locationPointZoneBorderRadiusOffset = 6f;
-    [SerializeField] private float locationPointZoneCenterRadius = 9f;
     [Range(0, 4f)][SerializeField] private float minZoneElevationDifference = 0.6f;
     [Range(0, 4f)][SerializeField] private float maxZoneElevationDifference = 2f;
     [Range(1, 12f)][SerializeField] private float zoneConnectorPointRadius = 6f;
@@ -120,14 +119,6 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
     float _maxLocationZoneCenterYOffset;
     float _maxBlockClusterPointDistance;
     float _maxBorderClusterPointDistance;
-
-    // FastNoiseState[] fastNoiseStates;
-    // struct FastNoiseState
-    // {
-    //     public int seed;
-    //     public float frequency;
-
-    // }
     #endregion
 
     Mesh mesh;
@@ -456,11 +447,7 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
                     //     }
                     // }
 
-                    List<Vector3> subzonePoints = new List<Vector3>();
-                    foreach (SubzonePrototype item in nearestLocation.subzonePrototypes)
-                    {
-                        subzonePoints.Add(item.position);
-                    }
+                    Vector3[] subzonePoints = LocationUtility.GetLocationSubzonePoints(nearestLocation);
 
                     List<Vector3> betweenPoints = ProceduralTerrainUtility.GetPointsBetweenPosition(vertices[x + y * terrainSize].position, subzonePoints);
                     if (betweenPoints.Count > 0)
@@ -565,15 +552,10 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
                         }
                     }
 
-                    if (nearestZoneDist < locationPointZoneRadius && subzonePoints.Count > 1)
+                    if (nearestZoneDist < locationPointZoneRadius && subzonePoints.Length > 1)
                     {
 
-                        Vector3[] subzoneConnectors = new Vector3[nearestLocation.subzoneConnectors.Count];
-                        for (int i = 0; i < subzoneConnectors.Length; i++)
-                        {
-                            subzoneConnectors[i] = nearestLocation.subzoneConnectors[i].position;
-
-                        }
+                        Vector3[] subzoneConnectors = LocationUtility.GetLocationZoneConnectors(nearestLocation);
 
                         (Vector3 nearestConnector, float connectorDistance, int index) = ProceduralTerrainUtility.GetClosestPoint(subzoneConnectors, new Vector2(x, y));
                         // (Vector3 nearestConnector, float connectorDistance) = ProceduralTerrainUtility.GetClosestPoint(nearestLocation.zoneConnectorPoints, new Vector2(x, y));
@@ -682,7 +664,7 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
         float maxLocationHeight = terrainHeight * maxlocationHeightOffsetMult;
         Vector3 scale = transform.lossyScale;
 
-        List<LocationPoint> newPoints = new List<LocationPoint>();
+        List<LocationPrototype> newLocationPrototypes = new List<LocationPrototype>();
         Vector3[] newPositions = ProceduralTerrainUtility.GeneratePointsWithinBounds(
             locationCount,
             transform.lossyScale,
@@ -693,135 +675,32 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
         {
             float radius = locationPointZoneRadius;
 
-            LocationPoint loc = new LocationPoint();
+            LocationPrototype loc = new LocationPrototype();
 
-            (Vector3[] newZones, Vector3[] connectors, ZoneConnectorPair[] pairs) = ProceduralTerrainUtility.GenerateChainOfOverlappingPointsWithMidpoints(
+            (List<SubzonePrototype> newSubzonePrototypes, List<ZoneConnector> newZoneConnectors) = ProceduralTerrainUtility.GenerateLocationZoneAndConnectorPrototypes(
                 locationZoneCount, point,
                 new Vector2(radius * placeZoneCenterOffsetMult, radius * placeZoneBorderOffsetMult),
                 new Vector2(
                     minZoneElevationDifference,
                     maxZoneElevationDifference),
-                    minLocationZoneDistance
+                    minLocationZoneDistance,
+
+                locationPointZoneRadius * 0.88f
             );
+            Debug.Log("newSubzonePrototypes: " + newSubzonePrototypes.Count);
+
+
             loc.position = point;
             loc.radius = radius;
-            loc.subZonePoints = newZones;
-            loc.zoneConnectors = connectors;
-            loc.zoneConnectorPairs = pairs;
+            loc.subzonePrototypes = newSubzonePrototypes;
+            loc.subzoneConnectors = newZoneConnectors;
 
-            List<Vector3[]> zoneCorners = new List<Vector3[]>();
-            List<Vector3[,]> zoneGrid = new List<Vector3[,]>();
-            List<Vector3[]> zoneRoadPoints = new List<Vector3[]>();
-
-            List<List<Hexagon>> zoneHexGrid = new List<List<Hexagon>>();
-
-            for (int i = 0; i < newZones.Length; i++)
-            {
-                Vector3[] corners = ProceduralTerrainUtility.GenerateHexagonPoints(newZones[i], locationPointZoneRadius * 0.85f);
-                zoneCorners.Add(corners);
-                // Vector3[,] grid = ProceduralTerrainUtility.GenerateGrid(corners, minRoadPointSpacing, newZones[i].y);
-                // zoneGrid.Add(grid);
-                // zoneRoadPoints.Add(ProceduralTerrainUtility.GeneratePath(grid));
-
-                zoneHexGrid.Add(HexagonGenerator.GenerateHexagonGrid(corners, minRoadPointSpacing, newZones[i].y));
-            }
-            loc.zoneCorners = zoneCorners;
-            // loc.zoneGrid = zoneGrid;
-            // loc.zoneRoadPoints = zoneRoadPoints;
-
-            loc.zoneHexGrid = zoneHexGrid;
-
-            // Debug.Log("zoneGrid: " + zoneGrid.Count);
-            // Debug.Log("zoneGrid 0: " + zoneGrid[0].Length);
-
-            // (Vector3[] newZones, List<ZoneOverlapPoint> midPoints, ) = ProceduralTerrainUtility.GenerateChainOfOverlappingPointsWithMidpoints(
-            //     locationZoneCount, point,
-            //     new Vector2(radius * placeZoneCenterOffsetMult, radius * placeZoneBorderOffsetMult),
-            //     new Vector2(
-            //         minZoneElevationDifference,
-            //         maxZoneElevationDifference),
-            //         minLocationZoneDistance
-            // );
-            // loc.position = point;
-            // loc.radius = radius;
-            // loc.subZonePoints = newZones;
-            // loc.zoneConnectorPoints = midPoints.ToArray();
-
-            // List<Vector3> tempList = new List<Vector3>();
-            // tempList.AddRange(loc.subZonePoints);
-            // tempList.AddRange(loc.zoneConnectorPairs);
-            // tempList.AddRange(loc.subZonePoints);
-            // foreach (ZoneOverlapPoint item in midPoints)
-            // {
-            //     tempList.Add(item.position);
-            // }
-            // Vector3 pointWorldPos = transform.TransformPoint(point);
-            // ProceduralTerrainUtility.MoveGroupedPointsToPosition(tempList, pointWorldPos);
-
-            // ProceduralTerrainUtility.MoveGroupedPointsToPosition(loc.subZonePoints, point);
-
-            // Vector3[] newZones = ProceduralTerrainUtility.GenerateChainOfOverlappingPoints(
-            //     locationZoneCount, point,
-            //     new Vector2(radius * placeZoneCenterOffsetMult, radius * placeZoneBorderOffsetMult),
-            //     new Vector2(
-            //         minZoneElevationDifference,
-            //         maxZoneElevationDifference),
-            //         minLocationZoneDistance
-            // );
-
-
-            // Vector3[] newZones = ProceduralTerrainUtility.GenerateChainOfOverlappingPoints(
-            //     locationZoneCount, point,
-            //     new Vector2(radius * placeZoneCenterOffsetMult, radius * placeZoneBorderOffsetMult),
-            //     new Vector2(
-            //         minZoneElevationDifference,
-            //         maxZoneElevationDifference),
-            //         minVerticePointLevelRadius
-            // );
-
-            // zoneOverlapPoints = ProceduralTerrainUtility.GetOverlappingPoints(newZones, radius);
-
-            // Vector3[] newZones = ProceduralTerrainUtility.GeneratePointsWithinRadius(
-            //     locationZoneCount, point, transform.lossyScale,
-            //     new Vector2(radius * placeZoneCenterOffsetMult, radius * placeZoneBorderOffsetMult),
-            //     new Vector2(
-            //         minYOffset,
-            //         maxYOffset),
-            //         minLocationZoneDistance
-            // );
-            // for (int i = 0; i < newZones.Length; i++)
-            // {
-            //     float yMod = UnityEngine.Random.Range(minZoneElevationDifference, maxZoneElevationDifference);
-            //     if (i == 0)
-            //     {
-            //         newZones[i].y = point.y + yMod;
-            //     }
-            //     else
-            //     {
-            //         newZones[i].y = newZones[i - 1].y + yMod;
-            //     }
-            // }
-
-            loc.zonesCenter = newZones.Length > 0 ? ProceduralTerrainUtility.GetCenterPosition(newZones) : point;
-            float minYOffset = point.y - minZoneElevationDifference;
-            float maxYOffset = point.y + maxZoneElevationDifference;
-            float yPos = UnityEngine.Random.Range(minYOffset, maxYOffset);
-            loc.zonesCenter.y = yPos;
-            newPoints.Add(loc);
+            newLocationPrototypes.Add(loc);
         }
+        locationPrototypes = newLocationPrototypes;
+        Debug.Log("locationPrototypes: " + locationPrototypes.Count);
+        Debug.Log("locationPrototypes[0].subzonePrototypes: " + locationPrototypes[0].subzonePrototypes.Count);
 
-        locationPoints = newPoints;
-
-        // locationPointZones = ProceduralTerrainUtility.GeneratePointsWithinRadius(
-        //     locationZones,
-        //     locationPoints[0],
-        //     transform.lossyScale,
-        //     maxVerticePointLevelRadius,
-        //     new Vector2(
-        //         minLocationZoneCenterYOffset,
-        //         maxLocationZoneCenterYOffset),
-        //     minLocationZoneDistance
-        // );
     }
 
     [Header("Debug Settings")]
@@ -839,11 +718,11 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
     {
         if (!debug_showPoints && !debug_locationPointLevelRadius && !debug_minLocationDistance) return;
 
-        if (showLocationPoints && locationPoints != null && locationPoints.Count > 0)
+        if (showLocationPoints && locationPrototypes != null && locationPrototypes.Count > 0)
         {
             Vector3 scale = transform.lossyScale;
             // Draw a sphere at each point's position
-            foreach (LocationPoint locPoint in locationPoints)
+            foreach (LocationPrototype locPoint in locationPrototypes)
             {
                 Vector3 pointWorldPos = transform.TransformPoint(locPoint.position);
                 Gizmos.color = locationPointColor;
@@ -864,44 +743,33 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
                     Gizmos.DrawWireSphere(pointWorldPos, maxVerticePointLevelRadius * scale.x);
                 }
 
-                Gizmos.color = Color.black;
-                pointWorldPos = transform.TransformPoint(locPoint.zonesCenter);
-                Gizmos.DrawSphere(pointWorldPos, 1f);
-                Gizmos.DrawWireSphere(pointWorldPos, locationPointZoneCenterRadius * scale.x);
-
                 Gizmos.color = Color.magenta;
-                foreach (Vector3 point in locPoint.subZonePoints)
+                foreach (SubzonePrototype zone in locPoint.subzonePrototypes)
                 {
-                    pointWorldPos = transform.TransformPoint(point);
+                    pointWorldPos = transform.TransformPoint(zone.position);
                     Gizmos.DrawSphere(pointWorldPos, 1f);
                     Gizmos.DrawWireSphere(pointWorldPos, locationPointZoneRadius * scale.x);
 
+                    Gizmos.color = Color.grey;
+                    foreach (Vector3 point in zone.borderCorners)
+                    {
+                        pointWorldPos = transform.TransformPoint(point);
+                        Gizmos.DrawSphere(pointWorldPos, 1f * scale.x);
 
-
+                    }
+                    ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(zone.borderCorners, transform);
                 }
 
                 if (enableZoneOverlapPoints)
                 {
                     Gizmos.color = Color.green;
-                    foreach (Vector3 point in locPoint.zoneConnectors)
+                    foreach (ZoneConnector connector in locPoint.subzoneConnectors)
                     {
-                        pointWorldPos = transform.TransformPoint(point);
+                        pointWorldPos = transform.TransformPoint(connector.position);
                         Gizmos.DrawSphere(pointWorldPos, 1f);
                         Gizmos.DrawWireSphere(pointWorldPos, zoneConnectorPointRadius * scale.x);
                     }
                 }
-                Gizmos.color = Color.grey;
-                foreach (Vector3[] points in locPoint.zoneCorners)
-                {
-                    foreach (Vector3 point in points)
-                    {
-                        pointWorldPos = transform.TransformPoint(point);
-                        Gizmos.DrawSphere(pointWorldPos, 1f * scale.x);
-                    }
-
-                    ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(points, transform);
-                }
-
 
                 Gizmos.color = Color.black;
                 hexagons = HexagonGenerator.GenerateHexagonGrid(6f, 12, 12, Vector3.zero);
@@ -927,26 +795,6 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
                     // }
                 }
 
-                // for (int i = 0; i < pts.Length; i++)
-                // {
-                //     pointWorldPos = transform.TransformPoint(pts[i]);
-                //     Gizmos.DrawSphere(pointWorldPos, 0.25f);
-                // }
-
-
-                // if (locPoint.zoneRoadPoints != null)
-                // {
-                //     Gizmos.color = Color.blue;
-                //     foreach (Vector3[] points in locPoint.zoneRoadPoints)
-                //     {
-                //         foreach (Vector3 point in points)
-                //         {
-                //             pointWorldPos = transform.TransformPoint(point);
-                //             Gizmos.DrawSphere(pointWorldPos, minRoadPointSpacing * 2f);
-                //         }
-                //     }
-                // }
-
                 Gizmos.color = Color.black;
 
                 // foreach (Vector3[,] grid in locPoint.zoneGrid)
@@ -959,38 +807,7 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
                 //     HexagonGenerator.DrawHexagonPointsInGizmos(hexGrid, 0.5f, transform);
                 //     HexagonGenerator.DrawHexagonInGizmos(hexGrid, transform);
                 // }
-
-
-
-                // foreach (Vector3[] points in hexagons)
-                // {
-                //     if (UnityEngine.Random.Range(0, 100) < 50)
-                //     {
-                //         Gizmos.color = Color.red;
-                //     }
-                //     else
-                //     {
-                //         Gizmos.color = Color.blue;
-                //     }
-                //     for (int i = 0; i < points.Length; i++)
-                //     {
-                //         Gizmos.DrawSphere(points[i], 0.3f);
-                //     }
-                // }
-
-                // foreach (Vector3[] points in locPoint.zoneRoadPoints)
-                // {
-                //     foreach (Vector3 point in points)
-                //     {
-                //         pointWorldPos = transform.TransformPoint(point);
-                //         Gizmos.DrawSphere(pointWorldPos, 0.5f);
-                //     }
-                // }
             }
-
-            // Gizmos.color = Color.black;
-            // Vector3 worldPos = transform.TransformPoint(locationPointZoneCenter);
-            // Gizmos.DrawWireSphere(worldPos, locationPointZoneCenterRadius * scale.x);
         }
 
         // Draw the cluster points
