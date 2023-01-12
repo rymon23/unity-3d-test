@@ -27,10 +27,17 @@ namespace ProceduralBase
     public class Location : MonoBehaviour
     {
         [SerializeField] private List<Vector3> locationCenterPoints;
-        [SerializeField] private List<SubZone> subZones;
+        [SerializeField] private List<SubZone> _subZones;
         [SerializeField] private float totalSize;
+        [SerializeField] private float radius;
         public List<GameObject> objects;
         public ProceduralTerrainMesh9.Vertex[] verticeData;
+
+        public void MapFromPrototype(LocationPrototype prototype, List<SubZone> subZones)
+        {
+            radius = prototype.radius;
+            _subZones = subZones;
+        }
 
         //Districts
 

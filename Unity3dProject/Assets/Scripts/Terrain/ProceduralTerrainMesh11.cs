@@ -76,8 +76,12 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
     [Range(0, 4f)][SerializeField] private float minZoneElevationDifference = 0.6f;
     [Range(0, 4f)][SerializeField] private float maxZoneElevationDifference = 2f;
     [Range(1, 12f)][SerializeField] private float zoneConnectorPointRadius = 6f;
-    [Range(0.1f, 10f)][SerializeField] private float minRoadPointSpacing = 3f;
+
+    [Header("Hexagon Tile Config")]
+    [Range(2, 10)][SerializeField] private int hexagonSize = 4;
+    [Range(0.6f, 2f)][SerializeField] private float hexagonRowOffsetAdjusterMult = 1.734f;
     [Range(4, 32)][SerializeField] private int maxRoadPoints = 12;
+
 
     [Header("Layer 2 Settings")]
     [Range(-1f, 1f)][SerializeField] private float terrainHeight_L2 = 0.3f;
@@ -128,6 +132,8 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
     List<PointCluster> locationBorderClusters = new List<PointCluster>();
     List<Vector3> locationRoadVertices = new List<Vector3>();
     List<Vector3> locationBorderVertices = new List<Vector3>();
+
+
 
     private void Awake()
     {
@@ -195,11 +201,6 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
         if (fastNoiseUnity == null || fastNoiseUnity.Length < 2)
         {
             fastNoiseUnity = GetComponentsInChildren<FastNoiseUnity>();
-            // fastNoiseStates = new FastNoiseState[fastNoiseUnity.Length];
-            // for (int i = 0; i < fastNoiseStates.Length; i++)
-            // {
-            //     fastNoiseStates[i] = new FastNoiseState();
-            // }
         }
 
         if (locationPrototypes == null || locationCount != locationPrototypes.Count ||
@@ -228,19 +229,8 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
                 showLocationPoints = true;
             }
 
-            // zoneOverlapPoints = new List<Vector3>();
-            GenerateLocationPoints();
-            // GetLocationZonesCenter();
+            GenerateLocationPrototypes();
         }
-
-
-        // if (locationCount > 0 &&
-        //     (_minLocationZoneCenterYOffset != minLocationZoneCenterYOffset ||
-        //     _maxLocationZoneCenterYOffset != maxLocationZoneCenterYOffset)
-        // )
-        // {
-        //     GetLocationZonesCenter();
-        // }
 
         if ((enableLocationBlockPlotPoints || enableRoadPlotPoints || enableBorderPlotPoints)
             && (resetPlotPoints || _terrainHeight != terrainHeight || _terrainSize != terrainSize
@@ -262,11 +252,20 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
             DestroyAllTiles(true);
         }
 
-        if (generateBlockTiles && !resetPlotPoints)
+        if (generateLocationGameObjects)
         {
-            generateBlockTiles = false;
-            InstantiateTiles();
+            generateLocationGameObjects = false;
+
+            if (locationPrototypes != null && locationPrototypes.Count > 0)
+            {
+                GenerateLocationGameObjects(locationPrototypes);
+            }
         }
+        // if (generateBlockTiles && !resetPlotPoints)
+        // {
+        //     generateBlockTiles = false;
+        //     InstantiateTiles();
+        // }
 
         if (bSaveMesh)
         {
@@ -658,7 +657,7 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
         return vertexPositions;
     }
 
-    void GenerateLocationPoints()
+    private void GenerateLocationPrototypes()
     {
         float minLocationHeight = terrainHeight * minlocationHeightOffsetMult;
         float maxLocationHeight = terrainHeight * maxlocationHeightOffsetMult;
@@ -677,7 +676,7 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
 
             LocationPrototype loc = new LocationPrototype();
 
-            (List<SubzonePrototype> newSubzonePrototypes, List<ZoneConnector> newZoneConnectors) = ProceduralTerrainUtility.GenerateLocationZoneAndConnectorPrototypes(
+            (List<SubzonePrototype> newSubzonePrototypes, List<ZoneConnector> newZoneConnectors) = LocationUtility.GenerateLocationZoneAndConnectorPrototypes(
                 locationZoneCount, point,
                 new Vector2(radius * placeZoneCenterOffsetMult, radius * placeZoneBorderOffsetMult),
                 new Vector2(
@@ -685,10 +684,8 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
                     maxZoneElevationDifference),
                     minLocationZoneDistance,
 
-                locationPointZoneRadius * 0.88f
+                locationPointZoneRadius
             );
-            Debug.Log("newSubzonePrototypes: " + newSubzonePrototypes.Count);
-
 
             loc.position = point;
             loc.radius = radius;
@@ -698,9 +695,39 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
             newLocationPrototypes.Add(loc);
         }
         locationPrototypes = newLocationPrototypes;
-        Debug.Log("locationPrototypes: " + locationPrototypes.Count);
-        Debug.Log("locationPrototypes[0].subzonePrototypes: " + locationPrototypes[0].subzonePrototypes.Count);
+    }
 
+    List<GameObject> locationGameObjects;
+
+    private void GenerateLocationGameObjects(List<LocationPrototype> locationPrototypes)
+    {
+        List<GameObject> Locations = new List<GameObject>();
+        List<GameObject> SubzoneLocations = new List<GameObject>();
+        List<GameObject> SubzoneConnectors = new List<GameObject>();
+
+        foreach (LocationPrototype locationPrototype in locationPrototypes)
+        {
+            Vector3 worldPosition = transform.TransformPoint(locationPrototype.position);
+            GameObject newLocation = Instantiate(Location_prefab, worldPosition, Quaternion.identity);
+            Location location = newLocation.GetComponent<Location>();
+            List<SubZone> newSubzones = new List<SubZone>();
+
+            foreach (SubzonePrototype subzonePrototype in locationPrototype.subzonePrototypes)
+            {
+                worldPosition = transform.TransformPoint(subzonePrototype.position);
+                GameObject newSubzone = Instantiate(Subzone_prefab, worldPosition, Quaternion.identity);
+                SubZone subZone = newSubzone.GetComponent<SubZone>();
+                subZone.MapFromPrototype(subzonePrototype, location);
+                newSubzones.Add(subZone);
+
+                newSubzone.transform.SetParent(newLocation.transform);
+            }
+
+            location.MapFromPrototype(locationPrototype, newSubzones);
+            Locations.Add(newLocation);
+        }
+
+        locationGameObjects = Locations;
     }
 
     [Header("Debug Settings")]
@@ -712,7 +739,6 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
 
 
     List<List<Vector3>> hexagons;
-    // List<Vector3[]> hexagons;
 
     void OnDrawGizmos()
     {
@@ -758,6 +784,8 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
 
                     }
                     ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(zone.borderCorners, transform);
+
+                    // HexagonGenerator.CreateHexagonMesh(zone.borderCorners, meshRenderer.material);
                 }
 
                 if (enableZoneOverlapPoints)
@@ -772,28 +800,27 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
                 }
 
                 Gizmos.color = Color.black;
-                hexagons = HexagonGenerator.GenerateHexagonGrid(6f, 12, 12, Vector3.zero);
-                // Vector3[] pts = HexagonGenerator.GenerateHexagonGrid(4f, 12, 12, locPoint.position);
-                // Vector3[] pts = HexagonGenerator.GenerateHexagonChain(4f, 12, 12);
-                // Gizmos.DrawWireSphere(locPoint.position, 32f);
+                // hexagons = HexagonGenerator.GenerateHexagonGrid(6f, 12, 12, Vector3.zero);
+                // hexagons = HexagonGenerator.DetermineGridSize(locPoint.position, minVerticePointLevelRadius * 0.8f, hexagonSize, hexagonRowOffsetAdjusterMult);
 
-                for (int i = 0; i < hexagons.Count; i++)
-                {
-                    Gizmos.color = Color.black;
-                    for (int j = 0; j < hexagons[i].Count; j++)
-                    {
-                        pointWorldPos = transform.TransformPoint(hexagons[i][j]);
-                        Gizmos.DrawSphere(pointWorldPos, 0.25f);
-                    }
-                    // Debug.Log("Hex Points: " + hexagons[i][j].Count);
 
-                    // if (i <= 24)
-                    // {
-                    Gizmos.color = Color.blue;
-                    ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(hexagons[i].ToArray(), transform);
+                // for (int i = 0; i < hexagons.Count; i++)
+                // {
+                //     Gizmos.color = Color.black;
+                //     for (int j = 0; j < hexagons[i].Count; j++)
+                //     {
+                //         pointWorldPos = transform.TransformPoint(hexagons[i][j]);
+                //         Gizmos.DrawSphere(pointWorldPos, 0.25f);
+                //     }
+                //     // Debug.Log("Hex Points: " + hexagons[i][j].Count);
 
-                    // }
-                }
+                //     // if (i <= 24)
+                //     // {
+                //     Gizmos.color = Color.blue;
+                //     ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(hexagons[i].ToArray(), transform);
+
+                //     // }
+                // }
 
                 Gizmos.color = Color.black;
 
@@ -1135,6 +1162,12 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
         }
 
     }
+    [Header("Location Prefabs")]
+    [SerializeField] private bool generateLocationGameObjects;
+    [SerializeField] private GameObject Location_prefab;
+    [SerializeField] private GameObject Subzone_prefab;
+    [SerializeField] private GameObject SubzoneConnector_prefab;
+
 
     [Header("Procedural Object Placement")]
     [SerializeField] private bool generateBlockTiles;

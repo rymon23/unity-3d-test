@@ -100,7 +100,7 @@ public class TileSocketMatrixGenerator : MonoBehaviour
         ResizeCompatibilityTable();
 
         matrix = GetCompatibilityMatrix();
-        Debug.Log("Matrix Length: " + matrix.Length);
+        // Debug.Log("Matrix Length: " + matrix.Length);
     }
 }
 
