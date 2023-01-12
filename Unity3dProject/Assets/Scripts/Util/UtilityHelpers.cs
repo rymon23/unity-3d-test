@@ -8,6 +8,13 @@ using Unity.Entities;
 
 static class UtilityHelpers
 {
+
+    public static Vector3 FaceAwayFromPoint(Vector3 point, Vector3 vector)
+    {
+        Vector3 facingAway = vector - point;
+        facingAway = facingAway.normalized;
+        return facingAway;
+    }
     public static Vector3[] GetTransformPositions(Transform[] transforms)
     {
         Vector3[] positions = new Vector3[transforms.Length];

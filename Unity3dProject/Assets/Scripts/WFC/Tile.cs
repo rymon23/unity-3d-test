@@ -27,6 +27,11 @@ public class Tile : MonoBehaviour
 
     private void OnValidate()
     {
+        EvaluateRotatedSideSockets();
+        EvaluateSocketLabels(true);
+    }
+    private void EvaluateRotatedSideSockets()
+    {
         rotatedSideSocketIds = new int[4][];
         for (int i = 0; i < 4; i++)
         {
@@ -47,8 +52,6 @@ public class Tile : MonoBehaviour
             rotatedSideSocketIds[i][(int)TileSide.Back] = rotatedSideSocketIds[i - 1][(int)TileSide.Left];
             rotatedSideSocketIds[i][(int)TileSide.Left] = rotatedSideSocketIds[i - 1][(int)TileSide.Front];
         }
-
-        EvaluateSocketLabels(true);
     }
 
     private void EvaluateSocketLabels(bool force = false)

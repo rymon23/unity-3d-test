@@ -60,6 +60,48 @@ namespace ProceduralBase
         //Governance
 
         //Spawn Points
+
+
+        [Header("Sub-Zone Controller")]
+        [SerializeField] private bool showZoneBounds;
+        [SerializeField] private bool showTileGrid;
+        [SerializeField] private bool resetHexagonTilePrototypes;
+        [SerializeField] private bool generateHexagonTileCells;
+        private bool _showZoneBounds;
+        private bool _showTileGrid;
+        private bool _resetHexagonTilePrototypes;
+        private bool _generateHexagonTileCells;
+
+
+        private void OnValidate()
+        {
+            if (_showTileGrid != showTileGrid ||
+                _showZoneBounds != showZoneBounds ||
+                _resetHexagonTilePrototypes != resetHexagonTilePrototypes ||
+                _generateHexagonTileCells != generateHexagonTileCells)
+            {
+
+                for (int i = 0; i < _subZones.Count; i++)
+                {
+                    _subZones[i].Debug_ShowTiles(showZoneBounds);
+                    _subZones[i].Debug_ShowBounds(showTileGrid);
+                    _subZones[i].Debug_ResetHexagonTilePrototypes(resetHexagonTilePrototypes);
+                    _subZones[i].Debug_GenerateHexagonTileCells(generateHexagonTileCells);
+                }
+
+                if (_resetHexagonTilePrototypes != resetHexagonTilePrototypes ||
+                _generateHexagonTileCells != generateHexagonTileCells)
+                {
+                    resetHexagonTilePrototypes = false;
+                    generateHexagonTileCells = false;
+                }
+
+                _showTileGrid = showTileGrid;
+                _showZoneBounds = showZoneBounds;
+                _resetHexagonTilePrototypes = resetHexagonTilePrototypes;
+                _generateHexagonTileCells = generateHexagonTileCells;
+            }
+        }
     }
 
     [System.Serializable]
@@ -70,20 +112,4 @@ namespace ProceduralBase
         public List<SubzonePrototype> subzonePrototypes;
         public List<ZoneConnector> subzoneConnectors;
     }
-
-    // [System.Serializable]
-    // public struct LocationPrototype
-    // {
-    //     public Vector3 position;
-    //     public float radius;
-    //     public Vector3 zonesCenter;
-    //     public Vector3[] subZonePoints;
-    //     public Vector3[] zoneConnectors;
-    //     public ZoneConnectorPair[] zoneConnectorPairs;
-    //     public List<Vector3[]> zoneCorners;
-    //     public List<Vector3[]> zoneRoadPoints;
-    //     public List<Vector3[,]> zoneGrid;
-
-    //     public List<List<Hexagon>> zoneHexGrid;
-    // }
 }

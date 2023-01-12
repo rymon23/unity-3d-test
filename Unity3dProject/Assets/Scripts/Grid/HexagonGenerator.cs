@@ -4,6 +4,20 @@ using UnityEngine;
 
 public class HexagonGenerator
 {
+
+    public static Vector3[] GenerateHexagonSidePoints(Vector3[] corners)
+    {
+        Vector3[] hexagonSides = new Vector3[6];
+        for (int i = 0; i < 6; i++)
+        {
+            // Find the center point between the current corner and the next corner
+            Vector3 side = Vector3.Lerp(corners[i], corners[(i + 1) % 6], 0.5f);
+            hexagonSides[i] = side;
+        }
+        return hexagonSides;
+    }
+
+
     public static Mesh CreateHexagonMesh(Vector3[] hexagonCorners)
     {
         // Create new Mesh

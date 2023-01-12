@@ -1,66 +1,119 @@
-using System.Collections;
-using System.Collections.Generic;
+using System;
 using UnityEngine;
 using ProceduralBase;
 using UnityEditor;
 
+public enum HexagonSides
+{
+    Front,
+    FrontRight,
+    BackRight,
+    Back,
+    BackLeft,
+    FrontLeft,
+    Invalid
+}
+
 [System.Serializable]
 public class HexagonTile : MonoBehaviour
 {
-    private Transform center;
-    [SerializeField] private Transform[] _edgePoints; //TODO: rename
-    public Vector3[] _cornerPoints; // Clear nonce calculations are done
-
-    [SerializeField] private List<HexagonTile> _neighbors;
+    public int id = -1;
     public int size = 12;
+    private Transform center;
+    [SerializeField] private Vector3[] _corners;
+    [SerializeField] private Vector3[] _sides;
 
-
-    [SerializeField] private int[] sideSocketIds = new int[6];
-    public Bounds bounds;
-
+    [Header("Tile Config")]
+    [SerializeField] private TileSocketDirectory tileSocketDirectory;
+    [SerializeField] public int[] sideSocketIds = new int[6];
+    public int GetSideSocketId(HexagonSides side) => sideSocketIds[(int)side];
+    public int[][] rotatedSideSocketIds { get; private set; }
+    public bool isEdgeable; // can be placed on the edge / border or the grid
+    [SerializeField] private float sideDisplayOffsetY = 6f;
     public GameObject[] socketTextDisplay;
 
+    #region Saved Values
+    private Vector3 _currentCenterPosition;
+    #endregion
 
-    [Header("Debug Settings")]
-    [SerializeField] private bool enableEditMode;
-    [SerializeField] private bool showSocketColorMap;
-    [SerializeField] private bool showSocketLabels;
-    [SerializeField] private bool showNeighbors;
-    private bool _showSocketLabels;
-    [SerializeField] private bool showPoints;
 
-    [Header("Mesh Generation")]
-    [SerializeField] private bool generateMesh;
-    [SerializeField] private bool saveMesh;
-    private Mesh lastGeneratedMesh;
-    [SerializeField] private MeshFilter meshFilter;
-    [SerializeField] private MeshRenderer meshRenderer;
+    private void EvaluateRotatedSideSockets()
+    {
+        rotatedSideSocketIds = new int[6][];
+        for (int i = 0; i < 6; i++)
+        {
+            rotatedSideSocketIds[i] = new int[6];
+        }
+
+        // Initialize rotatedSideSocketIds with the sideSocketIds of the unrotated tile
+        for (int i = 0; i < 6; i++)
+        {
+            rotatedSideSocketIds[0][i] = sideSocketIds[i];
+        }
+
+        // Update rotatedSideSocketIds with the sideSocketIds of the rotated tiles
+        for (int i = 1; i < 6; i++)
+        {
+            rotatedSideSocketIds[i][(int)HexagonSides.Front] = rotatedSideSocketIds[i - 1][(int)HexagonSides.FrontRight];
+            rotatedSideSocketIds[i][(int)HexagonSides.FrontRight] = rotatedSideSocketIds[i - 1][(int)HexagonSides.BackRight];
+            rotatedSideSocketIds[i][(int)HexagonSides.BackRight] = rotatedSideSocketIds[i - 1][(int)HexagonSides.Back];
+            rotatedSideSocketIds[i][(int)HexagonSides.Back] = rotatedSideSocketIds[i - 1][(int)HexagonSides.BackLeft];
+            rotatedSideSocketIds[i][(int)HexagonSides.BackLeft] = rotatedSideSocketIds[i - 1][(int)HexagonSides.FrontLeft];
+            rotatedSideSocketIds[i][(int)HexagonSides.FrontLeft] = rotatedSideSocketIds[i - 1][(int)HexagonSides.Front];
+        }
+    }
+
+    private void EvaluateSocketLabels(bool force = false)
+    {
+        if (force || _showSocketLabels != showSocketLabels)
+        {
+            _showSocketLabels = showSocketLabels;
+            if (socketTextDisplay != null && socketTextDisplay.Length > 0)
+            {
+                for (int i = 0; i < socketTextDisplay.Length; i++)
+                {
+                    socketTextDisplay[i].SetActive(showSocketLabels);
+                }
+            }
+        }
+    }
+
+    private void RecalculateEdgePoints()
+    {
+        _corners = ProceduralTerrainUtility.GenerateHexagonPoints(transform.position, size);
+        _sides = HexagonGenerator.GenerateHexagonSidePoints(_corners);
+    }
 
     private void Awake()
     {
+        center = transform;
         meshFilter = GetComponent<MeshFilter>();
         meshRenderer = GetComponent<MeshRenderer>();
+    }
 
-        center = transform;
+    private void Start()
+    {
+        RecalculateEdgePoints();
     }
 
     void OnValidate()
     {
         center = transform;
 
-        if (!enableEditMode) return;
-
-        if (_edgePoints == null || _edgePoints.Length == 0)
+        if (_currentCenterPosition != center.position || _corners == null || _corners.Length == 0 || _sides == null || _sides.Length == 0)
         {
-            Vector3[] corners = ProceduralTerrainUtility.GenerateHexagonPoints(transform.position, size);
-            _edgePoints = UtilityHelpers.ConvertVector3sToTransformPositions(corners, gameObject.transform);
+            _currentCenterPosition = center.position;
+            RecalculateEdgePoints();
         }
+
+        if (!enableEditMode) return;
 
         if (generateMesh)
         {
             generateMesh = false;
 
-            lastGeneratedMesh = HexagonGenerator.CreateHexagonMesh(UtilityHelpers.GetTransformPositions(_edgePoints));
+            lastGeneratedMesh = HexagonGenerator.CreateHexagonMesh(_corners);
+            // lastGeneratedMesh = HexagonGenerator.CreateHexagonMesh(UtilityHelpers.GetTransformPositions(_corners));
             if (meshFilter.sharedMesh == null)
             {
                 meshFilter.mesh = lastGeneratedMesh;
@@ -75,24 +128,88 @@ public class HexagonTile : MonoBehaviour
             SaveMeshAsset(lastGeneratedMesh, "New Tile Mesh");
         }
     }
+
+    #region Debug
+
+    [Header("Debug Settings")]
+    [SerializeField] private bool enableEditMode;
+    // [SerializeField] private bool showSocketColorMap;
+    [SerializeField] private bool showSocketLabels;
+    [SerializeField] private bool showCorners;
+    [SerializeField] private bool showSides;
+    [SerializeField] private bool showEdges;
+    private bool _showSocketLabels;
+
     private void OnDrawGizmos()
     {
+        EvaluateSocketLabels(_showSocketLabels != showSocketLabels);
 
-        if (showNeighbors && _neighbors != null && _neighbors.Count > 0)
+        Gizmos.color = Color.black;
+        Gizmos.DrawSphere(center.position, 0.3f);
+
+        if (showCorners)
         {
-            foreach (HexagonTile neighbor in _neighbors)
+            Gizmos.color = Color.magenta;
+
+            foreach (Vector3 item in _corners)
             {
-                Gizmos.DrawSphere(neighbor.center.position, 3f);
+                Gizmos.DrawSphere(item, 0.3f);
             }
         }
 
-        if (showPoints)
+        if (showSides)
+        {
+            for (int i = 0; i < _sides.Length; i++)
+            {
+                Gizmos.color = tileSocketDirectory.sockets[sideSocketIds[i]].color;
+                Vector3 pos = _sides[i];
+                pos = pos - UtilityHelpers.FaceAwayFromPoint(center.position, _sides[i]);
+                // pos = pos - pos * 0.1f;
+                Gizmos.DrawSphere(pos, 1f);
+            }
+        }
+
+        if (showEdges)
         {
             Gizmos.color = Color.magenta;
-            Gizmos.DrawSphere(center.position, 0.3f);
-            ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(UtilityHelpers.GetTransformPositions(_edgePoints), transform);
+            ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(_corners);
+        }
+
+        // if (!showSocketColorMap) return;
+
+        for (int i = 0; i < _sides.Length; i++)
+        {
+            Gizmos.color = tileSocketDirectory ? tileSocketDirectory.sockets[sideSocketIds[i]].color : Color.white;
+            Gizmos.DrawSphere(_sides[i], 0.1f * transform.lossyScale.z);
+            socketTextDisplay[i].GetComponent<RectTransform>().position = _sides[i] + new Vector3(0, sideDisplayOffsetY, 0);
+        }
+
+        if (showSocketLabels && socketTextDisplay != null && socketTextDisplay.Length == 6)
+        {
+            string[] sideNames = Enum.GetNames(typeof(HexagonSides));
+            for (int i = 0; i < socketTextDisplay.Length; i++)
+            {
+                RectTransform rectTransform = socketTextDisplay[i].GetComponent<RectTransform>();
+                rectTransform.rotation = new Quaternion(0, 180, 0, 0);
+                socketTextDisplay[i].GetComponent<RectTransform>().rotation = new Quaternion(0, 180, 0, 0);
+                TextMesh textMesh = socketTextDisplay[i].GetComponent<TextMesh>();
+                textMesh.color = tileSocketDirectory.sockets[sideSocketIds[i]].color;
+                string str = "id_" + sideSocketIds[i] + " - " + tileSocketDirectory.sockets[sideSocketIds[i]].name + "\n" + sideNames[i];
+                textMesh.text = str;
+                textMesh.fontSize = 12;
+            }
         }
     }
+
+    #endregion
+
+    [Header("Mesh Generation")]
+    [SerializeField] private bool generateMesh;
+    [SerializeField] private bool saveMesh;
+    private Mesh lastGeneratedMesh;
+    [SerializeField] private MeshFilter meshFilter;
+    [SerializeField] private MeshRenderer meshRenderer;
+
 
     private void SaveMeshAsset(Mesh mesh, string assetName)
     {
@@ -103,63 +220,6 @@ public class HexagonTile : MonoBehaviour
         AssetDatabase.CreateAsset(lastGeneratedMesh, "Assets/Meshes/" + assetName + ".asset");
         AssetDatabase.SaveAssets();
     }
-
-
-    public static void PopulateNeighborsFromCornerPoints(List<HexagonTile> tiles, float offset = 0.3f)
-    {
-        foreach (HexagonTile tile1 in tiles)
-        {
-            //for each edgepoint on the current hexagontile
-            for (int i = 0; i < tile1._cornerPoints.Length; i++)
-            {
-                //loop through all the hexagontile to check for neighbors
-                for (int j = 0; j < tiles.Count; j++)
-                {
-                    //skip if the hexagontile is the current tile
-                    if (tiles[j] == tile1)
-                        continue;
-
-                    //loop through the _cornerPoints of the neighboring tile
-                    for (int k = 0; k < tiles[j]._cornerPoints.Length; k++)
-                    {
-                        if (Vector3.Distance(tiles[j]._cornerPoints[k], tile1._cornerPoints[i]) <= offset)
-                        {
-                            tile1._neighbors.Add(tiles[j]);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    public static void PopulateNeighbors(List<HexagonTile> tiles, float offset = 0.2f)
-    {
-        foreach (HexagonTile tile1 in tiles)
-        {
-            //for each edgepoint on the current hexagontile
-            for (int i = 0; i < tile1._edgePoints.Length; i++)
-            {
-                //loop through all the hexagontile to check for neighbors
-                for (int j = 0; j < tiles.Count; j++)
-                {
-                    //skip if the hexagontile is the current tile
-                    if (tiles[j] == tile1)
-                        continue;
-
-                    //loop through the _edgePoints of the neighboring tile
-                    for (int k = 0; k < tiles[j]._edgePoints.Length; k++)
-                    {
-                        if (Vector3.Distance(tiles[j]._edgePoints[k].position, tile1._edgePoints[i].position) <= offset)
-                        {
-                            tile1._neighbors.Add(tiles[j]);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
 }
 
 [System.Serializable]

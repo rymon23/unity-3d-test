@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using ProceduralBase;
 
 namespace ProceduralBase
 {
@@ -10,14 +9,14 @@ namespace ProceduralBase
         [Range(24f, 128f)][SerializeField] private float radius = 102f;
         [SerializeField] private int hexagonSize = 12;
         [SerializeField] private List<int> neighbors;
-        [SerializeField] private List<HexagonTile> tiles;
+        // [SerializeField] private List<HexagonTile> tiles;
         [SerializeField] private Vector3[] borderCorners;
         [SerializeField] private Vector3[] zoneConnectors;
 
         public void MapFromPrototype(SubzonePrototype subzonePrototype, Location locationParent)
         {
             _locationParent = locationParent;
-            radius = subzonePrototype.radius;
+            // radius = subzonePrototype.radius;
             borderCorners = subzonePrototype.borderCorners;
         }
 
@@ -29,20 +28,58 @@ namespace ProceduralBase
         [SerializeField] private bool generateHexagonTileCells;
 
         List<HexagonTilePrototype> hexagonTilePrototypes;
-        [SerializeField] private List<HexagonTile> hexagonTileCells;
+        [SerializeField] private List<HexagonCell> hexagonTileCells;
+
+        public void Debug_ShowBounds(bool enable)
+        {
+            showBounds = enable;
+            OnValidate();
+        }
+        public void Debug_ShowTiles(bool enable)
+        {
+            showTileGrid = enable;
+            OnValidate();
+        }
+        public void Debug_ResetHexagonTilePrototypes(bool enable)
+        {
+            resetHexagonTilePrototypes = enable;
+            OnValidate();
+        }
+        public void Debug_GenerateHexagonTileCells(bool enable)
+        {
+            generateHexagonTileCells = enable;
+            OnValidate();
+        }
 
         [Header("Prefabs")]
         [SerializeField] private GameObject HexagonTileCell_prefab;
 
+        [Header("WFC")]
+        [SerializeField] private HexagonWaveFunctionCollapse_1 waveFunctionCollapse;
+
         private void GenerateHexagonTilePrototypes()
         {
-            hexagonTilePrototypes = LocationUtility.GetTilesWithinRadius(HexagonGenerator.DetermineHexagonTilePrototypeGrideSize(transform.position, radius, hexagonSize),
+            hexagonTilePrototypes = LocationUtility.GetTilesWithinRadius(
+                                        HexagonGenerator.DetermineHexagonTilePrototypeGrideSize(
+                                                transform.position,
+                                                radius,
+                                                hexagonSize),
                                                 transform.position,
                                                 radius);
         }
 
+        private void Awake()
+        {
+            waveFunctionCollapse = GetComponent<HexagonWaveFunctionCollapse_1>();
+        }
+
         private void OnValidate()
         {
+            if (waveFunctionCollapse == null)
+            {
+                waveFunctionCollapse = GetComponent<HexagonWaveFunctionCollapse_1>();
+            }
+
             bool hasTilePrototypes = hexagonTilePrototypes != null && hexagonTilePrototypes.Count > 0;
 
             if (resetHexagonTilePrototypes || !hasTilePrototypes)
@@ -59,7 +96,9 @@ namespace ProceduralBase
 
                     GenerateHexagonTileCellObjects(hexagonTilePrototypes);
 
-                    HexagonTile.PopulateNeighborsFromCornerPoints(hexagonTileCells, 0.33f);
+                    HexagonCell.PopulateNeighborsFromCornerPoints(hexagonTileCells, 0.33f);
+
+                    waveFunctionCollapse.cells = hexagonTileCells;
                 }
             }
         }
@@ -100,25 +139,26 @@ namespace ProceduralBase
 
         private void GenerateHexagonTileCellObjects(List<HexagonTilePrototype> hexagonTilePrototypes)
         {
-            List<HexagonTile> newHexagonTileCells = new List<HexagonTile>();
-
+            List<HexagonCell> newHexagonTileCells = new List<HexagonCell>();
+            int cellId = 0;
             foreach (HexagonTilePrototype tilePrototype in hexagonTilePrototypes)
             {
                 Vector3 pointPos = tilePrototype.center;
 
                 GameObject newTile = Instantiate(HexagonTileCell_prefab, pointPos, Quaternion.identity);
-                HexagonTile hexagonTile = newTile.GetComponent<HexagonTile>();
+                HexagonCell hexagonTile = newTile.GetComponent<HexagonCell>();
                 hexagonTile._cornerPoints = tilePrototype.cornerPoints;
                 hexagonTile.size = hexagonSize;
+                hexagonTile.id = cellId;
 
                 newHexagonTileCells.Add(hexagonTile);
 
                 hexagonTile.transform.SetParent(gameObject.transform);
 
+                cellId++;
             }
             hexagonTileCells = newHexagonTileCells;
         }
-
     }
 
 

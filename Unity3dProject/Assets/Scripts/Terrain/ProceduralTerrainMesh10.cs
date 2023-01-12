@@ -928,102 +928,45 @@ public class ProceduralTerrainMesh10 : MonoBehaviour
                         Gizmos.DrawWireSphere(pointWorldPos, zoneConnectorPointRadius * scale.x);
                     }
                 }
-                Gizmos.color = Color.grey;
-                foreach (Vector3[] points in locPoint.zoneCorners)
-                {
-                    foreach (Vector3 point in points)
-                    {
-                        pointWorldPos = transform.TransformPoint(point);
-                        Gizmos.DrawSphere(pointWorldPos, 1f * scale.x);
-                    }
-
-                    ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(points, transform);
-                }
-
-
-                Gizmos.color = Color.black;
-                hexagons = HexagonGenerator.GenerateHexagonGrid(6f, 12, 12, Vector3.zero);
-                // Vector3[] pts = HexagonGenerator.GenerateHexagonGrid(4f, 12, 12, locPoint.position);
-                // Vector3[] pts = HexagonGenerator.GenerateHexagonChain(4f, 12, 12);
-                // Gizmos.DrawWireSphere(locPoint.position, 32f);
-
-                for (int i = 0; i < hexagons.Count; i++)
-                {
-                    Gizmos.color = Color.black;
-                    for (int j = 0; j < hexagons[i].Count; j++)
-                    {
-                        pointWorldPos = transform.TransformPoint(hexagons[i][j]);
-                        Gizmos.DrawSphere(pointWorldPos, 0.25f);
-                    }
-                    // Debug.Log("Hex Points: " + hexagons[i][j].Count);
-
-                    // if (i <= 24)
-                    // {
-                    Gizmos.color = Color.blue;
-                    ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(hexagons[i].ToArray(), transform);
-
-                    // }
-                }
-
-                // for (int i = 0; i < pts.Length; i++)
-                // {
-                //     pointWorldPos = transform.TransformPoint(pts[i]);
-                //     Gizmos.DrawSphere(pointWorldPos, 0.25f);
-                // }
-
-
-                // if (locPoint.zoneRoadPoints != null)
-                // {
-                //     Gizmos.color = Color.blue;
-                //     foreach (Vector3[] points in locPoint.zoneRoadPoints)
-                //     {
-                //         foreach (Vector3 point in points)
-                //         {
-                //             pointWorldPos = transform.TransformPoint(point);
-                //             Gizmos.DrawSphere(pointWorldPos, minRoadPointSpacing * 2f);
-                //         }
-                //     }
-                // }
-
-                Gizmos.color = Color.black;
-
-                // foreach (Vector3[,] grid in locPoint.zoneGrid)
-                // {
-                //     ProceduralTerrainUtility.DrawGridPointsInGizmos(grid, minRoadPointSpacing, transform);
-                // }
-
-                // foreach (List<Hexagon> hexGrid in locPoint.zoneHexGrid)
-                // {
-                //     HexagonGenerator.DrawHexagonPointsInGizmos(hexGrid, 0.5f, transform);
-                //     HexagonGenerator.DrawHexagonInGizmos(hexGrid, transform);
-                // }
-
-
-
-                // foreach (Vector3[] points in hexagons)
-                // {
-                //     if (UnityEngine.Random.Range(0, 100) < 50)
-                //     {
-                //         Gizmos.color = Color.red;
-                //     }
-                //     else
-                //     {
-                //         Gizmos.color = Color.blue;
-                //     }
-                //     for (int i = 0; i < points.Length; i++)
-                //     {
-                //         Gizmos.DrawSphere(points[i], 0.3f);
-                //     }
-                // }
-
-                // foreach (Vector3[] points in locPoint.zoneRoadPoints)
+                // Gizmos.color = Color.grey;
+                // foreach (Vector3[] points in locPoint.zoneCorners)
                 // {
                 //     foreach (Vector3 point in points)
                 //     {
                 //         pointWorldPos = transform.TransformPoint(point);
-                //         Gizmos.DrawSphere(pointWorldPos, 0.5f);
+                //         Gizmos.DrawSphere(pointWorldPos, 1f * scale.x);
                 //     }
+
+                //     ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(points, transform);
                 // }
+
+
+                // Gizmos.color = Color.black;
+                // hexagons = HexagonGenerator.GenerateHexagonGrid(6f, 12, 12, Vector3.zero);
+                // // Vector3[] pts = HexagonGenerator.GenerateHexagonGrid(4f, 12, 12, locPoint.position);
+                // // Vector3[] pts = HexagonGenerator.GenerateHexagonChain(4f, 12, 12);
+                // // Gizmos.DrawWireSphere(locPoint.position, 32f);
+
+                // for (int i = 0; i < hexagons.Count; i++)
+                // {
+                //     Gizmos.color = Color.black;
+                //     for (int j = 0; j < hexagons[i].Count; j++)
+                //     {
+                //         pointWorldPos = transform.TransformPoint(hexagons[i][j]);
+                //         Gizmos.DrawSphere(pointWorldPos, 0.25f);
+                //     }
+                //     // Debug.Log("Hex Points: " + hexagons[i][j].Count);
+
+                //     // if (i <= 24)
+                //     // {
+                //     Gizmos.color = Color.blue;
+                //     ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(hexagons[i].ToArray(), transform);
+
+                //     // }
+                // }
+
+
+                Gizmos.color = Color.black;
             }
 
             // Gizmos.color = Color.black;

@@ -248,8 +248,6 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
             UpdateLocationPlacementPoints();
 
             resetPlotPoints = false;
-
-            DestroyAllTiles(true);
         }
 
         if (generateLocationGameObjects)
@@ -259,13 +257,9 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
             if (locationPrototypes != null && locationPrototypes.Count > 0)
             {
                 GenerateLocationGameObjects(locationPrototypes);
+                enableEditMode = false;
             }
         }
-        // if (generateBlockTiles && !resetPlotPoints)
-        // {
-        //     generateBlockTiles = false;
-        //     InstantiateTiles();
-        // }
 
         if (bSaveMesh)
         {
@@ -774,7 +768,7 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
                 {
                     pointWorldPos = transform.TransformPoint(zone.position);
                     Gizmos.DrawSphere(pointWorldPos, 1f);
-                    Gizmos.DrawWireSphere(pointWorldPos, locationPointZoneRadius * scale.x);
+                    // Gizmos.DrawWireSphere(pointWorldPos, locationPointZoneRadius * scale.x);
 
                     Gizmos.color = Color.grey;
                     foreach (Vector3 point in zone.borderCorners)
@@ -1168,76 +1162,6 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
     [SerializeField] private GameObject Subzone_prefab;
     [SerializeField] private GameObject SubzoneConnector_prefab;
 
-
-    [Header("Procedural Object Placement")]
-    [SerializeField] private bool generateBlockTiles;
-    [SerializeField] private float InstantiateOffsetY = 1f;
-    [SerializeField] private GameObject proceduralTilePrefab_sm;
-    [SerializeField] private GameObject proceduralTilePrefab_md;
-    [SerializeField] private GameObject proceduralTilePrefab_lg;
-    [SerializeField] private List<GameObject> allTiles = new List<GameObject>();
-
-    void DestroyAllTiles(bool immediate = false)
-    {
-        // Destroy any existing objects in the array
-        foreach (GameObject obj in allTiles)
-        {
-            if (immediate)
-            {
-                DestroyImmediate(obj);
-            }
-            else
-            {
-                Destroy(obj);
-            }
-        }
-        // Clear the array
-        allTiles.Clear();
-    }
-
-    void InstantiateTiles()
-    {
-        DestroyAllTiles();
-
-        if (instantiatedParent == null)
-        {
-            instantiatedParent = Instantiate(new GameObject("LocationObjects"), gameObject.transform).transform;
-            // instantiatedParent.transform.SetParent(gameObject.transform);
-        }
-
-        foreach (PointCluster cluster in locationLandPlotClusters)
-        {
-            List<PointCluster.GridPointPrototype> gridPoints = cluster.gridPointPrototypes;
-            if (gridPoints.Count > 0)
-            {
-                foreach (PointCluster.GridPointPrototype point in gridPoints)
-                {
-                    GameObject prefab;
-                    if (point.radius <= 6f)
-                    {
-                        prefab = proceduralTilePrefab_sm;
-                    }
-                    else if (point.radius <= 12f)
-                    {
-                        prefab = proceduralTilePrefab_md;
-                    }
-                    else
-                    {
-                        prefab = proceduralTilePrefab_lg;
-                    }
-                    Vector3 pos = transform.TransformPoint(point.position);
-                    Vector3 scaleXZ = transform.lossyScale;
-                    Vector3 scaleY = prefab.transform.lossyScale;
-                    // GameObject newObject = Instantiate(prefab, new Vector3(pos.x * scaleXZ.x, pos.y * scaleY.y, pos.z * scaleXZ.z), Quaternion.identity);
-                    GameObject newObject = Instantiate(prefab, new Vector3(point.position.x, point.position.y + (scaleY.y * 0.5f) - InstantiateOffsetY, point.position.z), Quaternion.identity);
-
-                    allTiles.Add(newObject);
-                    newObject.transform.SetParent(instantiatedParent.transform);
-                }
-            }
-
-        }
-    }
     #endregion
 
     Dictionary<TerrainMaterialType, List<Vector3>> GroupVerticesByMaterial(TerrainMaterialType[] materialTypes, Vector3[] vertices)
