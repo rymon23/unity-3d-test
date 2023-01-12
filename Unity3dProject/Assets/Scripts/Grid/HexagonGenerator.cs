@@ -4,49 +4,138 @@ using UnityEngine;
 
 public class HexagonGenerator
 {
-
-    // public static List<Vector3[]> GenerateHexagonChain(float hexagonSize, int numHexagons, int numRows, float elevation = 1f)
-    // {
-    //     List<Vector3[]> hexagonsPoints = new List<Vector3[]>();
-    //     Vector3[] hexagonPoints = new Vector3[6];
-    //     int currentHexagonIndex = 0;
-    //     float angle = 60 * Mathf.Deg2Rad;
-    //     float currentX = 0;
-    //     float currentZ = 0;
-
-    //     for (int k = 0; k < numRows; k++)
-    //     {
-    //         currentX = 0;
-    //         for (int i = 0; i < numHexagons; i++)
-    //         {
-    //             currentHexagonIndex = 0;
-    //             for (int j = 0; j < 6; j++)
-    //             {
-    //                 float x = currentX + hexagonSize * Mathf.Cos(angle * j);
-    //                 float z = currentZ + hexagonSize * Mathf.Sin(angle * j);
-    //                 if (k > 0 && j == 0) z = hexagonsPoints[hexagonsPoints.Count - 1][5].z;
-    //                 hexagonPoints[currentHexagonIndex++] = new Vector3(x, elevation, z);
-    //             }
-    //             currentX += hexagonSize;
-    //             hexagonsPoints.Add(hexagonPoints);
-    //             hexagonPoints = new Vector3[6];
-    //         }
-    //         currentZ += hexagonSize * 1.69f;
-    //     }
-    //     return hexagonsPoints;
-    // }
-
-
-    public static List<List<Vector3>> GenerateHexagonGrid(float hexagonSize, int numHexagons, int numRows, Vector3 startPos)
+    public static Mesh CreateHexagonMesh(Vector3[] hexagonCorners)
     {
-        List<List<Vector3>> hexagons = new List<List<Vector3>>();
-        // int currentHexagonIndex = 0;
+        // Create new Mesh
+        Mesh hexMesh = new Mesh();
+
+        // Assign corner vertices to the Mesh
+        hexMesh.vertices = hexagonCorners;
+
+        // Define triangles of the Mesh
+        int[] triangles = new int[] {
+            2, 1, 0,
+            3, 2, 0,
+            4, 3, 0,
+            5, 4, 0
+        };
+        hexMesh.triangles = triangles;
+
+        // Recalculate Normals
+        hexMesh.RecalculateNormals();
+
+        // Return the created Mesh
+        return hexMesh;
+    }
+    public static GameObject CreateHexagonMesh(Vector3[] hexagonCorners, Material material)
+    {
+        Mesh hexMesh = new Mesh();
+        // Assign corner vertices to the Mesh
+        hexMesh.vertices = hexagonCorners;
+        // Define triangles of the Mesh
+        int[] triangles = new int[] {
+            2, 1, 0,
+            3, 2, 0,
+            4, 3, 0,
+            5, 4, 0
+        };
+        hexMesh.triangles = triangles;
+        // Recalculate Normals
+        hexMesh.RecalculateNormals();
+
+        // Instantiate a new empty GameObject
+        GameObject newObject = new GameObject();
+        // Add a MeshFilter component to the new GameObject
+        MeshFilter meshFilter = newObject.AddComponent<MeshFilter>();
+        // Assign the hexagon mesh to the MeshFilter
+        meshFilter.mesh = hexMesh;
+        // Add a MeshRenderer component to the new GameObject
+        MeshRenderer meshRenderer = newObject.AddComponent<MeshRenderer>();
+
+        // Assign the hexagon material to the MeshRenderer
+        meshRenderer.material = material;
+
+        return newObject;
+    }
+
+
+    public static List<HexagonTilePrototype> DetermineHexagonTilePrototypeGrideSize(Vector3 position, float radius, int hexagonSize, float adjusterMult = 1.734f)
+    {
+        float bottomCornerX = position.x - (radius * 0.9f);
+        float bottomCornerZ = position.z - (radius * 0.9f);
+        Vector3 bottomCorner = new Vector3(bottomCornerX, position.y, bottomCornerZ);
+
+        int numHexagons = (int)((radius * 2.2f) / (hexagonSize * 1.5f));
+        float numRowsf = ((radius * 2f) / (hexagonSize * adjusterMult));
+        int numRows = Mathf.CeilToInt(numRowsf);
+        List<HexagonTilePrototype> hexagons = GenerateHexagonTilePrototypeGrid(hexagonSize, numHexagons, numRows, bottomCorner, adjusterMult);
+        return hexagons;
+    }
+    public static List<HexagonTilePrototype> GenerateHexagonTilePrototypeGrid(float hexagonSize, int numHexagons, int numRows, Vector3 startPos, float adjusterMult = 1.734f)
+    {
+        List<HexagonTilePrototype> hexagonTilePrototypes = new List<HexagonTilePrototype>();
         float angle = 60 * Mathf.Deg2Rad;
         float currentX = startPos.x;
         float currentZ = startPos.z;
         float lastZ = startPos.z;
 
-        float adjusterMult = 1.74f;
+        for (int k = 0; k < numRows; k++)
+        {
+            currentX = startPos.x;
+            for (int i = 0; i < numHexagons; i++)
+            {
+                float adjusterMultB = 0.88f;
+
+                Vector3[] hexagonPoints = new Vector3[6];
+                if (i % 2 == 1)
+                {
+                    currentZ -= hexagonSize * adjusterMultB;
+                }
+                else
+                {
+                    currentZ += hexagonSize * adjusterMultB;
+                }
+
+                for (int j = 0; j < 6; j++)
+                {
+                    float x = currentX + hexagonSize * Mathf.Cos(angle * j);
+                    float z = currentZ + hexagonSize * Mathf.Sin(angle * j);
+
+                    hexagonPoints[j] = (new Vector3(x, startPos.y, z));
+
+                    if (j == 2) lastZ = z;
+                }
+
+                HexagonTilePrototype prototype = new HexagonTilePrototype();
+                prototype.center = HexagonGenerator.GetPolygonCenter(hexagonPoints);
+                prototype.cornerPoints = hexagonPoints;
+                hexagonTilePrototypes.Add(prototype);
+
+                currentX += hexagonSize * 1.5f;
+            }
+            currentZ += hexagonSize * adjusterMult;
+        }
+        return hexagonTilePrototypes;
+    }
+    public static List<List<Vector3>> DetermineGridSize(Vector3 position, float radius, int hexagonSize, float adjusterMult = 1.734f)
+    {
+        float bottomCornerX = position.x - radius;
+        float bottomCornerZ = position.z - radius;
+        Vector3 bottomCorner = new Vector3(bottomCornerX, position.y, bottomCornerZ);
+
+        int numHexagons = (int)((radius * 2f) / (hexagonSize * 1.5f));
+        float numRowsf = ((radius * 2f) / (hexagonSize * adjusterMult));
+        int numRows = Mathf.CeilToInt(numRowsf);
+        List<List<Vector3>> hexagons = GenerateHexagonGrid(hexagonSize, numHexagons, numRows, bottomCorner, adjusterMult);
+        return hexagons;
+    }
+    public static List<List<Vector3>> GenerateHexagonGrid(float hexagonSize, int numHexagons, int numRows, Vector3 startPos, float adjusterMult = 1.734f)
+    {
+        List<List<Vector3>> hexagons = new List<List<Vector3>>();
+        float angle = 60 * Mathf.Deg2Rad;
+        float currentX = startPos.x;
+        float currentZ = startPos.z;
+        float lastZ = startPos.z;
 
         for (int k = 0; k < numRows; k++)
         {
@@ -70,8 +159,7 @@ public class HexagonGenerator
                 {
                     float x = currentX + hexagonSize * Mathf.Cos(angle * j);
                     float z = currentZ + hexagonSize * Mathf.Sin(angle * j);
-                    // if (k > 0 && j == 0) z = hexagonPoints[currentHexagonIndex - 6].z;
-                    // if (k > 0 && j == 0) z = hexagons[k - 1][0].z;
+
                     hexagonPoints.Add(new Vector3(x, startPos.y, z));
                     if (j == 2) lastZ = z;
                 }
@@ -340,6 +428,21 @@ public class HexagonGenerator
     //     }
     //     return hexagons;
     // }
+
+    public static Vector3 GetPolygonCenter(Vector3[] edgePoints)
+    {
+        Vector3 center = Vector3.zero;
+        if (edgePoints != null && edgePoints.Length > 0)
+        {
+            for (int i = 0; i < edgePoints.Length; i++)
+            {
+                center += edgePoints[i];
+            }
+            center /= edgePoints.Length;
+        }
+        return center;
+    }
+
 
     private static Bounds GetBounds(List<Vector3> convexHull)
     {

@@ -8,6 +8,35 @@ using Unity.Entities;
 
 static class UtilityHelpers
 {
+    public static Vector3[] GetTransformPositions(Transform[] transforms)
+    {
+        Vector3[] positions = new Vector3[transforms.Length];
+        for (int i = 0; i < transforms.Length; i++)
+        {
+            positions[i] = transforms[i].position;
+        }
+        return positions;
+    }
+
+    public static Transform[] ConvertVector3sToTransformPositions(Vector3[] points, Transform parent)
+    {
+        Transform[] transforms = new Transform[points.Length];
+        for (int i = 0; i < points.Length; i++)
+        {
+            // Instantiate a new empty GameObject
+            GameObject newObject = new GameObject();
+            // Access the Transform component of the new GameObject
+            Transform newTransform = newObject.transform;
+            newTransform.position = points[i];
+            Transform t = Transform.Instantiate(newTransform, points[i], Quaternion.identity);
+            t.position = points[i];
+            transforms[i] = t;
+
+            t.SetParent(parent);
+        }
+        return transforms;
+    }
+
     public static string GetUnsetActorEntityRefId() => "-";
 
     public static string getActorEntityRefId(Entity entity)
@@ -299,7 +328,7 @@ static class UtilityHelpers
     }
 
 
-#region Spell Methods
+    #region Spell Methods
     public static void CastMagicSpellEffects(
         MagicSpell magicSpell,
         GameObject target,
@@ -332,16 +361,16 @@ static class UtilityHelpers
             spell.gameObject.GetComponent<ActiveSpellController>();
         if (spellController != null)
         {
-            spellController.FireMagicEffects (spellInstanceData);
+            spellController.FireMagicEffects(spellInstanceData);
         }
     }
 
 
-#endregion
+    #endregion
 
 
 
-#region Angle Trajectory Methods
+    #region Angle Trajectory Methods
 
     public static float
     MagnitudeToReachXYInGravityAtAngle(Vector2 XY, float gravity, float angle)
@@ -378,6 +407,5 @@ static class UtilityHelpers
     }
 
 
-#endregion
-
+    #endregion
 }

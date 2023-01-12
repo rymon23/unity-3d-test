@@ -356,6 +356,7 @@ namespace ProceduralBase
         //     return (points, midPoints);
         // }
 
+
         public static (Vector3[], Vector3[], ZoneConnectorPair[]) GenerateChainOfOverlappingPointsWithMidpoints(int number, Vector3 position, Vector2 radiusRange, Vector2 rangeY, float minDistance)
         {
             Vector3[] points = new Vector3[number];
@@ -579,6 +580,7 @@ namespace ProceduralBase
             }
             return points;
         }
+
         public static Vector3[] GeneratePointsWithinBounds(Vector3[] edgePoints, int numPoints, float distance, float elevation)
         {
             // Find the min and max x and z values
@@ -871,45 +873,16 @@ namespace ProceduralBase
                 Gizmos.DrawLine(pointA, pointB);
             }
         }
+        public static void DrawHexagonPointLinesInGizmos(Vector3[] corners)
+        {
+            for (int i = 0; i < corners.Length; i++)
+            {
+                Vector3 pointA = corners[i];
+                Vector3 pointB = corners[(i + 1) % corners.Length];
+                Gizmos.DrawLine(pointA, pointB);
+            }
+        }
 
-
-        // Note this only works with rectangular grids
-        // public static Vector3[] GeneratePath(Vector3[,] grid)
-        // {
-        //     int xCells = grid.GetLength(0);
-        //     int zCells = grid.GetLength(1);
-
-        //     // Randomly select the starting point on one edge of the grid
-        //     Vector3 start = grid[0, UnityEngine.Random.Range(0, zCells)];
-        //     Vector3 end = grid[xCells - 1, UnityEngine.Random.Range(0, zCells)];
-
-        //     // Generate a path from the starting point to the other edge
-        //     Vector3[] path = new Vector3[xCells];
-        //     Vector3 current = start;
-        //     path[0] = current;
-
-        //     // Create a list of all the possible next steps in the path
-        //     List<Vector3> nextSteps = new List<Vector3>();
-
-        //     // iterate through the cells and create the path
-        //     for (int i = 1; i < xCells; i++)
-        //     {
-        //         if (current.x < end.x)
-        //             nextSteps.Add(grid[(int)current.x + 1, (int)current.z]);
-        //         if (current.x > end.x)
-        //             nextSteps.Add(grid[(int)current.x - 1, (int)current.z]);
-        //         if (current.z < end.z)
-        //             nextSteps.Add(grid[(int)current.x, (int)current.z + 1]);
-        //         if (current.z > end.z)
-        //             nextSteps.Add(grid[(int)current.x, (int)current.z - 1]);
-
-        //         current = nextSteps[UnityEngine.Random.Range(0, nextSteps.Count)];
-        //         path[i] = current;
-        //         nextSteps.Clear();
-        //     }
-
-        //     return path;
-        // }
         public static Vector3[] GeneratePath(Vector3[,] grid)
         {
             int xCells = grid.GetLength(0);
