@@ -2,21 +2,64 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using ProceduralBase;
+<<<<<<< HEAD
+using System.Linq;
+
+public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
+{
+    //Temp
+    [SerializeField] private SubZone subZone;
+
+    [SerializeField] private TileSocketMatrixGenerator socketMatrixGenerator;
+    [SerializeField] private TileDirectory tileDirectory;
+    [SerializeField] private int outOfBoundsSlotId = 1; // Edge socket
+    [SerializeField] private List<GameObject> activeTiles;
+=======
 
 public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
 {
     [SerializeField] private TileSocketMatrixGenerator socketMatrixGenerator;
     [SerializeField] private int outOfBoundsSlotId = 1;
     [SerializeField] private List<HexagonTile> activeTiles;
+>>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
     [SerializeField] private int matrixLength;
     private int numTiles; // Number of tile prefabs
     public bool[,] compatibilityMatrix = null; // Compatibility matrix for tiles
     public int[,] probabilityMatrix;
+<<<<<<< HEAD
+    [SerializeField] private GameObject markerPrefab;
+    [SerializeField] private List<HexagonTile> tilePrefabs;
+    [SerializeField] private List<HexagonTile> tilePrefabs_edgable;
+    [SerializeField] private List<HexagonTile> tilePrefabs_ClusterSet;
+    [SerializeField] private List<HexagonTileCluster> tilePrefabs_cluster;
+    Dictionary<int, HexagonTile> tileLookupByid;
+    Dictionary<int, HexagonTileCluster> tileClusterLookupByid;
+    public List<HexagonCell> cells;
+    [SerializeField] private List<HexagonCellCluster> activeCellClusters;
+    [SerializeField] private List<HexagonCellCluster> allCellClusters;
+    [SerializeField] private int availableCellClusters = 0;
+
+    List<Transform> clusterTransforms = new List<Transform>();
+
+    [SerializeField] private int totalEdgeCells = 0;
+
+    float[] rotationValues = { 0f, 60f, 120f, 180f, 240f, 300f };
+
+    [Header("Cluster Settings")]
+    [Range(0.05f, 1f)][SerializeField] private float clusterChance = 0.5f;
+
+
+    void Start()
+    {
+        EvaluateTiles();
+
+=======
     [SerializeField] private List<HexagonTile> tilePrefabs;
     public List<HexagonCell> cells;
 
     void Start()
     {
+>>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
         UpdateCompatibilityMatrix();
 
         Invoke("ExecuteWFC", 0.2f);
@@ -25,6 +68,38 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
 
     private void ExecuteWFC()
     {
+<<<<<<< HEAD
+        compatibilityMatrix = socketMatrixGenerator.GetCompatibilityMatrix();
+        if (compatibilityMatrix != null) matrixLength = compatibilityMatrix.Length;
+        matrixLength = socketMatrixGenerator.matrix.Length;
+
+        EvaluateCells();
+
+        probabilityMatrix = new int[cells.Count, tilePrefabs.Count];
+
+        InitialTileAssignment();
+
+        while (IsUnassignedCells())
+        {
+            SelectNext();
+
+            // // Select next cell with the highest probability
+            // HexagonCell nextCell = SelectNextCell();
+
+            // Debug.Log("nextCell: " + nextCell.id);
+            // // Select next tile with the highest probability for the next cell
+            // (HexagonTile nextTile, List<int> rotations) = SelectNextTile(nextCell);
+
+            // Debug.Log("1 nextTile: " + nextTile);
+            // if (nextTile == null) return;
+
+            // // Assign tile to the next cell
+            // AssignTileToCell(nextCell, nextTile, rotations);
+            // Debug.Log("2 nextTile: " + nextTile);
+
+            // Update neighboring cells probabilities
+            // UpdateNeighborCellProbabilities(nextCell, nextTile);
+=======
         probabilityMatrix = new int[cells.Count, tilePrefabs.Count];
 
         // Initialize the probability matrix with the same size as the number of cells
@@ -46,6 +121,7 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
             AssignTileToCell(nextCell, nextTile, rotation);
             // Update neighboring cells probabilities
             UpdateNeighboringCellProbabilities(nextCell, nextTile);
+>>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
         }
 
         InstantiateTiles();
@@ -53,9 +129,328 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         Debug.Log("Execution of WFC Complete");
     }
 
+<<<<<<< HEAD
+
+    private bool IsUnassignedCells()
+    {
+        // Iterate through all cells and check if there is any unassigned cell
+        for (int i = 0; i < cells.Count; i++)
+        {
+            if (cells[i].IsAssigned() == false) return true;
+        }
+        return false;
+    }
+
+    private void InitialTileAssignment()
+    {
+        bool useCluster = true;// allCellClusters.Count > 0 && (100 * clusterChance) >= (UnityEngine.Random.Range(0, 100));
+        HexagonCellCluster selected = useCluster ? SelectCellCluster() : null;
+        // Cluster assigned, end here
+        if (selected != null) return;
+
+        // Initialize the first tile
+        HexagonCell startCell = SelectRandomStartCell();
+        HexagonTile startTile = SelectRandomTile(true);
+
+        AssignTileToCell(startCell, startTile, 0);
+    }
+
+    private void SetIgnoreCellCluster(HexagonCellCluster cluster)
+    {
+        cluster.selectIgnore = true;
+        availableCellClusters -= 1;
+    }
+
+    private HexagonCellCluster SelectCellCluster()
+    {
+        if (allCellClusters.Count == 0) return null;
+
+        // For now: 
+        // A cluster can be selected if none of the neighbor cells are assigned
+        HexagonCellCluster selected = null;
+
+        for (int i = 0; i < allCellClusters.Count; i++)
+        {
+            Debug.Log("allCellClusters[" + i + "] - id: " + allCellClusters[i].id);
+
+            if (allCellClusters[i].selectIgnore) continue;
+
+            if (allCellClusters[i].AreAnyNeighborCellsAssigned())
+            {
+                SetIgnoreCellCluster(allCellClusters[i]);
+            }
+            else
+            {
+                Debug.Log("SelectCellCluster 1");
+
+                // Make sure there is a compatible Tile
+                GameObject tile = SelectClusterTile(allCellClusters[i]);
+                if (tile == null)
+                {
+                    Debug.Log("NO Compatible Cluster Tile Found for id: " + allCellClusters[i].id);
+                    SetIgnoreCellCluster(allCellClusters[i]);
+                }
+                else
+                {
+                    // Assign cluster cells
+                    allCellClusters[i].AssignCells();
+                    selected = allCellClusters[i];
+
+                    AssignTileToCluster(selected, tile);
+
+                    // Add to active list
+                    activeCellClusters.Add(selected);
+
+                    SetIgnoreCellCluster(allCellClusters[i]);
+                    break;
+                }
+            }
+        }
+        return selected;
+    }
+
+    private bool IsTileClusterCompatible(HexagonCellCluster cluster, HexagonTileCluster tileCluster)
+    {
+        if (tileCluster.id < 0) return false;
+        Debug.Log("IsTileClusterCompatible 0");
+
+        if (tileCluster.GetCellSize() != cluster.cells[0].size) return false;
+        Debug.Log("IsTileClusterCompatible 1:  tileCluster: " + tileCluster.id + ", cell count: " + tileCluster.GetCellCount() + " != " + cluster.cells.Count);
+
+        if (tileCluster.GetCellCount() != cluster.cells.Count) return false;
+        return true;
+    }
+
+    private GameObject SelectClusterTile(HexagonCellCluster cluster)
+    {
+        HexagonTileCluster tileCluster = null;
+
+        for (int i = 0; i < tilePrefabs_cluster.Count; i++)
+        {
+            Debug.Log("SelectClusterTile 0: tilePrefabs_cluster[" + i + "]: " + tilePrefabs_cluster[i].id);
+
+
+            if (IsTileClusterCompatible(cluster, tilePrefabs_cluster[i]))
+            {
+                Debug.Log("SelectClusterTile 1: tilePrefabs_cluster[" + i + "]: " + tilePrefabs_cluster[i].id);
+                tileCluster = tilePrefabs_cluster[i];
+                break;
+            }
+        }
+        if (tileCluster != null) return tileCluster.transform.gameObject;
+        return null;
+    }
+
+    private void AssignTileToCluster(HexagonCellCluster cluster, GameObject tile)
+    {
+        cluster.SetTile(tile, 0);
+    }
+    // private void AssignTileToCluster(HexagonCellCluster cluster, GameObject tile, List<int> rotations)
+    // {
+    //     cluster.SetTile(tile, rotations[UnityEngine.Random.Range(0, rotations.Count)]);
+    // }
+
+
+    private HexagonCell SelectRandomStartCell()
+    {
+        // Select Random Edge Cell
+        if (totalEdgeCells > 0)
+        {
+            return cells[0]; // edge cells should be ordered by the fewest neighbors first;
+        }
+        return cells[UnityEngine.Random.Range(0, cells.Count)];
+    }
+
+    private HexagonTile SelectRandomTile(bool edgeTile = false)
+    {
+        // Select Random Edge Cell
+        if (edgeTile && totalEdgeCells > 0 && tilePrefabs_edgable.Count > 0)
+        {
+            return tilePrefabs_edgable[UnityEngine.Random.Range(0, tilePrefabs_edgable.Count)];
+        }
+        return tilePrefabs[UnityEngine.Random.Range(0, tilePrefabs.Count)];
+    }
+
+    private void AssignTileToCell(HexagonCell cell, HexagonTile tile, int rotation = 0)
+    {
+        cell.SetTile(tile, rotation);
+    }
+    private void AssignTileToCell(HexagonCell cell, HexagonTile tile, List<int> rotations)
+    {
+        cell.SetTile(tile, rotations[UnityEngine.Random.Range(0, rotations.Count)]);
+        cell.highlight = false;
+    }
+
+    private void SelectNext()
+    {
+        bool useCluster = availableCellClusters > 0 && (100 * clusterChance) >= (UnityEngine.Random.Range(0, 100));
+        HexagonCellCluster selected = useCluster ? SelectCellCluster() : null;
+        // Cluster assigned, end here
+        if (selected != null) return;
+
+        HexagonCell nextCell = SelectNextCell();
+
+        (HexagonTile nextTile, List<int> rotations) = SelectNextTile(nextCell);
+
+        // Debug.Log("1 nextTile: " + nextTile);
+        if (nextTile == null) return;
+
+        // Assign tile to the next cell
+        AssignTileToCell(nextCell, nextTile, rotations);
+    }
+
+    HexagonCell SelectNextCell()
+    {
+        HexagonCell nextCell = null;
+
+        // Iterate through the cells
+        for (int i = 0; i < cells.Count; i++)
+        {
+            HexagonCell currentCell = cells[i];
+
+            // If the current cell is unassigned
+            if (currentCell.IsAssigned() == false)
+            {
+                currentCell.highlight = true;
+                nextCell = currentCell;
+            }
+        }
+        return nextCell;
+    }
+
+    private (HexagonTile, List<int>) SelectNextTile(HexagonCell cell)
+    {
+        // Create a list of compatible tiles and their rotations
+        List<(HexagonTile, List<int>)> compatibleTilesAndRotations = new List<(HexagonTile, List<int>)>();
+
+        // Iterate through all tiles
+        for (int i = 0; i < tilePrefabs.Count; i++)
+        {
+            HexagonTile currentTile = tilePrefabs[i];
+
+            List<int> compatibleTileRotations = GetCompatibleTileRotations(cell, currentTile);
+
+            if (compatibleTileRotations.Count > 0)
+            {
+                compatibleTilesAndRotations.Add((currentTile, compatibleTileRotations));
+            }
+
+            // Debug.Log("SelectNextTile - tile: " + currentTile);
+            // // if (tile == null) return false;
+
+            // // Check the compatibility of the tile with the current cell for each rotation
+            // for (int rotation = 0; rotation < 6; rotation++)
+            // {
+            //     if (AreTilesCompatible(cell, currentTile, rotation))
+            //     {
+            //         compatibleTiles.Add((currentTile, rotation));
+            //     }
+            // }
+        }
+        // If there are no compatible tiles, return null
+        if (compatibleTilesAndRotations.Count == 0)
+        {
+            Debug.Log("No compatible tiles for cell: " + cell.id);
+            return (null, null);
+        }
+
+        // Select a random compatible tile and rotation
+        int randomIndex = UnityEngine.Random.Range(0, compatibleTilesAndRotations.Count);
+        return compatibleTilesAndRotations[randomIndex];
+    }
+
+    private List<int> GetCompatibleTileRotations(HexagonCell currentCell, HexagonTile currentTile)
+    {
+        int[] neighborTileSockets = currentCell.GetNeighborTileSockets();
+
+        for (int i = 0; i < neighborTileSockets.Length; i++)
+        {
+            Debug.Log("Cell: " + currentCell.id + ", neighborTileSocket: side: " + (HexagonSides)i + ", socket: " + neighborTileSockets[i]);
+        }
+        List<int> compatibleRotations = new List<int>();
+
+        // Check every rotation
+        for (int rotation = 0; rotation < 6; rotation++)
+        {
+            bool compatibile = true;
+            // Check that all neighborTileSockets are compatibile
+            for (int nIX = 0; nIX < neighborTileSockets.Length; nIX++)
+            {
+                int rotatedSideSocket = currentTile.GetRotatedSideSocketId((HexagonSides)nIX, rotation);
+                if (neighborTileSockets[nIX] != -1 && !compatibilityMatrix[rotatedSideSocket, neighborTileSockets[nIX]])
+                {
+                    compatibile = false;
+                    break;
+                }
+            }
+
+            if (compatibile) compatibleRotations.Add(rotation);
+        }
+        Debug.Log("Cell: " + currentCell.id + ", compatibleRotations: " + compatibleRotations.Count);
+        return compatibleRotations;
+    }
+
+    private bool AreTilesCompatible(HexagonCell current, HexagonTile tile, int rotation)
+    {
+        Debug.Log("AreTilesCompatible - tile: " + tile.id);
+        if (tile == null) return false;
+
+
+
+
+
+        // Check neighbors for compatibility
+        for (int neighborSideIndex = 0; neighborSideIndex < 6; neighborSideIndex++)
+        {
+            // Debug.Log("current.neighborsBySide.Count: " + current.neighborsBySide.Count + ", current.neighborsBySide[]: " + current.neighborsBySide[neighborSideIndex]);
+            HexagonCell neighbor = current.neighborsBySide[neighborSideIndex];
+            int tileSideSocket = tile.sideSocketIds[(neighborSideIndex + rotation) % 6];
+
+            // Handle Edge Cells
+            if (neighbor == null || current.isEdgeCell)
+            {
+                int rotatedSideSocket = tile.GetRotatedSideSocketId((HexagonSides)neighborSideIndex, rotation);
+                Debug.Log("Edge Cell: " + tile.id + ", rotatedSideSocket: " + rotatedSideSocket);
+
+                if (!compatibilityMatrix[rotatedSideSocket, outOfBoundsSlotId])
+                {
+                    Debug.Log("Tile incompatible with Edge: " + tile.id + ", rotatedSideSocket: " + rotatedSideSocket + ",  outOfBoundsSlotId: " + outOfBoundsSlotId);
+
+                    return false;
+                }
+            }
+            else
+            {
+                HexagonTile neighborTile = neighbor.GetTile();
+
+                if (neighborTile != null)
+                {
+                    int neighborRelativeSide = current.GetNeighborsRelativeSide((HexagonSides)neighborSideIndex);
+                    // int neighborSideSocket = neighbor.currentTile.sideSocketIds[(neighborRelativeSide + rotation) % 6];
+                    int neighborSideSocket = neighborTile.GetSideSocketId((HexagonSides)((neighborRelativeSide + rotation) % 6));
+                    int rotatedSideSocket = tile.GetRotatedSideSocketId((HexagonSides)neighborSideIndex, rotation);
+
+                    // Debug.Log("compatibilityMatrix.length: " + compatibilityMatrix.Length + ", tileSide: " + tileSideSocket + ", neighborSideSocket: " + neighborSideSocket);
+
+                    // if (!compatibilityMatrix[tileSideSocket, neighborSideSocket])
+                    if (!compatibilityMatrix[rotatedSideSocket, neighborSideSocket])
+                    {
+                        return false;
+                    }
+                }
+            }
+
+        }
+        return true;
+    }
+    public void InitializeTileProbabilities()
+    {
+        probabilityMatrix = new int[cells.Count, tileLookupByid.Count];
+=======
     public void InitializeTileProbabilities()
     {
         probabilityMatrix = new int[cells.Count, tilePrefabs.Count];
+>>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
 
         // Iterate through all cells
         for (int i = 0; i < cells.Count; i++)
@@ -84,6 +479,90 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         }
     }
 
+<<<<<<< HEAD
+    // private void UpdateTileProbabilities(HexagonCell currentCell)
+    // {
+    //     // Initialize a sum of probabilities for normalization
+    //     int probabilitySum = 0;
+
+    //     // Iterate through all tile prefabs
+    //     for (int i = 0; i < tilePrefabs.Count; i++)
+    //     {
+    //         // Get the current tile
+    //         HexagonTile currentTile = tilePrefabs[i];
+    //         // Initialize a probability product for the current tile
+    //         int probabilityProduct = 1;
+
+    //         // Iterate through the neighboring cells
+    //         for (int j = 0; j < currentCell._neighbors.Count; j++)
+    //         {
+    //             HexagonCell neighbor = currentCell._neighbors[j];
+    //             if (neighbor.currentTile != null)
+    //             {
+    //                 // check for compatibility by comparing sideSocketIds
+    //                 int currentTileSideSocketId = currentTile.GetSideSocketId((HexagonSides)j);
+    //                 int neighborTileSideSocketId = neighbor.currentTile.GetSideSocketId((HexagonSides)j);
+    //                 if (currentTileSideSocketId == neighborTileSideSocketId)
+    //                 {
+    //                     probabilityProduct *= 1;
+    //                 }
+    //                 else
+    //                 {
+    //                     probabilityProduct *= 0;
+    //                 }
+    //             }
+    //             else
+    //             {
+    //                 probabilityProduct *= 1;
+    //             }
+    //         }
+    //         // Update the probability for the current tile
+    //         probabilityMatrix[currentCell.id, currentTile.id] = probabilityProduct;
+    //         // Add the current probability to the probability sum
+    //         probabilitySum += probabilityProduct;
+    //     }
+    //     // Normalize the probabilities
+    //     NormalizeProbabilities(currentCell, probabilitySum);
+    // }
+    // private void UpdateNeighborCellProbabilities(HexagonCell currentCell, HexagonTile currentTile)
+    // {
+    //     Debug.Log("UpdateNeighboringCellProbabilities: currentTile:" + currentTile);
+
+    //     // Iterate through the neighboring cells
+    //     for (int i = 0; i < currentCell._neighbors.Count; i++)
+    //     {
+    //         HexagonCell neighbor = currentCell._neighbors[i];
+    //         // Skip the current cell
+    //         if (neighbor.currentTile != null)
+    //         {
+
+    //             Debug.Log("neighbor: " + neighbor + ", currentTile:" + currentTile);
+
+
+    //             // check for compatibility
+    //             for (int j = 0; j < 6; j++)
+    //             {
+    //                 if (!AreTilesCompatible(neighbor, currentTile, j))
+    //                 {
+    //                     // Mark the current tile as incompatible with the neighbor
+    //                     probabilityMatrix[neighbor.id, currentTile.id] = 0;
+    //                 }
+    //                 else
+    //                 {
+
+
+    //                     // Update the highestProbability for the current cell
+    //                     if (probabilityMatrix[neighbor.id, currentTile.id] > neighbor.highestProbability)
+    //                     {
+    //                         neighbor.highestProbability = probabilityMatrix[neighbor.id, currentTile.id];
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
+=======
 
     private bool IsUnassignedCells()
     {
@@ -332,6 +811,7 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         }
     }
 
+>>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
     public int[,] CreateTileProbabilityMatrix(List<HexagonCell> cells, List<HexagonTile> tilePrefabs)
     {
         int numTiles = tilePrefabs.Count;
@@ -356,6 +836,20 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         return newProbabilityMatrix;
     }
 
+<<<<<<< HEAD
+    // private void Reset()
+    // {
+    //     // Reset all cells
+    //     for (int i = 0; i < cells.Count; i++)
+    //     {
+    //         HexagonCell cell = cells[i];
+    //         cell.currentTile = null;
+    //     }
+
+    //     // Reset all tile probabilities
+    //     InitializeTileProbabilities();
+    // }
+=======
     private void Reset()
     {
         // Reset all cells
@@ -368,31 +862,166 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         // Reset all tile probabilities
         InitializeTileProbabilities();
     }
+>>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
 
     // Instantiate the tiles in the appropriate positions to create the final pattern
     void InstantiateTiles()
     {
+<<<<<<< HEAD
+        // Instantiate clusters first
+        for (int i = 0; i < activeCellClusters.Count; i++)
+        {
+            GameObject prefab = activeCellClusters[i].GetTile();
+            int rotation = activeCellClusters[i].GetTileRotation();
+
+            activeCellClusters[i].CalculateCenter();
+            Vector3 spawnPosition = activeCellClusters[i].center;
+            spawnPosition.y += 0.2f;
+
+            GameObject instantiatedParent = Instantiate(markerPrefab, spawnPosition, Quaternion.identity);
+
+            GameObject activeTile = Instantiate(prefab.gameObject, instantiatedParent.transform.localPosition, Quaternion.identity);
+            activeTile.gameObject.transform.rotation = Quaternion.Euler(0f, rotationValues[rotation], 0f);
+            activeTile.transform.position = instantiatedParent.transform.position;
+            // activeTile.transform.SetParent(instantiatedParent.transform);
+            // activeTile.transform.position = instantiatedParent.transform.TransformPoint(instantiatedParent.transform.position);
+
+            // activeTile.transform.position = instantiatedParent.transform.localPosition;
+            // instantiatedParent.transform.position = Vector3.zero;
+
+            // CenterGameObjectAtPosition(activeTile, instantiatedParent.transform.position);
+
+
+            // Vector3 offset = activeTile.transform.position - instantiatedParent.transform.position;
+            // activeTile.transform.position = activeTile.transform.position + offset;
+
+
+
+            // instantiatedParent.transform.position = Vector3.zero;
+
+            // activeTile.transform.position = 
+            // Vector3 offset = activeTile.transform.position - activeCellClusters[i].center;
+
+            // activeTile.transform.position = activeTile.transform.position + offset;
+            // Debug.Log("offset.x: " + offset.x + ", offset.z: " + offset.z);
+
+            activeTiles.Add(activeTile);
+        }
+
+        for (int i = 0; i < cells.Count; i++)
+        {
+            // Skip cluster assigned cells
+            if (cells[i].IsInCluster()) continue;
+
+            HexagonTile prefab = cells[i].GetTile();
+=======
         for (int i = 0; i < cells.Count; i++)
         {
             HexagonTile prefab = cells[i].currentTile;
+>>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
             int rotation = cells[i].currentRotation;
 
             Vector3 position = cells[i].transform.position;
             position.y += 0.2f;
+<<<<<<< HEAD
+
+            GameObject activeTile = Instantiate(prefab.gameObject, position, Quaternion.identity);
+            activeTile.gameObject.transform.rotation = Quaternion.Euler(0f, rotationValues[rotation], 0f);
+=======
             // Quaternion rotationQuat = Quaternion.Euler(0, 90 * rotation, 0);
             // cell.currentTile.transform.position = cell.transform.position;
 
             HexagonTile activeTile = Instantiate(prefab, position, Quaternion.identity);
+>>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
             activeTiles.Add(activeTile);
         }
     }
 
+<<<<<<< HEAD
+    public void ShuffleTiles(List<HexagonTile> tiles)
+    {
+        int n = tiles.Count;
+        for (int i = 0; i < n; i++)
+        {
+            // Get a random index from the remaining elements
+            int r = i + UnityEngine.Random.Range(0, n - i);
+            // Swap the current element with the random one
+            HexagonTile temp = tiles[r];
+            tiles[r] = tiles[i];
+            tiles[i] = temp;
+        }
+    }
+    public void ShuffleTiles(List<HexagonTileCluster> tiles)
+    {
+        int n = tiles.Count;
+        for (int i = 0; i < n; i++)
+        {
+            // Get a random index from the remaining elements
+            int r = i + UnityEngine.Random.Range(0, n - i);
+            // Swap the current element with the random one
+            HexagonTileCluster temp = tiles[r];
+            tiles[r] = tiles[i];
+            tiles[i] = temp;
+        }
+    }
+
+    private void EvaluateTiles()
+    {
+        tileLookupByid = tileDirectory.CreateTileDictionary();
+        List<HexagonTile> _tilePrefabs = tileLookupByid.Select(x => x.Value).ToList();
+
+        tileClusterLookupByid = tileDirectory.CreateTileClusterDictionary();
+        tilePrefabs_cluster = tileClusterLookupByid.Select(x => x.Value).ToList();
+
+        tilePrefabs_ClusterSet = HexagonTile.ExtractClusterSetTiles(_tilePrefabs);
+        tilePrefabs = new List<HexagonTile>();
+        tilePrefabs.AddRange(_tilePrefabs.Except(tilePrefabs_ClusterSet));
+
+        foreach (HexagonTile prefab in tilePrefabs)
+        {
+            int id = prefab.id;
+        }
+
+        ShuffleTiles(tilePrefabs);
+        ShuffleTiles(tilePrefabs_cluster);
+
+        tilePrefabs_edgable = tilePrefabs.FindAll(x => x.isEdgeable).ToList();
+
+        clusterTransforms = new List<Transform>();
+
+    }
+    private void EvaluateCells()
+    {
+        // Place edgeCells first
+        List<HexagonCell> edgeCells = HexagonCell.GetEdgeCells(cells);
+        totalEdgeCells = edgeCells.Count;
+
+        allCellClusters = HexagonCellCluster.GetHexagonCellClusters(cells);
+        availableCellClusters = allCellClusters.Count;
+
+        // Temp
+        subZone.cellClusters = allCellClusters;
+
+        List<HexagonCell> _processedCells = new List<HexagonCell>();
+        _processedCells.AddRange(edgeCells);
+        _processedCells.AddRange(cells.Except(edgeCells));
+
+        cells = _processedCells;
+    }
+
+=======
+>>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
     private void UpdateCompatibilityMatrix()
     {
         socketMatrixGenerator = GetComponent<TileSocketMatrixGenerator>();
 
+<<<<<<< HEAD
+        compatibilityMatrix = socketMatrixGenerator.GetCompatibilityMatrix();
+
+=======
         compatibilityMatrix = null;
         compatibilityMatrix = socketMatrixGenerator.matrix;
+>>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
         if (compatibilityMatrix.Length == 0)
         {
             Debug.LogError("compatibilityMatrix is unset");
@@ -400,6 +1029,8 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         }
     }
 
+<<<<<<< HEAD
+=======
     // HexagonTile SelectNextTile(HexagonCell cell)
     // {
     //     HexagonTile nextTile = null;
@@ -421,6 +1052,7 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
     // }
 
 
+>>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
     // private void OnValidate()
     // {
     //     UpdateCompatibilityMatrix();
@@ -436,8 +1068,54 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
     //     matrixLength = socketMatrixGenerator.matrix.Length;
     // }
 
+<<<<<<< HEAD
+
+    // private void OnValidate()
+    // {
+    //     EvaluateTiles();
+    // }
+
+    private void Awake()
+    {
+        subZone = GetComponent<SubZone>();
+
+        UpdateCompatibilityMatrix();
+
+        // EvaluateTiles();
+    }
+
+    private void OnDrawGizmos()
+    {
+        if (activeCellClusters != null && activeCellClusters.Count > 0)
+        {
+            Gizmos.color = Color.black;
+            Vector3 pos = transform.TransformPoint(activeCellClusters[0].GetTile().transform.position);
+            Gizmos.DrawSphere(pos, 5f);
+            Gizmos.color = Color.magenta;
+            Gizmos.DrawWireSphere(activeCellClusters[0].center, 2f);
+        }
+    }
+
+
+    void CenterGameObjectAtPosition(GameObject go, Vector3 position)
+    {
+        // Get the renderer bounds of the GameObject
+        Renderer renderer = go.GetComponent<Renderer>();
+        Bounds bounds = renderer.bounds;
+
+        // Calculate the center point of the GameObject
+        Vector3 centerPoint = bounds.center;
+
+        // Set the position of the Transform to the desired position minus the calculated center point
+        go.transform.position = position - centerPoint;
+    }
+
+}
+
+=======
     private void Awake()
     {
         UpdateCompatibilityMatrix();
     }
 }
+>>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
