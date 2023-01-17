@@ -1,12 +1,12 @@
 using System.Collections.Generic;
 using UnityEngine;
-using ProceduralBase;
 using System.Linq;
 
 public class VerticalWFC : MonoBehaviour
 {
     [SerializeField] private TileSocketMatrixGenerator socketMatrixGenerator;
     [SerializeField] private TileDirectory tileDirectory;
+    [SerializeField] private VerticalCellManager cellManager;
     [SerializeField] private int outOfBoundsSlotId = 1; // Edge socket
     [SerializeField] private List<VerticalTile> activeTiles;
     [SerializeField] private int matrixLength;
@@ -21,12 +21,12 @@ public class VerticalWFC : MonoBehaviour
 
     void Start()
     {
-        // EvaluateTiles();
+        EvaluateTiles();
+
         UpdateCompatibilityMatrix();
 
         Invoke("ExecuteWFC", 0.2f);
     }
-
 
     private void ExecuteWFC()
     {
@@ -34,26 +34,17 @@ public class VerticalWFC : MonoBehaviour
         if (compatibilityMatrix != null) matrixLength = compatibilityMatrix.Length;
         matrixLength = socketMatrixGenerator.matrix.Length;
 
-        // EvaluateCells();
+        EvaluateCells();
 
-        // Initialize the first tile randomly
-        VerticalCell baseCell = SelectRandomStartCell();
-        VerticalTile baseTile = SelectRandomTile();
+        InitialTileAssignment();
 
-        AssignTileToCell(baseCell, baseTile, 0);
+        VerticalCell previousCell = cells[0];
 
-        while (IsUnassignedCells())
+        // Skip the first index
+        for (int i = 1; i < cells.Count; i++)
         {
-            // Select next cell with the highest probability
-            VerticalCell nextCell = SelectNextCell();
-
-            // Select next tile with the highest probability for the next cell
-            (VerticalTile nextTile, List<int> rotations) = SelectNextTile(nextCell);
-
-            if (nextTile == null) return;
-
-            // Assign tile to the next cell
-            AssignTileToCell(nextCell, nextTile, rotations);
+            CollapseCell(cells[i], previousCell);
+            previousCell = cells[i];
         }
 
         InstantiateTiles();
@@ -61,19 +52,20 @@ public class VerticalWFC : MonoBehaviour
         Debug.Log("Execution of WFC Complete");
     }
 
-    private bool IsUnassignedCells()
+    private void CollapseCell(VerticalCell cell, VerticalCell previousCell)
     {
-        // Iterate through all cells and check if there is any unassigned cell
-        for (int i = 0; i < cells.Count; i++)
-        {
-            if (cells[i].currentTile == null) return true;
-        }
-        return false;
+        (VerticalTile nextTile, List<int> rotations) = SelectNextTile(cell, previousCell);
+
+        // Assign tile to the next cell
+        AssignTileToCell(cell, nextTile, rotations);
     }
 
-    private VerticalCell SelectRandomStartCell()
+    private void InitialTileAssignment()
     {
-        return cells[UnityEngine.Random.Range(0, cells.Count)];
+        // Set Base Level
+        VerticalCell startCell = cells[0];
+        VerticalTile startTile = tilePrefabs_Bases[UnityEngine.Random.Range(0, tilePrefabs_Bases.Count)];
+        AssignTileToCell(startCell, startTile, 0);
     }
 
     private VerticalTile SelectRandomTile()
@@ -86,54 +78,32 @@ public class VerticalWFC : MonoBehaviour
         cell.currentTile = tile;
         cell.currentRotation = rotation;
     }
+
     private void AssignTileToCell(VerticalCell cell, VerticalTile tile, List<int> rotations)
     {
         cell.currentTile = tile;
         cell.currentRotation = rotations[UnityEngine.Random.Range(0, rotations.Count)];
     }
-    VerticalCell SelectNextCell()
-    {
-        VerticalCell nextCell = null;
-        float highestProb = 0f;
-        // Iterate through the cells
-        for (int i = 0; i < cells.Count; i++)
-        {
-            VerticalCell currentCell = cells[i];
-            // If the current cell is unassigned
-            if (currentCell.currentTile == null)
-            {
-                currentCell.highlight = true;
-                // Debug.Log("currentCell.highestProbability: " + currentCell.highestProbability);
 
-                // // Check if the current cell's highest probability is greater than the previous highest
-                // if (currentCell.highestProbability > highestProb)
-                // {
-                nextCell = currentCell;
-                // highestProb = currentCell.highestProbability;
-                // }
-            }
-        }
-        return nextCell;
-    }
-
-    private (VerticalTile, List<int>) SelectNextTile(VerticalCell cell)
+    private (VerticalTile, List<int>) SelectNextTile(VerticalCell cell, VerticalCell previousCell)
     {
         // Create a list of compatible tiles and their rotations
         List<(VerticalTile, List<int>)> compatibleTilesAndRotations = new List<(VerticalTile, List<int>)>();
 
-        // // Iterate through all tiles
-        // for (int i = 0; i < tilePrefabs.Count; i++)
-        // {
-        //     VerticalTile currentTile = tilePrefabs[i];
+        int[] lastTileTopEdgeSockets = previousCell.currentTile.GetTopEdgeSockets();
 
-        //     List<int> compatibleTileRotations = GetCompatibleTileRotations(cell, currentTile);
+        // Iterate through all tiles
+        for (int i = 0; i < tilePrefabs.Count; i++)
+        {
+            VerticalTile currentTile = tilePrefabs[i];
 
-        //     if (compatibleTileRotations.Count > 0)
-        //     {
-        //         compatibleTilesAndRotations.Add((currentTile, compatibleTileRotations));
-        //     }
-        // }
+            List<int> compatibleTileRotations = GetCompatibleTileRotations(cell, currentTile, lastTileTopEdgeSockets);
 
+            if (compatibleTileRotations.Count > 0)
+            {
+                compatibleTilesAndRotations.Add((currentTile, compatibleTileRotations));
+            }
+        }
         // If there are no compatible tiles, return null
         if (compatibleTilesAndRotations.Count == 0)
         {
@@ -146,90 +116,29 @@ public class VerticalWFC : MonoBehaviour
         return compatibleTilesAndRotations[randomIndex];
     }
 
-    // private List<int> GetCompatibleTileRotations(VerticalCell currentCell, VerticalTile currentTile)
-    // {
-    //     int[] neighborTileSockets = currentCell.GetNeighborTileSockets();
-
-    //     for (int i = 0; i < neighborTileSockets.Length; i++)
-    //     {
-    //         Debug.Log("Cell: " + currentCell.id + ", neighborTileSocket: side: " + (HexagonSides)i + ", socket: " + neighborTileSockets[i]);
-    //     }
-    //     List<int> compatibleRotations = new List<int>();
-
-    //     // Check every rotation
-    //     for (int rotation = 0; rotation < 6; rotation++)
-    //     {
-    //         bool compatibile = true;
-    //         // Check that all neighborTileSockets are compatibile
-    //         for (int nIX = 0; nIX < neighborTileSockets.Length; nIX++)
-    //         {
-    //             int rotatedSideSocket = currentTile.GetRotatedSideSocketId((HexagonSides)nIX, rotation);
-    //             if (neighborTileSockets[nIX] != -1 && !compatibilityMatrix[rotatedSideSocket, neighborTileSockets[nIX]])
-    //             {
-    //                 compatibile = false;
-    //                 break;
-    //             }
-    //         }
-
-    //         if (compatibile) compatibleRotations.Add(rotation);
-    //     }
-    //     Debug.Log("Cell: " + currentCell.id + ", compatibleRotations: " + compatibleRotations.Count);
-    //     return compatibleRotations;
-    // }
-
-    private bool AreTilesCompatible(VerticalCell current, VerticalTile tile, int rotation)
+    private List<int> GetCompatibleTileRotations(VerticalCell currentCell, VerticalTile currentTile, int[] lastTileTopEdgeSockets)
     {
-        Debug.Log("AreTilesCompatible - tile: " + tile.id);
-        if (tile == null) return false;
+        List<int> compatibleRotations = new List<int>();
 
+        // Check every rotation
+        for (int rotation = 0; rotation < 6; rotation++)
+        {
+            bool compatibile = true;
+            // Check that all neighborTileSockets are compatibile
+            for (int edgeIndex = 0; edgeIndex < lastTileTopEdgeSockets.Length; edgeIndex++)
+            {
+                int rotatedSideSocket = currentTile.GetRotatedEdgeSocketId((VerticalEdges)edgeIndex + 4, rotation);
+                if (lastTileTopEdgeSockets[edgeIndex] != -1 && !compatibilityMatrix[rotatedSideSocket, lastTileTopEdgeSockets[edgeIndex]])
+                {
+                    compatibile = false;
+                    break;
+                }
+            }
 
-
-
-
-        // // Check neighbors for compatibility
-        // for (int neighborSideIndex = 0; neighborSideIndex < 6; neighborSideIndex++)
-        // {
-        //     // Debug.Log("current.neighborsBySide.Count: " + current.neighborsBySide.Count + ", current.neighborsBySide[]: " + current.neighborsBySide[neighborSideIndex]);
-        //     VerticalCell neighbor = current.neighborsBySide[neighborSideIndex];
-        //     int tileSideSocket = tile.edgeSockets[(neighborSideIndex + rotation) % 6];
-
-        //     // Handle Edge Cells
-        //     if (neighbor == null)
-        //     {
-        //         int rotatedSideSocket = tile.GetRotatedSideSocketId((HexagonSides)neighborSideIndex, rotation);
-        //         Debug.Log("Edge Cell: " + tile.id + ", rotatedSideSocket: " + rotatedSideSocket);
-
-        //         if (!compatibilityMatrix[rotatedSideSocket, outOfBoundsSlotId])
-        //         {
-        //             Debug.Log("Tile incompatible with Edge: " + tile.id + ", rotatedSideSocket: " + rotatedSideSocket + ",  outOfBoundsSlotId: " + outOfBoundsSlotId);
-
-        //             return false;
-        //         }
-        //     }
-        //     else
-        //     {
-
-        //         if (neighbor.currentTile != null)
-        //         {
-        //             int neighborRelativeSide = current.GetNeighborsRelativeSide((HexagonSides)neighborSideIndex);
-        //             int neighborSideSocket = neighbor.currentTile.edgeSockets[(neighborRelativeSide + rotation) % 6];
-
-        //             int rotatedSideSocket = tile.GetRotatedSideSocketId((HexagonSides)neighborSideIndex, rotation);
-
-
-        //             // Debug.Log("compatibilityMatrix.length: " + compatibilityMatrix.GetLength(tileSide) + ", tileSide: " + tileSide + ", neighborSideSocket: " + neighborSideSocket);
-        //             Debug.Log("compatibilityMatrix.length: " + compatibilityMatrix.Length + ", tileSide: " + tileSideSocket + ", neighborSideSocket: " + neighborSideSocket);
-
-        //             // if (!compatibilityMatrix[tileSideSocket, neighborSideSocket])
-        //             if (!compatibilityMatrix[rotatedSideSocket, neighborSideSocket])
-        //             {
-        //                 return false;
-        //             }
-        //         }
-        //     }
-
-        // }
-        return true;
+            if (compatibile) compatibleRotations.Add(rotation);
+        }
+        // Debug.Log("Cell: " + currentCell.id + ", compatibleRotations: " + compatibleRotations.Count);
+        return compatibleRotations;
     }
 
     private void AssignTileToCell(VerticalCell cell)
@@ -255,12 +164,13 @@ public class VerticalWFC : MonoBehaviour
         {
             VerticalTile prefab = cells[i].currentTile;
             int rotation = cells[i].currentRotation;
-
             Vector3 position = cells[i].transform.position;
-            position.y += 0.2f;
-
+            if (i != 0)
+            {
+                position = cells[i - 1]._centerPoints[1];
+            }
             VerticalTile activeTile = Instantiate(prefab, position, Quaternion.identity);
-            activeTile.gameObject.transform.rotation = Quaternion.Euler(0f, rotationValues[rotation], 0f);
+            // activeTile.gameObject.transform.rotation = Quaternion.Euler(0f, rotationValues[rotation], 0f);
             activeTiles.Add(activeTile);
         }
     }
@@ -279,38 +189,41 @@ public class VerticalWFC : MonoBehaviour
         }
     }
 
-    // private void EvaluateTiles()
-    // {
-    //     tileLookupByid = tileDirectory.CreateTileDictionary();
-    //     tilePrefabs = tileLookupByid.Select(x => x.Value).ToList();
+    private void EvaluateCells()
+    {
+        cellManager = GetComponent<VerticalCellManager>();
+        cellManager.EvaluateCells();
 
-    //     foreach (VerticalTile prefab in tilePrefabs)
-    //     {
-    //         int id = prefab.id;
-    //     }
+        cells = new List<VerticalCell>();
+        cells = cellManager.cells;
 
-    //     ShuffleTiles(tilePrefabs);
+        if (cells == null) Debug.LogError("Cells List is unset");
+        if (cells.Count == 0) Debug.LogError("Cells List is empty ");
+    }
 
-    //     tilePrefabs_edgable = tilePrefabs.FindAll(x => x.isEdgeable).ToList();
+    private void EvaluateTiles()
+    {
+        tileLookupByid = tileDirectory.CreateVerticalTileDictionary();
+        List<VerticalTile> _tilePrefabs = tileLookupByid.Select(x => x.Value).ToList();
 
-    // }
-    // private void EvaluateCells()
-    // {
-    //     // Place edgeCells first
-    //     List<VerticalCell> edgeCells = VerticalCell.GetEdgeCells(cells);
-    //     List<VerticalCell> _processedCells = new List<VerticalCell>();
+        tilePrefabs_Bases = _tilePrefabs.FindAll(x => x.IsBaseFloor()).ToList();
 
-    //     _processedCells.AddRange(edgeCells);
-    //     _processedCells.AddRange(cells.Except(edgeCells));
+        tilePrefabs = new List<VerticalTile>();
+        tilePrefabs.AddRange(_tilePrefabs.Except(tilePrefabs_Bases));
 
-    //     cells = _processedCells;
-    // }
+        foreach (VerticalTile prefab in tilePrefabs)
+        {
+            int id = prefab.GetID();
+        }
+
+        ShuffleTiles(tilePrefabs);
+        ShuffleTiles(tilePrefabs_Bases);
+    }
+
 
     private void UpdateCompatibilityMatrix()
     {
         socketMatrixGenerator = GetComponent<TileSocketMatrixGenerator>();
-
-        // compatibilityMatrix = null;
         compatibilityMatrix = socketMatrixGenerator.GetCompatibilityMatrix();
 
         if (compatibilityMatrix.Length == 0)
@@ -319,9 +232,10 @@ public class VerticalWFC : MonoBehaviour
             return;
         }
     }
-
     private void Awake()
     {
+        cellManager = GetComponent<VerticalCellManager>();
+
         UpdateCompatibilityMatrix();
     }
 }

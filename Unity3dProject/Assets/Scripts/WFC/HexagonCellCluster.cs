@@ -8,15 +8,21 @@ using System.Linq;
 public class HexagonCellCluster
 {
     public List<HexagonCell> cells;
+    public HexagonCell parent;
+    public HexagonCell GetParentCell() => cells.Count == 0 ? null : cells[0];
     public HexagonCellCluster(int id, List<HexagonCell> cells)
     {
         this.id = id;
         this.cells = cells;
-        CalculateCenter();
+
+        Reevaluate();
     }
     public int id = -1;
     public float probability;
     public Vector3 center;
+    [SerializeField] private Vector3 foundationCenter;
+    public Vector3 GetFoundationCenter() => foundationCenter;
+
     // public Vector3 center { private set; get; }
     public Vector3[] _sides;
     public List<HexagonCell> _neighbors;
@@ -28,15 +34,16 @@ public class HexagonCellCluster
     }
 
     [Header("Tile")]
-    [SerializeField] private GameObject currentTile;
-    [SerializeField] private int currentTileRotation;
-    public bool IsAssigned() => currentTile != null;
-    public GameObject GetTile() => currentTile;
-    public int GetTileRotation() => currentTileRotation;
-    public void SetTile(GameObject newTile, int rotation)
+    [SerializeField] public GameObject mainTile;
+    [SerializeField] private List<GameObject> currentTiles;
+    // [SerializeField] private int currentTileRotation;
+    public bool IsAssigned() => currentTiles.Count == cells.Count;
+    public List<GameObject> GetTiles() => currentTiles;
+    // public int GetTileRotation() => currentTileRotation;
+    public void SetTiles(List<GameObject> newTiles)
     {
-        currentTile = newTile;
-        currentTileRotation = rotation;
+        currentTiles = newTiles;
+        // currentTileRotation = rotation;
     }
     public bool selectIgnore;
 
@@ -48,7 +55,70 @@ public class HexagonCellCluster
         }
     }
 
-    public void CalculateCenter()
+    public void Reevaluate()
+    {
+        CalculateClusterCenter();
+        EvaluateParentCell();
+        CalculateFoundationCenter();
+    }
+
+    public void EvaluateParentCell()
+    {
+        if (cells.Count == 0) return;
+
+        Dictionary<HexagonCell, int> cellsByNeighborsInSameCluster = new Dictionary<HexagonCell, int>();
+        foreach (HexagonCell cell in cells)
+        {
+            int internalNeighbors = 0;
+            foreach (HexagonCell item in cell._neighbors)
+            {
+                if (cells.Contains(item)) internalNeighbors++;
+            }
+            if (!cellsByNeighborsInSameCluster.ContainsKey(cell))
+            {
+                cellsByNeighborsInSameCluster.Add(cell, internalNeighbors);
+            }
+        }
+
+        cellsByNeighborsInSameCluster.OrderBy(x => x.Value);
+        List<HexagonCell> orderedCells = cellsByNeighborsInSameCluster.Select(x => x.Key).ToList();
+
+        // orderedCells.AddRange(cells.OrderBy(c => c._neighbors.Count));
+        Debug.Log("orderedCells.Count: " + orderedCells.Count);
+        cells = orderedCells;
+        Debug.Log("cells.Count: " + cells.Count);
+        parent = cells[0];
+    }
+
+    public void CalculateFoundationCenter()
+    {
+        // foundationCenter = center;
+        // return
+
+        HexagonCell parentCell = GetParentCell();
+        if (!parentCell || cells.Count != 5)
+        {
+            foundationCenter = center;
+            return;
+        }
+
+        List<Vector3> points = new List<Vector3>();
+
+        // points.AddRange(parentCell._sides);
+        // points.AddRange(parentCell._cornerPoints);
+        points.Add(parentCell.transform.position);
+        points.Add(center);
+        points.Add(center);
+
+        Vector3 sum = Vector3.zero;
+        foreach (Vector3 point in points)
+        {
+            sum += point;
+        }
+        foundationCenter = sum / points.Count;
+    }
+
+    public void CalculateClusterCenter()
     {
         List<Vector3> cellPoints = new List<Vector3>();
         foreach (HexagonCell cell in cells)
@@ -59,15 +129,6 @@ public class HexagonCellCluster
         }
         if (cellPoints.Count == 0) return;
         center = FindClosestPoint(cellPoints.ToArray());
-
-
-
-        // Vector3 sum = Vector3.zero;
-        // foreach (HexagonCell cell in cells)
-        // {
-        //     sum += cell.transform.position;
-        // }
-        // center = sum / cells.Count;
     }
 
     public int GetHexagonClusterSideCount(int cells)
@@ -162,7 +223,7 @@ public class HexagonCellCluster
                     cluster.cells.AddRange(toAdd);
                     clusters.Add(cluster);
                     addedToCluster.Add(cell.id);
-                    cluster.CalculateCenter();
+                    cluster.Reevaluate();
 
                     // Set cluster to edge cluster if any cell is an edge cell
                     if (cluster.cells.Any(x => edgeCells.Contains(x)))
@@ -200,7 +261,7 @@ public class HexagonCellCluster
                         cluster.cells.AddRange(toAdd);
                         clusters.Add(cluster);
                         addedToCluster.Add(cell.id);
-                        cluster.CalculateCenter();
+                        cluster.Reevaluate();
 
                         // Set cluster to edge cluster if any cell is an edge cell
                         if (cluster.cells.Any(x => edgeCells.Contains(x)))

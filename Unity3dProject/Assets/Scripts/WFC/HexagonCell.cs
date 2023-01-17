@@ -11,7 +11,6 @@ public class HexagonCell : MonoBehaviour
 {
     public int id = -1;
     public int size = 12;
-<<<<<<< HEAD
     public Vector3[] _cornerPoints;
     public Vector3[] _sides;
     // public Vector3[] _sides { private set; get; }
@@ -60,19 +59,11 @@ public class HexagonCell : MonoBehaviour
         return neighborSocketsBySide;
     }
 
-=======
-    public Vector3[] _cornerPoints; // Clear nonce calculations are done
-    public List<HexagonCell> _neighbors;
-    Dictionary<int, HexagonCell> neighborsBySide;
-
-    public HexagonTile currentTile;
->>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
     public int currentRotation = 0;
     private Transform center;
 
     [Header("WFC Params")]
     public float highestProbability;
-<<<<<<< HEAD
     public bool isEdgeCell { private set; get; }
     public void SetEdgeCell(bool enable)
     {
@@ -110,19 +101,6 @@ public class HexagonCell : MonoBehaviour
         _cornerPoints = ProceduralTerrainUtility.GenerateHexagonPoints(transform.position, size);
         _sides = HexagonGenerator.GenerateHexagonSidePoints(_cornerPoints);
     }
-=======
-
-
-
-
-    // public int GetNeighborTileId(int side)
-    // {
-    //     if (_neighbors[side].currentTile != null)
-    //         return _neighbors[side].currentTile.id;
-    //     else
-    //         return outOfBoundsSlotId;
-    // }
->>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
 
     private void Awake()
     {
@@ -161,7 +139,6 @@ public class HexagonCell : MonoBehaviour
             }
         }
     }
-<<<<<<< HEAD
 
     [Header("Debug Settings")]
     [SerializeField] private bool enableDebugMode = true;
@@ -181,42 +158,11 @@ public class HexagonCell : MonoBehaviour
     private void OnDrawGizmos()
     {
         if (!enableDebugMode) return;
-=======
-    [Header("Debug Settings")]
-    [SerializeField] private bool showCenter;
-    [SerializeField] private bool showNeighbors;
-    [SerializeField] private bool showCorners;
-    [SerializeField] private bool showEdges;
-
-    private void OnDrawGizmos()
-    {
-        if (showCenter)
-        {
-            Gizmos.color = Color.black;
-            Gizmos.DrawSphere(center.position, 0.3f);
-        }
-
-        if (showCorners)
-        {
-            Gizmos.color = Color.magenta;
-            foreach (Vector3 item in _cornerPoints)
-            {
-                Gizmos.DrawSphere(item, 0.3f);
-            }
-        }
-
-        if (showEdges)
-        {
-            Gizmos.color = Color.magenta;
-            ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(_cornerPoints);
-        }
->>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
 
         center = transform;
 
         if (_currentCenterPosition != center.position)
         {
-<<<<<<< HEAD
             OnValidate();
         }
 
@@ -260,39 +206,12 @@ public class HexagonCell : MonoBehaviour
 
         if (showNeighbors)
         {
-=======
->>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
             Gizmos.color = Color.green;
             foreach (HexagonCell neighbor in _neighbors)
             {
                 Gizmos.DrawSphere(neighbor.center.position, 3f);
             }
         }
-<<<<<<< HEAD
-=======
-
-        // if (showPoints)
-        // {
-        //     Gizmos.color = Color.magenta;
-        //     Gizmos.DrawSphere(center.position, 0.3f);
-        //     // ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(UtilityHelpers.GetTransformPositions(_edgePoints), transform);
-        // }
-    }
-    public void SetNeighborsBySide()
-    {
-        // Create a new dictionary to store neighbors by side
-        Dictionary<int, HexagonCell> newNeighborsBySide = new Dictionary<int, HexagonCell>();
-        for (int i = 0; i < 6; i++)
-        {
-            newNeighborsBySide.Add(i, null);
-        }
-        for (int k = 0; k < _neighbors.Count; k++)
-        {
-            // Assign the neighbor to the corresponding side in the dictionary
-            newNeighborsBySide[k] = _neighbors[k];
-        }
-        neighborsBySide = newNeighborsBySide;
->>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
     }
     public void SetNeighborsBySide(float offset = 0.33f)
     {
@@ -318,17 +237,11 @@ public class HexagonCell : MonoBehaviour
                     }
                 }
             }
-            tile1.SetNeighborsBySide();
         }
         neighborsBySide = _neighborsBySide;
     }
 
-<<<<<<< HEAD
     // public void SetNeighborsBySide()
-=======
-
-    // public static void PopulateNeighbors(List<HexagonCell> tiles, float offset = 0.2f)
->>>>>>> c8e6c7196b8d6a411e650172d66cf599795408bf
     // {
     //     // Create a new dictionary to store neighbors by side
     //     Dictionary<int, HexagonCell> newNeighborsBySide = new Dictionary<int, HexagonCell>();

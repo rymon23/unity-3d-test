@@ -9,7 +9,7 @@ using ProceduralBase;
 [ExecuteInEditMode]
 public class ProceduralTerrainMesh11 : MonoBehaviour
 {
-    [SerializeField] private bool enableEditMode = true;
+    [SerializeField] private bool enableTerrainEditMode = true;
     [SerializeField] private MeshFilter meshFilter;
     [SerializeField] private MeshRenderer meshRenderer;
     [SerializeField] private FastNoiseUnity[] fastNoiseUnity;
@@ -144,7 +144,7 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
 
     void Start()
     {
-        if (!enableEditMode) return;
+        if (!enableTerrainEditMode) return;
 
         Update();
     }
@@ -154,7 +154,7 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
     private float timer;
     private void Update()
     {
-        if (!enableEditMode) return;
+        if (!enableTerrainEditMode) return;
 
         if (!_editorUpdate && timer > 0f)
         {
@@ -194,60 +194,61 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
 
     void OnValidate()
     {
-        if (!enableEditMode) return;
-
         _editorUpdate = true;
 
-        if (fastNoiseUnity == null || fastNoiseUnity.Length < 2)
+        if (enableTerrainEditMode)
         {
-            fastNoiseUnity = GetComponentsInChildren<FastNoiseUnity>();
-        }
-
-        if (locationPrototypes == null || locationCount != locationPrototypes.Count ||
-            _minLocationDistance != minLocationDistance ||
-            _generatePointBorderXYOffeset != generatePointBorderXYOffeset ||
-            _minlocationHeightOffsetMult != minlocationHeightOffsetMult ||
-            _maxlocationHeightOffsetMult != maxlocationHeightOffsetMult
-            )
-        {
-            _minLocationDistance = minLocationDistance;
-            _minlocationHeightOffsetMult = minlocationHeightOffsetMult;
-            _maxlocationHeightOffsetMult = maxlocationHeightOffsetMult;
-
-            if (generatePointBorderXYOffeset > terrainSize * 0.6f)
+            if (fastNoiseUnity == null || fastNoiseUnity.Length < 2)
             {
-                generatePointBorderXYOffeset = terrainSize * 0.6f;
-            }
-            if (generatePointBorderXYOffeset < 0)
-            {
-                generatePointBorderXYOffeset = 0;
-            }
-            _generatePointBorderXYOffeset = generatePointBorderXYOffeset;
-
-            if (locationCount != locationPrototypes.Count)
-            {
-                showLocationPoints = true;
+                fastNoiseUnity = GetComponentsInChildren<FastNoiseUnity>();
             }
 
-            GenerateLocationPrototypes();
-        }
+            if (locationPrototypes == null || locationCount != locationPrototypes.Count ||
+                _minLocationDistance != minLocationDistance ||
+                _generatePointBorderXYOffeset != generatePointBorderXYOffeset ||
+                _minlocationHeightOffsetMult != minlocationHeightOffsetMult ||
+                _maxlocationHeightOffsetMult != maxlocationHeightOffsetMult
+                )
+            {
+                _minLocationDistance = minLocationDistance;
+                _minlocationHeightOffsetMult = minlocationHeightOffsetMult;
+                _maxlocationHeightOffsetMult = maxlocationHeightOffsetMult;
 
-        if ((enableLocationBlockPlotPoints || enableRoadPlotPoints || enableBorderPlotPoints)
-            && (resetPlotPoints || _terrainHeight != terrainHeight || _terrainSize != terrainSize
-            || _maxBlockClusterPointDistance != maxBlockClusterPointDistance
-            || _maxBorderClusterPointDistance != maxBorderClusterPointDistance
-        ))
-        {
-            _terrainHeight = terrainHeight;
-            _terrainSize = terrainSize;
-            _maxBlockClusterPointDistance = maxBlockClusterPointDistance;
-            _maxBorderClusterPointDistance = maxBorderClusterPointDistance;
-            locationLandPlotClusters = new List<PointCluster>();
-            locationBorderClusters = new List<PointCluster>();
+                if (generatePointBorderXYOffeset > terrainSize * 0.6f)
+                {
+                    generatePointBorderXYOffeset = terrainSize * 0.6f;
+                }
+                if (generatePointBorderXYOffeset < 0)
+                {
+                    generatePointBorderXYOffeset = 0;
+                }
+                _generatePointBorderXYOffeset = generatePointBorderXYOffeset;
 
-            UpdateLocationPlacementPoints();
+                if (locationCount != locationPrototypes.Count)
+                {
+                    showLocationPoints = true;
+                }
 
-            resetPlotPoints = false;
+                GenerateLocationPrototypes();
+            }
+
+            if ((enableLocationBlockPlotPoints || enableRoadPlotPoints || enableBorderPlotPoints)
+                && (resetPlotPoints || _terrainHeight != terrainHeight || _terrainSize != terrainSize
+                || _maxBlockClusterPointDistance != maxBlockClusterPointDistance
+                || _maxBorderClusterPointDistance != maxBorderClusterPointDistance
+            ))
+            {
+                _terrainHeight = terrainHeight;
+                _terrainSize = terrainSize;
+                _maxBlockClusterPointDistance = maxBlockClusterPointDistance;
+                _maxBorderClusterPointDistance = maxBorderClusterPointDistance;
+                locationLandPlotClusters = new List<PointCluster>();
+                locationBorderClusters = new List<PointCluster>();
+
+                UpdateLocationPlacementPoints();
+
+                resetPlotPoints = false;
+            }
         }
 
         if (generateLocationGameObjects)
@@ -257,7 +258,7 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
             if (locationPrototypes != null && locationPrototypes.Count > 0)
             {
                 GenerateLocationGameObjects(locationPrototypes);
-                enableEditMode = false;
+                enableTerrainEditMode = false;
             }
         }
 

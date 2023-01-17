@@ -25,6 +25,8 @@ public class TileDirectory : ScriptableObject
 
     [SerializeField] private TileEntry[] tileEntries;
     [SerializeField] private TileClusterEntry[] tileClusterEntries;
+    [SerializeField] private VerticalTileEntry[] verticalTileEntries;
+
     [SerializeField] private bool revaluate;
     private int currentSize = 0;
 
@@ -50,9 +52,19 @@ public class TileDirectory : ScriptableObject
         return tileDictionary;
     }
 
+    public Dictionary<int, VerticalTile> CreateVerticalTileDictionary()
+    {
+        Dictionary<int, VerticalTile> tileDictionary = new Dictionary<int, VerticalTile>();
+        for (int i = 0; i < verticalTileEntries.Length; i++)
+        {
+            tileDictionary.Add(verticalTileEntries[i].id, verticalTileEntries[i].tilePrefab);
+        }
+        return tileDictionary;
+    }
+
     private void EvaluateTiles()
     {
-        // Tiles
+        // Hex Tiles
         for (int i = 0; i < tileEntries.Length; i++)
         {
             if (tileEntries[i].tilePrefab == null)
@@ -64,7 +76,7 @@ public class TileDirectory : ScriptableObject
             tileEntries[i].id = i;
         }
 
-        // Tile Clusters
+        // Hex Tile Clusters
         for (int i = 0; i < tileClusterEntries.Length; i++)
         {
             if (tileClusterEntries[i].tileClusterPrefab == null)
@@ -74,6 +86,18 @@ public class TileDirectory : ScriptableObject
             }
             tileClusterEntries[i].id = i;
             tileClusterEntries[i].tileClusterPrefab.id = i;
+        }
+
+        // Vertical Tiles
+        for (int i = 0; i < verticalTileEntries.Length; i++)
+        {
+            if (verticalTileEntries[i].tilePrefab == null)
+            {
+                verticalTileEntries[i].id = -1;
+                continue;
+            }
+            verticalTileEntries[i].tilePrefab.SetID(i);
+            verticalTileEntries[i].id = i;
         }
     }
 
@@ -109,5 +133,14 @@ public class TileDirectory : ScriptableObject
 
             EvaluateTiles();
         }
+    }
+
+
+    [System.Serializable]
+    public struct VerticalTileEntry
+    {
+        public VerticalTile tilePrefab;
+        public int id;
+        public float probability;
     }
 }

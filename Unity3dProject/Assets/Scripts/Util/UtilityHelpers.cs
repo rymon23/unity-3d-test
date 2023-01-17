@@ -5,9 +5,29 @@ using Hybrid.Components;
 using UnityEngine;
 using UnityEngine.AI;
 using Unity.Entities;
+using System.Linq;
 
 static class UtilityHelpers
 {
+
+    public static int ChooseDecision(Dictionary<int, float> decisions)
+    {
+        float totalWeight = decisions.Values.Sum();
+        float randomValue = UnityEngine.Random.Range(0, totalWeight);
+        float currentWeight = 0;
+
+        foreach (KeyValuePair<int, float> decision in decisions)
+        {
+            currentWeight += decision.Value;
+            if (randomValue <= currentWeight)
+            {
+                return decision.Key;
+            }
+        }
+
+        return -1; // Return -1 if no decision is chosen (this should not happen)
+    }
+
 
     public static Vector3 FaceAwayFromPoint(Vector3 point, Vector3 vector)
     {

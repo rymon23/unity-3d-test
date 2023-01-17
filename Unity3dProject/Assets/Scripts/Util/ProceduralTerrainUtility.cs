@@ -567,6 +567,61 @@ namespace ProceduralBase
             return squarePoints;
         }
 
+        public static List<VerticalCellPrototype> GenerateCubeStack(int floors, Vector3 position, float width, float height, float depth)
+        {
+            List<VerticalCellPrototype> cubeStack = new List<VerticalCellPrototype>();
+            for (int i = 0; i < floors; i++)
+            {
+                Vector3 currentPosition = new Vector3(position.x, position.y, position.z);
+                if (i > 0) currentPosition.y += (height * i);
+
+                Vector3[] points = GenerateCubePoints(currentPosition, width, height, depth);
+                VerticalCellPrototype cube = new VerticalCellPrototype
+                {
+                    position = currentPosition,
+                    _cornerPoints = points,
+                    height = (int)height,
+                    width = (int)width,
+                    depth = (int)depth
+
+                };
+                cubeStack.Add(cube);
+            }
+            return cubeStack;
+        }
+
+        public static Vector3[] GenerateCubePoints(Vector3 center, float width, float height, float depth)
+        {
+            Vector3[] points = new Vector3[8];
+            float halfWidth = width / 2;
+            // float halfHeight = height / 2;
+            float halfDepth = depth / 2;
+            points[0] = center + new Vector3(-halfWidth, height, halfDepth);
+            points[1] = center + new Vector3(halfWidth, height, halfDepth);
+            points[2] = center + new Vector3(halfWidth, 0, halfDepth);
+            points[3] = center + new Vector3(-halfWidth, 0, halfDepth);
+            points[4] = center + new Vector3(-halfWidth, height, -halfDepth);
+            points[5] = center + new Vector3(halfWidth, height, -halfDepth);
+            points[6] = center + new Vector3(halfWidth, 0, -halfDepth);
+            points[7] = center + new Vector3(-halfWidth, 0, -halfDepth);
+            return points;
+        }
+
+        public static Vector3[] GenerateCubePoints(Vector3 center, float size)
+        {
+            Vector3[] points = new Vector3[8];
+            float halfSize = size / 2;
+            points[0] = center + new Vector3(-halfSize, halfSize, halfSize);
+            points[1] = center + new Vector3(halfSize, halfSize, halfSize);
+            points[2] = center + new Vector3(halfSize, -halfSize, halfSize);
+            points[3] = center + new Vector3(-halfSize, -halfSize, halfSize);
+            points[4] = center + new Vector3(-halfSize, halfSize, -halfSize);
+            points[5] = center + new Vector3(halfSize, halfSize, -halfSize);
+            points[6] = center + new Vector3(halfSize, -halfSize, -halfSize);
+            points[7] = center + new Vector3(-halfSize, -halfSize, -halfSize);
+            return points;
+        }
+
         public static Vector3[] GenerateHexagonPoints(Vector3 center, float radius)
         {
             Vector3[] points = new Vector3[6];
@@ -803,6 +858,34 @@ namespace ProceduralBase
 
         //     return grid;
         // }
+
+        public static void DrawRectangleInGizmos(Vector3[] corners)
+        {
+
+            if (corners == null) return;
+
+            // Draw lines connecting the corners
+            Gizmos.color = Color.black;
+            for (int i = 0; i < 4; i++)
+            {
+                Gizmos.DrawLine(corners[i], corners[(i + 1) % 4]);
+                Gizmos.DrawLine(corners[i + 4], corners[((i + 1) % 4) + 4]);
+                Gizmos.DrawLine(corners[i], corners[i + 4]);
+            }
+
+
+            // if (corners == null) return;
+
+            // for (int i = 0; i < corners.Length; i++)
+            // {
+            //     Gizmos.DrawSphere(corners[i], 0.1f);
+            // }
+            // for (int i = 0; i < corners.Length; i++)
+            // {
+            //     int j = (i + 1) % corners.Length;
+            //     Gizmos.DrawLine(corners[i], corners[j]);
+            // }
+        }
 
         public static void DrawGridInGizmos(Vector3[,] grid)
         {

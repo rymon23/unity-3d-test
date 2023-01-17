@@ -1,7 +1,9 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using ProceduralBase;
-using UnityEditor;
+using System.Linq;
 
 
 public enum VerticalSide
@@ -27,11 +29,17 @@ public enum VerticalEdges
 public class VerticalTile : MonoBehaviour
 {
     [SerializeField] private int _id = -1;
-    public int id { private set; get; } = -1;
+    public int GetID() => _id;
+    public void SetID(int id)
+    {
+        _id = id;
+    }
     [Range(12, 64)][SerializeField] private int _size = 24;
     public int GetSize() => _size;
 
     [Header("Tile Settings")]
+    [SerializeField] private bool isBaseFloor;
+    public bool IsBaseFloor() => isBaseFloor;
     [SerializeField] private TileCategory _tileCategory;
     public TileCategory GetTileCategory() => _tileCategory;
     [SerializeField] private TileType _tileType;
@@ -44,15 +52,17 @@ public class VerticalTile : MonoBehaviour
 
     [Header("Tile Socket Configuration")]
     [SerializeField] private TileSocketDirectory tileSocketDirectory;
-    [SerializeField] public int[] edgeSockets = new int[6];
-    public int GetSideSocketId(VerticalSide side) => edgeSockets[(int)side];
-    [SerializeField] private float sideDisplayOffsetY = 6f;
+    [SerializeField] private TileLabelGroup tileLabelGroup;
+    [SerializeField] public int[] edgeSockets = new int[8];
+    public int GetEdgeSocketId(VerticalEdges edge) => edgeSockets[(int)edge];
+    public int[] GetEdgeSockets() => edgeSockets;
+    public int[] GetTopEdgeSockets() => edgeSockets.Skip(4).ToArray();
+    public int[] GetBottomEdgeSockets(VerticalEdges edge) => edgeSockets.Take(4).ToArray();
 
     private Transform center;
     [SerializeField] private Vector3[] _corners;
     [SerializeField] private Vector3[] _sides;
     [SerializeField] private Vector3[] _edges = new Vector3[8];
-    public GameObject[] socketTextDisplay;
 
     [Header("Rotation")]
     [Range(0, 5)][SerializeField] private int currentRotation = 0;
@@ -67,7 +77,7 @@ public class VerticalTile : MonoBehaviour
     #endregion
 
     public int[][] rotatedEdgeSockets { get; private set; }
-    public int GetRotatedSideSocketId(HexagonSides side, int rotation)
+    public int GetRotatedEdgeSocketId(VerticalEdges side, int rotation)
     {
         EvaluateRotatedVerticalEdgeSockets();
         return rotatedEdgeSockets[rotation][(int)side];
@@ -76,19 +86,21 @@ public class VerticalTile : MonoBehaviour
 
     private void EvaluateRotatedVerticalEdgeSockets()
     {
-        int[][] newRotatedVerticalEdges = new int[6][];
-        for (int i = 0; i < 6; i++)
+        int edges = 8;
+
+        int[][] newRotatedVerticalEdges = new int[edges][];
+        for (int i = 0; i < edges; i++)
         {
-            newRotatedVerticalEdges[i] = new int[8];
+            newRotatedVerticalEdges[i] = new int[edges];
         }
         // Initialize rotatedVerticalEdges with the edgeIds of the unrotated cube
-        for (int i = 0; i < 8; i++)
+        for (int i = 0; i < edges; i++)
         {
             newRotatedVerticalEdges[0][i] = edgeSockets[i];
         }
 
         // Update rotatedVerticalEdges with the edgeIds of the rotated cubes
-        for (int i = 1; i < 6; i++)
+        for (int i = 1; i < edges; i++)
         {
             newRotatedVerticalEdges[i][(int)VerticalEdges.BottomFront] = newRotatedVerticalEdges[i - 1][(int)VerticalEdges.BottomRight];
             newRotatedVerticalEdges[i][(int)VerticalEdges.BottomRight] = newRotatedVerticalEdges[i - 1][(int)VerticalEdges.BottomBack];
@@ -114,8 +126,11 @@ public class VerticalTile : MonoBehaviour
     private void Awake()
     {
         center = transform;
-        meshFilter = GetComponent<MeshFilter>();
-        meshRenderer = GetComponent<MeshRenderer>();
+        // meshFilter = GetComponent<MeshFilter>();
+        // meshRenderer = GetComponent<MeshRenderer>();
+
+        tileLabelGroup = GetComponent<TileLabelGroup>();
+
         RecalculateEdgePoints();
     }
 
@@ -128,8 +143,8 @@ public class VerticalTile : MonoBehaviour
     {
         center = transform;
 
-        // RotateTransform(currentRotation, transform);
-        // UpdateHexagonSideEntries();
+        if (!tileLabelGroup) tileLabelGroup = GetComponentInChildren<TileLabelGroup>();
+
 
         if (resetPoints || _currentCenterPosition != center.position || _corners == null || _corners.Length == 0 || _sides == null || _sides.Length == 0)
         {
@@ -139,32 +154,9 @@ public class VerticalTile : MonoBehaviour
             EvaluateRotatedVerticalEdgeSockets();
         }
 
-        EvaluateSocketLabels(_showSocketLabels != showSocketLabels);
+        if (tileLabelGroup != null) tileLabelGroup.SetLabelsEnabled(_showSocketLabels != showSocketLabels);
 
         EvaluateTextDisplay();
-
-
-        if (!enableEditMode) return;
-
-        if (generateMesh)
-        {
-            generateMesh = false;
-
-            lastGeneratedMesh = HexagonGenerator.CreateHexagonMesh(_corners);
-            // lastGeneratedMesh = HexagonGenerator.CreateHexagonMesh(UtilityHelpers.GetTransformPositions(_corners));
-            if (meshFilter.sharedMesh == null)
-            {
-                meshFilter.mesh = lastGeneratedMesh;
-                meshFilter.mesh.RecalculateNormals();
-            }
-        }
-        if (saveMesh)
-        {
-            saveMesh = false;
-
-            if (!lastGeneratedMesh) return;
-            SaveMeshAsset(lastGeneratedMesh, "New Tile Mesh");
-        }
     }
 
     #region Debug
@@ -174,34 +166,21 @@ public class VerticalTile : MonoBehaviour
     // [SerializeField] private bool showSocketColorMap;
     [SerializeField] private bool showSocketLabels;
     private bool _showSocketLabels = false;
-    [SerializeField] private bool showCorners;
-    [SerializeField] private bool showSides;
+    // [SerializeField] private bool showCorners;
+    // [SerializeField] private bool showSides;
     [SerializeField] private bool showEdges;
     [SerializeField] private bool resetPoints;
 
     private void EvaluateTextDisplay()
     {
-        string[] sideNames = Enum.GetNames(typeof(HexagonSides));
-        for (int i = 0; i < socketTextDisplay.Length; i++)
-        {
-            socketTextDisplay[i].gameObject.name = sideNames[i];
-            RectTransform rectTransform = socketTextDisplay[i].GetComponent<RectTransform>();
-            rectTransform.rotation = new Quaternion(0, 180, 0, 0);
-        }
-    }
+        string[] sideNames = Enum.GetNames(typeof(VerticalEdges));
+        GameObject[] labels = tileLabelGroup.labels;
 
-    private void EvaluateSocketLabels(bool force = false)
-    {
-        if (force || _showSocketLabels != showSocketLabels)
+        for (int i = 0; i < labels.Length; i++)
         {
-            _showSocketLabels = showSocketLabels;
-            if (socketTextDisplay != null && socketTextDisplay.Length > 0)
-            {
-                for (int i = 0; i < socketTextDisplay.Length; i++)
-                {
-                    socketTextDisplay[i].SetActive(showSocketLabels);
-                }
-            }
+            labels[i].gameObject.name = sideNames[i];
+            RectTransform rectTransform = labels[i].GetComponent<RectTransform>();
+            rectTransform.rotation = new Quaternion(0, 180, 0, 0);
         }
     }
 
@@ -212,33 +191,33 @@ public class VerticalTile : MonoBehaviour
         Gizmos.color = Color.black;
         Gizmos.DrawSphere(center.position, 0.3f);
 
-        if (showCorners)
-        {
-            Gizmos.color = Color.magenta;
+        // if (showCorners)
+        // {
+        //     Gizmos.color = Color.magenta;
 
-            foreach (Vector3 item in _corners)
-            {
-                Gizmos.DrawSphere(item, 0.3f);
-            }
-        }
+        //     foreach (Vector3 item in _corners)
+        //     {
+        //         Gizmos.DrawSphere(item, 0.3f);
+        //     }
+        // }
 
-        if (showSides)
-        {
-            for (int i = 0; i < _sides.Length; i++)
-            {
-                // Fix if out of bounds
-                if (edgeSockets[i] > tileSocketDirectory.sockets.Length - 1)
-                {
-                    edgeSockets[i] = tileSocketDirectory.sockets.Length - 1;
-                }
+        // if (showSides)
+        // {
+        //     for (int i = 0; i < _sides.Length; i++)
+        //     {
+        //         // Fix if out of bounds
+        //         if (edgeSockets[i] > tileSocketDirectory.sockets.Length - 1)
+        //         {
+        //             edgeSockets[i] = tileSocketDirectory.sockets.Length - 1;
+        //         }
 
-                Gizmos.color = tileSocketDirectory.sockets[edgeSockets[i]].color;
-                Vector3 pos = _sides[i];
-                pos = pos - UtilityHelpers.FaceAwayFromPoint(center.position, _sides[i]);
-                // pos = pos - pos * 0.1f;
-                Gizmos.DrawSphere(pos, 1f);
-            }
-        }
+        //         Gizmos.color = tileSocketDirectory.sockets[edgeSockets[i]].color;
+        //         Vector3 pos = _sides[i];
+        //         pos = pos - UtilityHelpers.FaceAwayFromPoint(center.position, _sides[i]);
+        //         // pos = pos - pos * 0.1f;
+        //         Gizmos.DrawSphere(pos, 1f);
+        //     }
+        // }
 
         if (showEdges)
         {
@@ -246,24 +225,25 @@ public class VerticalTile : MonoBehaviour
             ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(_corners);
         }
 
-        // if (!showSocketColorMap) return;
+        // if (tileSocketDirectory != null && tileLabelGroup != null)
+        // {
+        //     for (int i = 0; i < _edges.Length; i++)
+        //     {
+        //         Gizmos.color = tileSocketDirectory ? tileSocketDirectory.sockets[edgeSockets[i]].color : Color.white;
+        //         Gizmos.DrawSphere(_edges[i], 0.1f * transform.lossyScale.z);
+        //         tileLabelGroup.labels[i].GetComponent<RectTransform>().position = _edges[i] + new Vector3(0, sideDisplayOffsetY, 0);
+        //     }
+        // }
 
-        for (int i = 0; i < _sides.Length; i++)
+        if (showSocketLabels && tileLabelGroup.labels != null && tileLabelGroup.labels.Length == 6)
         {
-            Gizmos.color = tileSocketDirectory ? tileSocketDirectory.sockets[edgeSockets[i]].color : Color.white;
-            Gizmos.DrawSphere(_sides[i], 0.1f * transform.lossyScale.z);
-            socketTextDisplay[i].GetComponent<RectTransform>().position = _sides[i] + new Vector3(0, sideDisplayOffsetY, 0);
-        }
-
-        if (showSocketLabels && socketTextDisplay != null && socketTextDisplay.Length == 6)
-        {
-            string[] sideNames = Enum.GetNames(typeof(HexagonSides));
-            for (int i = 0; i < socketTextDisplay.Length; i++)
+            string[] sideNames = Enum.GetNames(typeof(VerticalEdges));
+            for (int i = 0; i < tileLabelGroup.labels.Length; i++)
             {
-                RectTransform rectTransform = socketTextDisplay[i].GetComponent<RectTransform>();
+                RectTransform rectTransform = tileLabelGroup.labels[i].GetComponent<RectTransform>();
                 rectTransform.rotation = new Quaternion(0, 180, 0, 0);
-                socketTextDisplay[i].GetComponent<RectTransform>().rotation = new Quaternion(0, 180, 0, 0);
-                TextMesh textMesh = socketTextDisplay[i].GetComponent<TextMesh>();
+                tileLabelGroup.labels[i].GetComponent<RectTransform>().rotation = new Quaternion(0, 180, 0, 0);
+                TextMesh textMesh = tileLabelGroup.labels[i].GetComponent<TextMesh>();
                 textMesh.color = tileSocketDirectory.sockets[edgeSockets[i]].color;
                 string str = "id_" + edgeSockets[i] + " - " + tileSocketDirectory.sockets[edgeSockets[i]].name + "\n" + sideNames[i];
                 textMesh.text = str;
@@ -274,23 +254,22 @@ public class VerticalTile : MonoBehaviour
 
     #endregion
 
-    [Header("Mesh Generation")]
-    [SerializeField] private bool generateMesh;
-    [SerializeField] private bool saveMesh;
-    private Mesh lastGeneratedMesh;
-    [SerializeField] private MeshFilter meshFilter;
-    [SerializeField] private MeshRenderer meshRenderer;
+    // [Header("Mesh Generation")]
+    // [SerializeField] private bool generateMesh;
+    // [SerializeField] private bool saveMesh;
+    // private Mesh lastGeneratedMesh;
+    // [SerializeField] private MeshFilter meshFilter;
+    // [SerializeField] private MeshRenderer meshRenderer;
 
-
-    private void SaveMeshAsset(Mesh mesh, string assetName)
-    {
-        // Create a new mesh asset
-        lastGeneratedMesh = Instantiate(mesh) as Mesh;
-        lastGeneratedMesh.name = assetName;
-        // Save the mesh asset to the project
-        AssetDatabase.CreateAsset(lastGeneratedMesh, "Assets/Meshes/" + assetName + ".asset");
-        AssetDatabase.SaveAssets();
-    }
+    // private void SaveMeshAsset(Mesh mesh, string assetName)
+    // {
+    //     // Create a new mesh asset
+    //     lastGeneratedMesh = Instantiate(mesh) as Mesh;
+    //     lastGeneratedMesh.name = assetName;
+    //     // Save the mesh asset to the project
+    //     AssetDatabase.CreateAsset(lastGeneratedMesh, "Assets/Meshes/" + assetName + ".asset");
+    //     AssetDatabase.SaveAssets();
+    // }
 
     [System.Serializable]
     public struct HexagonSideEntry
