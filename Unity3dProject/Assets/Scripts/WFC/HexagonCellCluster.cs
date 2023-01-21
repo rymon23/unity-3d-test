@@ -8,8 +8,8 @@ using System.Linq;
 public class HexagonCellCluster
 {
     public List<HexagonCell> cells;
-    public HexagonCell parent;
-    public HexagonCell GetParentCell() => cells.Count == 0 ? null : cells[0];
+    [SerializeField] private HexagonCell parent;
+    public HexagonCell GetParentCell() => cells.Count == 0 ? null : parent;
     public HexagonCellCluster(int id, List<HexagonCell> cells)
     {
         this.id = id;
@@ -66,28 +66,32 @@ public class HexagonCellCluster
     {
         if (cells.Count == 0) return;
 
-        Dictionary<HexagonCell, int> cellsByNeighborsInSameCluster = new Dictionary<HexagonCell, int>();
-        foreach (HexagonCell cell in cells)
+        int[] internalNeighborsArray = new int[cells.Count];
+
+        for (int i = 0; i < cells.Count; i++)
         {
             int internalNeighbors = 0;
-            foreach (HexagonCell item in cell._neighbors)
+            foreach (HexagonCell item in cells[i]._neighbors)
             {
                 if (cells.Contains(item)) internalNeighbors++;
             }
-            if (!cellsByNeighborsInSameCluster.ContainsKey(cell))
+            internalNeighborsArray[i] = internalNeighbors;
+            cells[i].SetNumberofNeighborsInCluster(internalNeighbors);
+        }
+
+        int hightestIX = 0;
+        int hightestValue = 0;
+        for (int i = 0; i < internalNeighborsArray.Length; i++)
+        {
+            if (internalNeighborsArray[i] > hightestValue)
             {
-                cellsByNeighborsInSameCluster.Add(cell, internalNeighbors);
+                hightestValue = internalNeighborsArray[i];
+                hightestIX = i;
             }
         }
 
-        cellsByNeighborsInSameCluster.OrderBy(x => x.Value);
-        List<HexagonCell> orderedCells = cellsByNeighborsInSameCluster.Select(x => x.Key).ToList();
-
-        // orderedCells.AddRange(cells.OrderBy(c => c._neighbors.Count));
-        Debug.Log("orderedCells.Count: " + orderedCells.Count);
-        cells = orderedCells;
-        Debug.Log("cells.Count: " + cells.Count);
-        parent = cells[0];
+        parent = cells[hightestIX];
+        // Debug.Log("parent Cell: " + parent.id);
     }
 
     public void CalculateFoundationCenter()
@@ -158,7 +162,18 @@ public class HexagonCellCluster
         _neighbors = neighbors;
     }
 
-    public bool AreAnyNeighborCellsAssigned()
+    public bool AreAnyPotentialCellsAssigned()
+    {
+        for (int i = 0; i < cells.Count; i++)
+        {
+            if (cells[i].IsInCluster() || cells[i].IsAssigned())
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+    public bool AreAnyInnerNeighborCellsAssigned()
     {
         if (_neighbors == null) GetHexagonClusterNeighbors();
 
@@ -166,7 +181,7 @@ public class HexagonCellCluster
 
         for (int i = 0; i < _neighbors.Count; i++)
         {
-            if (_neighbors[i].IsAssigned())
+            if (!_neighbors[i].isEdgeCell && !_neighbors[i].IsInCluster() && _neighbors[i].IsAssigned())
             {
                 return true;
             }
@@ -191,74 +206,59 @@ public class HexagonCellCluster
         return false;
     }
 
-    public static List<HexagonCellCluster> GetHexagonCellClusters(List<HexagonCell> cells)
+    public static List<HexagonCellCluster> GetHexagonCellClusters(List<HexagonCell> cells, Vector3 positionCenter, WFCCollapseOrder collapseOrder = 0, bool ignoreEdges = false)
     {
         List<HexagonCell> edgeCells = HexagonCell.GetEdgeCells(cells); // get the edge cells first
+        HexagonCell centerCell = HexagonCell.GetClosestCellByCenterPoint(cells, positionCenter);
+
         List<HexagonCell> allCells = new List<HexagonCell>();
-        allCells.AddRange(edgeCells);
-        allCells.AddRange(cells.Except(edgeCells));
+
+        if (!ignoreEdges)
+        {
+            allCells.AddRange(edgeCells);
+        }
+        // if (collapseOrder == WFCCollapseOrder.Default)
+        // {
+        //     allCells.Add(centerCell);
+        // }
+        if (ignoreEdges)
+        {
+            allCells.AddRange(cells.Except(edgeCells).Except(allCells));
+            allCells = allCells.OrderByDescending(x => x._neighbors.Count).ToList();
+        }
+        else
+        {
+            allCells.AddRange(cells.Except(allCells));
+        }
+
         HashSet<int> addedToCluster = new HashSet<int>();
         List<HexagonCellCluster> clusters = new List<HexagonCellCluster>();
         int clusterId = -1;
 
-        foreach (HexagonCell cell in edgeCells)
+        if (ignoreEdges == false)
         {
-            HexagonCell nei = cell._neighbors.Find(c => c._neighbors.Count == 6);
-            if (nei != null && !addedToCluster.Contains(nei.id) && !AnyNeighborsInACluster(nei._neighbors))
+            foreach (HexagonCell cell in edgeCells)
             {
-                List<HexagonCell> toAdd = new List<HexagonCell>();
-
-                foreach (HexagonCell neighborCell in nei._neighbors)
-                {
-                    toAdd.Add(neighborCell);
-                    addedToCluster.Add(neighborCell.id);
-                    neighborCell.isClusterPrototype = true;
-                }
-                if (toAdd.Count > 0)
-                {
-                    clusterId++;
-                    HexagonCellCluster cluster = new HexagonCellCluster(clusterId, new List<HexagonCell>());
-                    cluster.cells.Add(nei);
-                    cluster.cells.Add(cell);
-                    cluster.cells.AddRange(toAdd);
-                    clusters.Add(cluster);
-                    addedToCluster.Add(cell.id);
-                    cluster.Reevaluate();
-
-                    // Set cluster to edge cluster if any cell is an edge cell
-                    if (cluster.cells.Any(x => edgeCells.Contains(x)))
-                    {
-                        cluster.SetEdgeCluster(true);
-                    }
-                }
-            }
-        }
-
-        clusterId = -1;
-        foreach (HexagonCell cell in allCells)
-        {
-            if (!addedToCluster.Contains(cell.id))
-            {
-                if (cell._neighbors.Count > 0)
+                HexagonCell nei = cell._neighbors.Find(c => c._neighbors.Count == 6);
+                if (nei != null && !addedToCluster.Contains(nei.id) && !AnyNeighborsInACluster(nei._neighbors))
                 {
                     List<HexagonCell> toAdd = new List<HexagonCell>();
 
-                    foreach (HexagonCell neighborCell in cell._neighbors)
+                    foreach (HexagonCell neighborCell in nei._neighbors)
                     {
-                        if (!addedToCluster.Contains(neighborCell.id))
-                        {
-                            toAdd.Add(neighborCell);
-                            addedToCluster.Add(neighborCell.id);
-                            neighborCell.isClusterPrototype = true;
-                        }
+                        toAdd.Add(neighborCell);
+                        addedToCluster.Add(neighborCell.id);
+                        neighborCell.isClusterPrototype = true;
                     }
-
                     if (toAdd.Count > 0)
                     {
                         clusterId++;
                         HexagonCellCluster cluster = new HexagonCellCluster(clusterId, new List<HexagonCell>());
-                        cluster.cells.Add(cell);
-                        cluster.cells.AddRange(toAdd);
+
+                        toAdd.Add(nei);
+                        toAdd.Add(cell);
+                        cluster.cells.AddRange(toAdd.OrderByDescending(x => x._neighbors.Count));
+
                         clusters.Add(cluster);
                         addedToCluster.Add(cell.id);
                         cluster.Reevaluate();
@@ -272,24 +272,154 @@ public class HexagonCellCluster
                 }
             }
         }
+
+        clusterId = -1;
+
+        int ix = 0;
+
+        while (ix < allCells.Count)
+        {
+            allCells = allCells.OrderByDescending(x => x.GetNumberOfNeighborsUnclustered()).ToList();
+            HexagonCell cell = allCells[ix];
+
+            if (addedToCluster.Contains(cell.id))
+            {
+                allCells.Remove(cell);
+                List<HexagonCell> updatedList = new List<HexagonCell>();
+                updatedList = allCells;
+
+                ix = 0;
+                continue;
+            }
+
+
+            if (cell._neighbors.Count > 0 && !ignoreEdges || !cell._neighbors.Any(x => x.isEdgeCell || x.isEntryCell))
+            {
+                List<HexagonCell> toAdd = new List<HexagonCell>();
+
+                foreach (HexagonCell neighborCell in cell._neighbors)
+                {
+                    if (!addedToCluster.Contains(neighborCell.id))
+                    {
+                        toAdd.Add(neighborCell);
+                        addedToCluster.Add(neighborCell.id);
+                        neighborCell.isClusterPrototype = true;
+                    }
+                }
+
+                if (toAdd.Count > 0)
+                {
+                    clusterId++;
+                    HexagonCellCluster cluster = new HexagonCellCluster(clusterId, new List<HexagonCell>());
+                    toAdd.Add(cell);
+                    cluster.cells.AddRange(toAdd.OrderByDescending(x => x._neighbors.Count));
+
+                    clusters.Add(cluster);
+                    addedToCluster.Add(cell.id);
+                    cluster.Reevaluate();
+
+                    List<HexagonCell> updatedList = new List<HexagonCell>();
+                    updatedList.AddRange(allCells.Except(toAdd));
+                    allCells = updatedList;
+
+                    ix = 0;
+
+                    // Set cluster to edge cluster if any cell is an edge cell
+                    if (cluster.cells.Any(x => edgeCells.Contains(x)))
+                    {
+                        cluster.SetEdgeCluster(true);
+                    }
+                }
+                else
+                {
+                    ix++;
+                }
+            }
+            else
+            {
+                ix++;
+            }
+        }
+
         return clusters.OrderByDescending(x => x.cells.Count).ToList();
     }
-    // public static List<HexagonCellCluster> GetHexagonCellClusters(List<HexagonCell> cells)
+
+
+
+
+    // public static List<HexagonCellCluster> GetHexagonCellClusters(List<HexagonCell> cells, Vector3 positionCenter, WFCCollapseOrder collapseOrder = 0, bool ignoreEdges = false)
     // {
     //     List<HexagonCell> edgeCells = HexagonCell.GetEdgeCells(cells); // get the edge cells first
+    //     HexagonCell centerCell = HexagonCell.GetClosestCellByCenterPoint(cells, positionCenter);
+
     //     List<HexagonCell> allCells = new List<HexagonCell>();
-    //     allCells.AddRange(edgeCells);
-    //     allCells.AddRange(cells.Except(edgeCells));
+
+    //     if (!ignoreEdges)
+    //     {
+    //         allCells.AddRange(edgeCells);
+    //     }
+    //     if (collapseOrder == WFCCollapseOrder.Default)
+    //     {
+    //         allCells.Add(centerCell);
+    //     }
+    //     if (ignoreEdges)
+    //     {
+    //         allCells.AddRange(cells.Except(edgeCells).Except(allCells));
+    //         allCells = allCells.OrderByDescending(x => x._neighbors.Count).ToList();
+    //     }
+    //     else
+    //     {
+    //         allCells.AddRange(cells.Except(allCells));
+    //     }
 
     //     HashSet<int> addedToCluster = new HashSet<int>();
     //     List<HexagonCellCluster> clusters = new List<HexagonCellCluster>();
+    //     int clusterId = -1;
 
-    //     int id = -1;
+    //     if (ignoreEdges == false)
+    //     {
+    //         foreach (HexagonCell cell in edgeCells)
+    //         {
+    //             HexagonCell nei = cell._neighbors.Find(c => c._neighbors.Count == 6);
+    //             if (nei != null && !addedToCluster.Contains(nei.id) && !AnyNeighborsInACluster(nei._neighbors))
+    //             {
+    //                 List<HexagonCell> toAdd = new List<HexagonCell>();
+
+    //                 foreach (HexagonCell neighborCell in nei._neighbors)
+    //                 {
+    //                     toAdd.Add(neighborCell);
+    //                     addedToCluster.Add(neighborCell.id);
+    //                     neighborCell.isClusterPrototype = true;
+    //                 }
+    //                 if (toAdd.Count > 0)
+    //                 {
+    //                     clusterId++;
+    //                     HexagonCellCluster cluster = new HexagonCellCluster(clusterId, new List<HexagonCell>());
+
+    //                     toAdd.Add(nei);
+    //                     toAdd.Add(cell);
+    //                     cluster.cells.AddRange(toAdd.OrderByDescending(x => x._neighbors.Count));
+
+    //                     clusters.Add(cluster);
+    //                     addedToCluster.Add(cell.id);
+    //                     cluster.Reevaluate();
+
+    //                     // Set cluster to edge cluster if any cell is an edge cell
+    //                     if (cluster.cells.Any(x => edgeCells.Contains(x)))
+    //                     {
+    //                         cluster.SetEdgeCluster(true);
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+
+    //     clusterId = -1;
     //     foreach (HexagonCell cell in allCells)
     //     {
     //         if (!addedToCluster.Contains(cell.id))
     //         {
-    //             if (cell._neighbors.Count > 0)
+    //             if (cell._neighbors.Count > 0 && !ignoreEdges || !cell._neighbors.Any(x => x.isEdgeCell || x.isEntryCell))
     //             {
     //                 List<HexagonCell> toAdd = new List<HexagonCell>();
 
@@ -299,18 +429,20 @@ public class HexagonCellCluster
     //                     {
     //                         toAdd.Add(neighborCell);
     //                         addedToCluster.Add(neighborCell.id);
+    //                         neighborCell.isClusterPrototype = true;
     //                     }
     //                 }
 
     //                 if (toAdd.Count > 0)
     //                 {
-    //                     id++;
-    //                     HexagonCellCluster cluster = new HexagonCellCluster(id, new List<HexagonCell>());
-    //                     cluster.cells.Add(cell);
-    //                     cluster.cells.AddRange(toAdd);
+    //                     clusterId++;
+    //                     HexagonCellCluster cluster = new HexagonCellCluster(clusterId, new List<HexagonCell>());
+    //                     toAdd.Add(cell);
+    //                     cluster.cells.AddRange(toAdd.OrderByDescending(x => x._neighbors.Count));
+
     //                     clusters.Add(cluster);
     //                     addedToCluster.Add(cell.id);
-    //                     cluster.CalculateCenter();
+    //                     cluster.Reevaluate();
 
     //                     // Set cluster to edge cluster if any cell is an edge cell
     //                     if (cluster.cells.Any(x => edgeCells.Contains(x)))
@@ -323,7 +455,6 @@ public class HexagonCellCluster
     //     }
     //     return clusters.OrderByDescending(x => x.cells.Count).ToList();
     // }
-
 
     public static Vector3 FindClosestPoint(Vector3[] points)
     {

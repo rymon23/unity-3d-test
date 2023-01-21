@@ -54,7 +54,7 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
     [Header("Location Marker Settings")]
     [SerializeField] private bool showLocationPoints;
     [Range(0, 24)][SerializeField] private int locationCount;
-    [Range(0, 12)][SerializeField] private float minLocationDistance = 2f;
+    [Range(0, 32)][SerializeField] private float minLocationDistance = 2f;
     [SerializeField] private float minVerticePointLevelRadius = 3f;
     [SerializeField] private float maxVerticePointLevelRadius = 9f;
     [SerializeField] private float generatePointBorderXYOffeset = 2f;
@@ -68,7 +68,7 @@ public class ProceduralTerrainMesh11 : MonoBehaviour
 
     [Header("Location Sub-Zone Settings")]
     [Range(1, 8)][SerializeField] private int locationZoneCount = 1;
-    [Range(0, 12)][SerializeField] private float minLocationZoneDistance = 2f;
+    [Range(0, 24)][SerializeField] private float minLocationZoneDistance = 2f;
     [Range(0, 1f)][SerializeField] private float placeZoneBorderOffsetMult = 0.8f;
     [Range(0, 0.88f)][SerializeField] private float placeZoneCenterOffsetMult = 0.33f;
     [Range(0, 32)][SerializeField] private float locationPointZoneRadius = 12f;

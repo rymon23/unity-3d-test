@@ -17,7 +17,7 @@ public class VerticalCellManager : MonoBehaviour
 
     [Header("Cell Settings")]
     [Range(1, 72)] public int levels = 4;
-    [Range(8, 24)] public int height = 8;
+    [Range(6, 24)] public int height = 8;
     [Range(12, 64)] public int width = 30;
     [Range(12, 64)] public int depth = 30;
     [Range(12, 72)] public int size = 30;
@@ -104,6 +104,7 @@ public class VerticalCellManager : MonoBehaviour
             VerticalCell newCell = newObject.GetComponent<VerticalCell>();
             newCell._cornerPoints = cellPrototype._cornerPoints;
             newCell.size = cellPrototype.width;
+            newCell.width = cellPrototype.width;
             newCell.height = cellPrototype.height;
             newCell.depth = cellPrototype.depth;
             newCell.id = cellId;

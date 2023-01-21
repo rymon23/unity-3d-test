@@ -4,6 +4,45 @@ using UnityEngine;
 
 public class HexagonGenerator
 {
+    public static List<Vector3> GetTopAndBottomEdgePointsOfRectangle(Vector3[] corners)
+    {
+        List<Vector3> topAndBottomPoints = new List<Vector3>();
+        // for (int i = 0; i < corners.Length; i++)
+        // {
+        //     Vector3 current = corners[i];
+        //     Vector3 next = corners[(i + 1) % corners.Length];
+
+        //     topAndBottomPoints.Add(current);
+        //     topAndBottomPoints.Add(new Vector3((current.x + next.x) / 2, current.y, (current.z + next.z) / 2));
+        // }
+        for (int i = 0; i < corners.Length; i++)
+        {
+            Vector3 current = corners[i];
+            Vector3 next;
+            if (i == corners.Length - 1)
+                next = corners[0];
+            else
+                next = corners[i + 1];
+
+            topAndBottomPoints.Add(current);
+            topAndBottomPoints.Add(new Vector3((current.x + next.x) / 2, current.y, (current.z + next.z) / 2));
+        }
+        return topAndBottomPoints;
+    }
+
+    public Vector3[] GeneratePyramid(float size, float height)
+    {
+        Vector3[] points = new Vector3[5];
+        // Bottom four points
+        points[0] = new Vector3(-size / 2, 0, size / 2);
+        points[1] = new Vector3(size / 2, 0, size / 2);
+        points[2] = new Vector3(size / 2, 0, -size / 2);
+        points[3] = new Vector3(-size / 2, 0, -size / 2);
+        // Top point
+        points[4] = new Vector3(0, height, 0);
+        return points;
+    }
+
 
     public static Vector3[] GenerateHexagonSidePoints(Vector3[] corners)
     {
@@ -12,7 +51,7 @@ public class HexagonGenerator
         {
             // Find the center point between the current corner and the next corner
             Vector3 side = Vector3.Lerp(corners[i], corners[(i + 1) % 6], 0.5f);
-            hexagonSides[i] = side;
+            hexagonSides[(i + 5) % 6] = side; // Places index 0 at the front side
         }
         return hexagonSides;
     }
@@ -85,7 +124,7 @@ public class HexagonGenerator
         List<HexagonTilePrototype> hexagons = GenerateHexagonTilePrototypeGrid(hexagonSize, numHexagons, numRows, bottomCorner, adjusterMult);
         return hexagons;
     }
-    public static List<HexagonTilePrototype> GenerateHexagonTilePrototypeGrid(float hexagonSize, int numHexagons, int numRows, Vector3 startPos, float adjusterMult = 1.734f)
+    public static List<HexagonTilePrototype> GenerateHexagonTilePrototypeGrid(int hexagonSize, int numHexagons, int numRows, Vector3 startPos, float adjusterMult = 1.734f)
     {
         List<HexagonTilePrototype> hexagonTilePrototypes = new List<HexagonTilePrototype>();
         float angle = 60 * Mathf.Deg2Rad;
@@ -121,8 +160,10 @@ public class HexagonGenerator
                 }
 
                 HexagonTilePrototype prototype = new HexagonTilePrototype();
-                prototype.center = HexagonGenerator.GetPolygonCenter(hexagonPoints);
+                prototype.id = k + "-" + i;
+                prototype.size = hexagonSize;
                 prototype.cornerPoints = hexagonPoints;
+                prototype.center = HexagonGenerator.GetPolygonCenter(hexagonPoints);
                 hexagonTilePrototypes.Add(prototype);
 
                 currentX += hexagonSize * 1.5f;

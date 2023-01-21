@@ -13,7 +13,22 @@ public class HexagonCell : MonoBehaviour
     public int size = 12;
     public Vector3[] _cornerPoints;
     public Vector3[] _sides;
-    // public Vector3[] _sides { private set; get; }
+
+    private Dictionary<TileCategory, float> categoyBias;
+    public void SetCategoryBias(TileCategory category, float value)
+    {
+        if (categoyBias == null) categoyBias = new Dictionary<TileCategory, float>();
+
+        if (!categoyBias.ContainsKey(category))
+        {
+            categoyBias.Add(category, value);
+        }
+        else
+        {
+            categoyBias[category] = value;
+        }
+    }
+
 
     public List<HexagonCell> _neighbors;
     public HexagonCell[] neighborsBySide = new HexagonCell[6];
@@ -30,7 +45,7 @@ public class HexagonCell : MonoBehaviour
         }
         return -1;
     }
-    public int[] GetNeighborTileSockets()
+    public int[] GetNeighborTileSockets(bool useWalledEdgePreference = false)
     {
         int[] neighborSocketsBySide = new int[6];
 
@@ -43,17 +58,44 @@ public class HexagonCell : MonoBehaviour
             }
             else
             {
-                // If neighbor has no tile set -1
-                if (neighborsBySide[side].currentTile == null)
+                if (useWalledEdgePreference && isEdgeCell && !IsInCluster())
                 {
-                    neighborSocketsBySide[side] = -1;
+
+                    if (!neighborsBySide[side].isEdgeCell && !neighborsBySide[side].isEntryCell)
+                    {
+                        neighborSocketsBySide[side] = (int)TileSocketConstants.InnerCell;
+                    }
+                    else
+                    {
+                        // If neighbor has no tile set -1
+                        if (neighborsBySide[side].currentTile == null)
+                        {
+                            neighborSocketsBySide[side] = neighborsBySide[side].isEntryCell ? (int)TileSocketConstants.Entrance : (int)TileSocketConstants.WallPart;
+                        }
+                        else
+                        {
+                            int neighborRelativeSide = GetNeighborsRelativeSide((HexagonSides)side);
+                            int facingSocket = neighborsBySide[side].currentTile.GetRotatedSideSocketId((HexagonSides)neighborRelativeSide, neighborsBySide[side].currentRotation);
+                            neighborSocketsBySide[side] = facingSocket;
+                        }
+                    }
                 }
                 else
                 {
-                    int neighborRelativeSide = GetNeighborsRelativeSide((HexagonSides)side);
-                    int facingSocket = neighborsBySide[side].currentTile.GetRotatedSideSocketId((HexagonSides)neighborRelativeSide, neighborsBySide[side].currentRotation);
-                    neighborSocketsBySide[side] = facingSocket;
+                    // If neighbor has no tile set -1
+                    if (neighborsBySide[side].currentTile == null)
+                    {
+                        neighborSocketsBySide[side] = -1;
+                    }
+                    else
+                    {
+                        int neighborRelativeSide = GetNeighborsRelativeSide((HexagonSides)side);
+                        int facingSocket = neighborsBySide[side].currentTile.GetRotatedSideSocketId((HexagonSides)neighborRelativeSide, neighborsBySide[side].currentRotation);
+                        neighborSocketsBySide[side] = facingSocket;
+                    }
                 }
+
+
             }
         }
         return neighborSocketsBySide;
@@ -64,6 +106,11 @@ public class HexagonCell : MonoBehaviour
 
     [Header("WFC Params")]
     public float highestProbability;
+    public bool isEntryCell { private set; get; }
+    public void SetEntryCell(bool enable)
+    {
+        isEntryCell = enable;
+    }
     public bool isEdgeCell { private set; get; }
     public void SetEdgeCell(bool enable)
     {
@@ -79,7 +126,22 @@ public class HexagonCell : MonoBehaviour
     {
         clusterId = _id;
     }
-
+    [SerializeField] private int _numberofNeighborsInCluster = 0;
+    public int GetNumberofNeighborsInCluster() => _numberofNeighborsInCluster;
+    public void SetNumberofNeighborsInCluster(int num)
+    {
+        _numberofNeighborsInCluster = num;
+    }
+    public int GetNumberOfNeighborsUnclustered()
+    {
+        if (_neighbors.Count == 0) return 0;
+        int num = 0;
+        foreach (HexagonCell item in _neighbors)
+        {
+            if (item.isClusterPrototype == false) num++;
+        }
+        return num;
+    }
 
     [Header("Tile")]
     [SerializeField] private HexagonTile currentTile;
@@ -126,7 +188,7 @@ public class HexagonCell : MonoBehaviour
             _currentSize = size;
             RecalculateEdgePoints();
 
-            SetNeighborsBySide();
+            // SetNeighborsBySide(1f * (size / 12f));
 
         }
 
@@ -216,6 +278,10 @@ public class HexagonCell : MonoBehaviour
     public void SetNeighborsBySide(float offset = 0.33f)
     {
         HexagonCell[] _neighborsBySide = new HexagonCell[6];
+        HashSet<int> added = new HashSet<int>();
+
+        // Debug.Log("Cell id: " + id + ", SetNeighborsBySide: ");
+        RecalculateEdgePoints();
 
         for (int side = 0; side < 6; side++)
         {
@@ -223,17 +289,24 @@ public class HexagonCell : MonoBehaviour
 
             for (int neighbor = 0; neighbor < _neighbors.Count; neighbor++)
             {
+                if (added.Contains(_neighbors[neighbor].id)) continue;
+
+                _neighbors[neighbor].RecalculateEdgePoints();
+
                 for (int neighborSide = 0; neighborSide < 6; neighborSide++)
                 {
                     Vector3 neighborSidePoint = _neighbors[neighbor]._sides[neighborSide];
 
                     // float dist = Vector2.Distance(new Vector2(sidePoint.x, sidePoint.z), new Vector2(neighborSidePoint.x, neighborSidePoint.z));
-                    // Debug.Log("dist: " + dist);
+                    // Debug.Log("offset: " + offset + ", dist: " + dist);
+                    // Debug.Log("sidePoint.x: " + sidePoint.x + ", neighborSidePoint.x: " + neighborSidePoint.x);
 
-                    if (Vector2.Distance(new Vector2(sidePoint.x, sidePoint.z),
-                    new Vector2(neighborSidePoint.x, neighborSidePoint.z)) <= offset)
+                    if (Vector2.Distance(new Vector2(sidePoint.x, sidePoint.z), new Vector2(neighborSidePoint.x, neighborSidePoint.z)) <= offset)
                     {
+
                         _neighborsBySide[side] = _neighbors[neighbor];
+                        added.Add(_neighbors[neighbor].id);
+                        break;
                     }
                 }
             }
@@ -347,7 +420,8 @@ public class HexagonCell : MonoBehaviour
     //         cell.neighborsBySide = newNeighborsBySide;
     //     }
     // }
-    public static void PopulateNeighborsFromCornerPoints(List<HexagonCell> cells, float offset = 0.3f)
+
+    public static void PopulateNeighborsFromCornerPoints(List<HexagonCell> cells, float offset = 0.33f)
     {
         foreach (HexagonCell cell in cells)
         {
@@ -364,7 +438,8 @@ public class HexagonCell : MonoBehaviour
                     //loop through the _cornerPoints of the neighboring tile
                     for (int k = 0; k < cells[j]._cornerPoints.Length; k++)
                     {
-                        if (Vector3.Distance(cells[j]._cornerPoints[k], cell._cornerPoints[i]) <= offset)
+                        // if (Vector3.Distance(cells[j]._cornerPoints[k], cell._cornerPoints[i]) <= offset)
+                        if (Vector2.Distance(new Vector2(cells[j]._cornerPoints[k].x, cells[j]._cornerPoints[k].z), new Vector2(cell._cornerPoints[i].x, cell._cornerPoints[i].z)) <= offset)
                         {
                             if (cell._neighbors.Contains(cells[j]) == false)
                             {
@@ -375,7 +450,23 @@ public class HexagonCell : MonoBehaviour
                     }
                 }
             }
-            cell.SetNeighborsBySide();
+            cell.SetNeighborsBySide(offset);
         }
+    }
+    public static HexagonCell GetClosestCellByCenterPoint(List<HexagonCell> cells, Vector3 position)
+    {
+        HexagonCell nearestCellToPos = cells[0];
+        float nearestDist = float.MaxValue;
+
+        for (int i = 0; i < cells.Count; i++)
+        {
+            float dist = Vector2.Distance(new Vector2(position.x, position.y), new Vector2(cells[i].transform.position.x, cells[i].transform.position.z));
+            if (dist < nearestDist)
+            {
+                nearestDist = dist;
+                nearestCellToPos = cells[i];
+            }
+        }
+        return nearestCellToPos;
     }
 }

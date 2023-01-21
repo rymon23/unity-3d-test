@@ -160,6 +160,9 @@ public class VerticalWFC : MonoBehaviour
     // Instantiate the tiles in the appropriate positions to create the final pattern
     void InstantiateTiles()
     {
+        Transform folder = new GameObject("Vertical Tiles").transform;
+        folder.transform.SetParent(gameObject.transform);
+
         for (int i = 0; i < cells.Count; i++)
         {
             VerticalTile prefab = cells[i].currentTile;
@@ -172,6 +175,7 @@ public class VerticalWFC : MonoBehaviour
             VerticalTile activeTile = Instantiate(prefab, position, Quaternion.identity);
             // activeTile.gameObject.transform.rotation = Quaternion.Euler(0f, rotationValues[rotation], 0f);
             activeTiles.Add(activeTile);
+            activeTile.transform.SetParent(folder);
         }
     }
 

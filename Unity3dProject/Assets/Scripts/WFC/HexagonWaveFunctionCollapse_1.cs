@@ -3,15 +3,27 @@ using System.Collections.Generic;
 using UnityEngine;
 using ProceduralBase;
 using System.Linq;
-
+public enum WFCCollapseOrder
+{
+    Default = 0, // Edges -> Center => th rest
+    Contract, // Start at the edges
+    Expand // Start at the center
+}
 public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
 {
+    [Header("Settings")]
+    [SerializeField] private WFCCollapseOrder collapseOrder = 0;
+    [SerializeField] private bool isWalledEdge;
+    [Header("Clusters")]
+    [Range(0.05f, 1f)][SerializeField] private float clusterChance = 0.5f;
+
     //Temp
     [SerializeField] private SubZone subZone;
-
+    [SerializeField] private ZoneCellManager zoneCellManager;
     [SerializeField] private TileSocketMatrixGenerator socketMatrixGenerator;
     [SerializeField] private TileDirectory tileDirectory;
     [SerializeField] private int outOfBoundsSlotId = 1; // Edge socket
+    [SerializeField] private int wallInnerSlotId = 10; // Edge socket
     [SerializeField] private List<GameObject> activeTiles;
     [SerializeField] private int matrixLength;
     private int numTiles; // Number of tile prefabs
@@ -21,10 +33,13 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
     [SerializeField] private List<HexagonTile> tilePrefabs;
     [SerializeField] private List<HexagonTile> tilePrefabs_edgable;
     [SerializeField] private List<HexagonTile> tilePrefabs_ClusterSet;
+    [SerializeField] private HexagonTile tilePrefabs_ClusterCenter;
     [SerializeField] private List<HexagonTileCluster> tilePrefabs_cluster;
     Dictionary<int, HexagonTile> tileLookupByid;
     Dictionary<int, HexagonTileCluster> tileClusterLookupByid;
     public List<HexagonCell> cells;
+    public List<HexagonCell> edgeCells;
+
     [SerializeField] private List<HexagonCellCluster> activeCellClusters;
     [SerializeField] private List<HexagonCellCluster> allCellClusters;
     [SerializeField] private int availableCellClusters = 0;
@@ -35,8 +50,7 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
 
     float[] rotationValues = { 0f, 60f, 120f, 180f, 240f, 300f };
 
-    [Header("Cluster Settings")]
-    [Range(0.05f, 1f)][SerializeField] private float clusterChance = 0.5f;
+
 
 
     void Start()
@@ -59,7 +73,16 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
 
         probabilityMatrix = new int[cells.Count, tilePrefabs.Count];
 
-        InitialTileAssignment();
+        if (isWalledEdge)
+        {
+            CollapseEdgeCells();
+
+            Debug.Log("Edge Cells Assigned");
+            // }
+            // else
+            // {
+            //     InitialTileAssignment();
+        }
 
         while (IsUnassignedCells())
         {
@@ -82,18 +105,33 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         return false;
     }
 
-    private void InitialTileAssignment()
+    // private void InitialTileAssignment()
+    // {
+    //     bool useCluster = allCellClusters.Count > 0 && (100 * clusterChance) >= (UnityEngine.Random.Range(0, 100));
+    //     HexagonCellCluster selected = useCluster ? SelectCellCluster() : null;
+    //     // Cluster assigned, end here
+    //     if (selected != null) return;
+
+    //     // Initialize the first tile
+    //     HexagonCell startCell = SelectRandomStartCell();
+    //     HexagonTile startTile = SelectRandomTile(true);
+
+    //     AssignTileToCell(startCell, startTile, 0);
+    // }
+
+    private void CollapseEdgeCells()
     {
-        bool useCluster = true;// allCellClusters.Count > 0 && (100 * clusterChance) >= (UnityEngine.Random.Range(0, 100));
-        HexagonCellCluster selected = useCluster ? SelectCellCluster() : null;
-        // Cluster assigned, end here
-        if (selected != null) return;
+        // Debug.Log("CollapseEdgeCells - startCell: " + edgeCells[0].id);
+        (HexagonTile startTile, List<int> startRotations) = SelectNextTile(edgeCells[0], tilePrefabs_edgable, false);
+        AssignTileToCell(edgeCells[0], startTile, startRotations);
 
-        // Initialize the first tile
-        HexagonCell startCell = SelectRandomStartCell();
-        HexagonTile startTile = SelectRandomTile(true);
+        for (int i = 0; i < edgeCells.Count; i++)
+        {
+            HexagonCell nextCell = edgeCells[i];
 
-        AssignTileToCell(startCell, startTile, 0);
+            (HexagonTile nextTile, List<int> rotations) = SelectNextTile(nextCell, tilePrefabs_edgable, false);
+            AssignTileToCell(nextCell, nextTile, rotations);
+        }
     }
 
     private void SetIgnoreCellCluster(HexagonCellCluster cluster)
@@ -116,8 +154,10 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
 
             if (allCellClusters[i].selectIgnore) continue;
 
-            if (allCellClusters[i].cells.Count == 0 || allCellClusters[i].AreAnyNeighborCellsAssigned())
+            if (allCellClusters[i].cells.Count == 0 || allCellClusters[i].AreAnyPotentialCellsAssigned() || allCellClusters[i].AreAnyInnerNeighborCellsAssigned())
             {
+                Debug.Log("SelectCellCluster 0: id: " + allCellClusters[i].id);
+
                 SetIgnoreCellCluster(allCellClusters[i]);
             }
             else
@@ -157,10 +197,39 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
     private List<GameObject> SelectClusterTileSet(HexagonCellCluster cluster)
     {
         List<GameObject> tileClusterSet = new List<GameObject>();
+
+        // Assign the center cell first if 7 cells
+        if (cluster.cells.Count == 7)
+        {
+            cluster.EvaluateParentCell();
+
+            HexagonCell startCell = cluster.GetParentCell();
+            HexagonTile startTile = tilePrefabs_ClusterCenter;
+            AssignTileToCell(startCell, startTile, 0);
+            tileClusterSet.Add(startTile.gameObject);
+
+            Debug.Log("startTile: " + startTile.name + ", startCell: " + startCell.id);
+        }
+
         foreach (HexagonCell cell in cluster.cells)
         {
-            (HexagonTile nextTile, List<int> rotations) = SelectNextTile(cell, tilePrefabs_ClusterSet);
-            AssignTileToCell(cell, nextTile, rotations);
+            if (cell.IsAssigned()) continue;
+
+            // Debug.Log("SelectClusterTileSet cell: " + cell.id);
+
+            // (HexagonTile nextTile, List<int> rotations) = SelectNextTile(cell, tilePrefabs_ClusterSet, true);
+
+            // if (nextTile == null)
+            // {
+            //     Debug.LogError("No tile found for cluster cell: " + cell.id + ", Cluster: " + cluster.id + ", cells: " + cluster.cells.Count + ", tilesFilled: " + tileClusterSet.Count);
+            //     for (int i = 0; i < tileClusterSet.Count; i++)
+            //     {
+            //         Debug.LogError("tile: " + i + ", " + tileClusterSet[i].gameObject.name);
+            //     }
+            // }
+            //AssignTileToCell(cell, nextTile, rotations);
+            HexagonTile nextTile = tilePrefabs_ClusterCenter;
+            AssignTileToCell(cell, nextTile, 0);
             tileClusterSet.Add(nextTile.gameObject);
         }
         return tileClusterSet;
@@ -185,6 +254,7 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         if (tileCluster != null) return tileCluster.transform.gameObject;
         return null;
     }
+
     private bool IsTileClusterCompatible(HexagonCellCluster cluster, HexagonTileCluster tileCluster)
     {
         if (cluster == null || tileCluster == null) return false;
@@ -200,7 +270,6 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         if (tileCluster.GetCellCount() > cluster.cells.Count) return false;
         return true;
     }
-
 
     private void AssignTilesToCluster(HexagonCellCluster cluster, List<GameObject> tileClusterSet)
     {
@@ -222,7 +291,8 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         // Select Random Edge Cell
         if (edgeTile && totalEdgeCells > 0 && tilePrefabs_edgable.Count > 0)
         {
-            return tilePrefabs_edgable[UnityEngine.Random.Range(0, tilePrefabs_edgable.Count)];
+            return tilePrefabs_edgable[0];
+            // return tilePrefabs_edgable[UnityEngine.Random.Range(0, tilePrefabs_edgable.Count)];
         }
         return tilePrefabs[UnityEngine.Random.Range(0, tilePrefabs.Count)];
     }
@@ -240,16 +310,25 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
     private void SelectNext()
     {
         bool useCluster = availableCellClusters > 0 && (100 * clusterChance) >= (UnityEngine.Random.Range(0, 100));
+        if (useCluster) Debug.Log("useCluster");
+
         HexagonCellCluster selected = useCluster ? SelectCellCluster() : null;
         // Cluster assigned, end here
         if (selected != null) return;
 
         HexagonCell nextCell = SelectNextCell();
 
-        (HexagonTile nextTile, List<int> rotations) = SelectNextTile(nextCell, tilePrefabs);
+        (HexagonTile nextTile, List<int> rotations) = SelectNextTile(nextCell, tilePrefabs, false);
 
-        // Debug.Log("1 nextTile: " + nextTile);
-        if (nextTile == null) return;
+        if (nextTile == null)
+        {
+            Debug.LogError("No tile found for cell: " + nextCell.id);
+
+            for (int i = 0; i < nextCell._neighbors.Count; i++)
+            {
+                Debug.LogError("neighbor: " + nextCell._neighbors[i].id + ",");
+            }
+        }
 
         // Assign tile to the next cell
         AssignTileToCell(nextCell, nextTile, rotations);
@@ -274,7 +353,7 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         return nextCell;
     }
 
-    private (HexagonTile, List<int>) SelectNextTile(HexagonCell cell, List<HexagonTile> prefabsList)
+    private (HexagonTile, List<int>) SelectNextTile(HexagonCell cell, List<HexagonTile> prefabsList, bool IsClusterCell)
     {
         // Create a list of compatible tiles and their rotations
         List<(HexagonTile, List<int>)> compatibleTilesAndRotations = new List<(HexagonTile, List<int>)>();
@@ -282,6 +361,8 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         // Iterate through all tiles
         for (int i = 0; i < prefabsList.Count; i++)
         {
+            if (IsClusterCell && prefabsList[i].GetInnerClusterSocketCount() != cell.GetNumberofNeighborsInCluster()) continue;
+
             HexagonTile currentTile = prefabsList[i];
 
             List<int> compatibleTileRotations = GetCompatibleTileRotations(cell, currentTile);
@@ -305,11 +386,15 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
 
     private List<int> GetCompatibleTileRotations(HexagonCell currentCell, HexagonTile currentTile)
     {
-        int[] neighborTileSockets = currentCell.GetNeighborTileSockets();
+        int[] neighborTileSockets = currentCell.GetNeighborTileSockets(isWalledEdge);
 
-        // for (int i = 0; i < neighborTileSockets.Length; i++)
+        // if (currentCell.isEdgeCell)
         // {
-        //     Debug.Log("Cell: " + currentCell.id + ", neighborTileSocket: side: " + (HexagonSides)i + ", socket: " + neighborTileSockets[i]);
+
+        //     for (int i = 0; i < neighborTileSockets.Length; i++)
+        //     {
+        //         Debug.Log("EdgeCell: " + currentCell.id + ", neighborTileSocket: side: " + (HexagonSides)i + ", socket: " + neighborTileSockets[i]);
+        //     }
         // }
         List<int> compatibleRotations = new List<int>();
 
@@ -339,10 +424,6 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         Debug.Log("AreTilesCompatible - tile: " + tile.id);
         if (tile == null) return false;
 
-
-
-
-
         // Check neighbors for compatibility
         for (int neighborSideIndex = 0; neighborSideIndex < 6; neighborSideIndex++)
         {
@@ -353,7 +434,18 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
             // Handle Edge Cells
             if (neighbor == null || current.isEdgeCell)
             {
-                int rotatedSideSocket = tile.GetRotatedSideSocketId((HexagonSides)neighborSideIndex, rotation);
+                int rotatedSideSocket;
+
+                // if using walled edges, treat non edge cells like Wall Inner sockets
+                if (isWalledEdge && !neighbor.isEdgeCell)
+                {
+                    rotatedSideSocket = wallInnerSlotId;
+                }
+                else
+                {
+                    rotatedSideSocket = tile.GetRotatedSideSocketId((HexagonSides)neighborSideIndex, rotation);
+                }
+
                 Debug.Log("Edge Cell: " + tile.id + ", rotatedSideSocket: " + rotatedSideSocket);
 
                 if (!compatibilityMatrix[rotatedSideSocket, outOfBoundsSlotId])
@@ -540,6 +632,10 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
     // Instantiate the tiles in the appropriate positions to create the final pattern
     void InstantiateTiles()
     {
+
+        Transform folder = new GameObject("Tiles").transform;
+        folder.transform.SetParent(gameObject.transform);
+
         // Instantiate clusters first
         for (int i = 0; i < activeCellClusters.Count; i++)
         {
@@ -582,6 +678,27 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
             // Debug.Log("offset.x: " + offset.x + ", offset.z: " + offset.z);
 
             activeTiles.Add(activeTile);
+
+            activeTile.transform.SetParent(folder);
+        }
+
+        for (int i = 0; i < edgeCells.Count; i++)
+        {
+            // Skip cluster assigned cells
+            // if (cells[i].IsInCluster()) continue;
+
+            HexagonTile prefab = edgeCells[i].GetTile();
+            int rotation = edgeCells[i].currentRotation;
+
+            Vector3 position = edgeCells[i].transform.position;
+            position.y += 0.2f;
+
+            GameObject activeTile = Instantiate(prefab.gameObject, position, Quaternion.identity);
+            activeTile.gameObject.transform.rotation = Quaternion.Euler(0f, rotationValues[rotation], 0f);
+            activeTiles.Add(activeTile);
+
+            activeTile.transform.SetParent(folder);
+
         }
 
         for (int i = 0; i < cells.Count; i++)
@@ -598,6 +715,8 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
             GameObject activeTile = Instantiate(prefab.gameObject, position, Quaternion.identity);
             activeTile.gameObject.transform.rotation = Quaternion.Euler(0f, rotationValues[rotation], 0f);
             activeTiles.Add(activeTile);
+            activeTile.transform.SetParent(folder);
+
         }
     }
 
@@ -640,33 +759,46 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         tilePrefabs = new List<HexagonTile>();
         tilePrefabs.AddRange(_tilePrefabs.Except(tilePrefabs_ClusterSet));
 
+
+        // tilePrefabs_ClusterCenter = tilePrefabs_ClusterSet.Find(x => x.isClusterCenterTile);
+        tilePrefabs_ClusterSet = tilePrefabs_ClusterSet.FindAll(x => x.isClusterCenterTile == false);
+
+
         foreach (HexagonTile prefab in tilePrefabs)
         {
             int id = prefab.id;
         }
 
+        tilePrefabs_edgable = tilePrefabs.FindAll(x => x.isEdgeable).ToList();
+
+        List<HexagonTile> innerTilePrefabs = new List<HexagonTile>();
+
+        innerTilePrefabs.AddRange(tilePrefabs.Except(tilePrefabs.FindAll(x => x.IsExteriorWall())));
+
+        tilePrefabs = innerTilePrefabs;
+
         ShuffleTiles(tilePrefabs);
         ShuffleTiles(tilePrefabs_cluster);
-
-        tilePrefabs_edgable = tilePrefabs.FindAll(x => x.isEdgeable).ToList();
 
         clusterTransforms = new List<Transform>();
 
     }
     private void EvaluateCells()
     {
-        // Place edgeCells first
-        List<HexagonCell> edgeCells = HexagonCell.GetEdgeCells(cells);
+        // Place edgeCells first 
+        edgeCells = HexagonCell.GetEdgeCells(cells);
         totalEdgeCells = edgeCells.Count;
 
-        allCellClusters = HexagonCellCluster.GetHexagonCellClusters(cells);
+        allCellClusters = HexagonCellCluster.GetHexagonCellClusters(cells, transform.position, collapseOrder, isWalledEdge);
         availableCellClusters = allCellClusters.Count;
 
         // Temp
         subZone.cellClusters = allCellClusters;
 
         List<HexagonCell> _processedCells = new List<HexagonCell>();
-        _processedCells.AddRange(edgeCells);
+
+        if (isWalledEdge == false) _processedCells.AddRange(edgeCells);
+
         _processedCells.AddRange(cells.Except(edgeCells));
 
         cells = _processedCells;
@@ -700,15 +832,10 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
     //     matrixLength = socketMatrixGenerator.matrix.Length;
     // }
 
-
-    // private void OnValidate()
-    // {
-    //     EvaluateTiles();
-    // }
-
     private void Awake()
     {
         subZone = GetComponent<SubZone>();
+        zoneCellManager = GetComponent<ZoneCellManager>();
 
         UpdateCompatibilityMatrix();
 

@@ -4,6 +4,8 @@ using ProceduralBase;
 using UnityEditor;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+
 public enum TileCategory
 {
     Unset = 0,
@@ -52,18 +54,29 @@ public class HexagonTile : MonoBehaviour
     public TileCategory GetTileCategory() => _tileCategory;
     [SerializeField] private TileType _tileType;
     public TileType GetTileType() => _tileType;
-
+    public bool IsExteriorWall() => _tileCategory == TileCategory.Wall && (_tileType == TileType.ExteriorWallLarge || _tileType == TileType.ExteriorWallSmall);
 
     [Header("Tile Compatibility / Probability")]
     public bool isInClusterSet; // Is part of a set of tiles that make a cluster
+    public bool isClusterCenterTile; // Is the center part of a set of tiles that make a cluster
     public bool isEdgeable; // can be placed on the edge / border or the grid
     public bool isFragment; // Is incomplete by itself, needs neighbor tiles like itself
     [Range(0.05f, 1f)] public float probabilityWeight = 0.3f;
 
     [Header("Tile Socket Configuration")]
     [SerializeField] private TileSocketDirectory tileSocketDirectory;
+    [SerializeField] private TileLabelGroup tileLabelGroup;
     [SerializeField] public int[] sideSocketIds = new int[6];
     public int GetSideSocketId(HexagonSides side) => sideSocketIds[(int)side];
+    public int GetInnerClusterSocketCount()
+    {
+        int found = 0;
+        foreach (int socket in sideSocketIds)
+        {
+            if (socket == (int)TileSocketConstants.InnerCuster) found++;
+        }
+        return found;
+    }
     [SerializeField] private float sideDisplayOffsetY = 6f;
 
     private Transform center;
@@ -71,18 +84,6 @@ public class HexagonTile : MonoBehaviour
     [SerializeField] private Vector3[] _sides;
 
 
-    // [SerializeField] private HexagonSideEntry[] sides = new HexagonSideEntry[6];
-    // private void UpdateHexagonSideEntries()
-    // {
-    //     string[] sideNames = Enum.GetNames(typeof(HexagonSides));
-
-    //     for (int i = 0; i < 6; i++)
-    //     {
-    //         sides[i].name = sideNames[i];
-    //         sides[i].socketId = sideSocketIds[i];
-    //         sides[i].socketName = tileSocketDirectory.sockets[sideSocketIds[i]].name;
-    //     }
-    // }
 
 
     public GameObject[] socketTextDisplay;
@@ -158,6 +159,7 @@ public class HexagonTile : MonoBehaviour
         center = transform;
         meshFilter = GetComponent<MeshFilter>();
         meshRenderer = GetComponent<MeshRenderer>();
+
         RecalculateEdgePoints();
     }
 
@@ -170,6 +172,9 @@ public class HexagonTile : MonoBehaviour
     {
         center = transform;
 
+        if (!tileLabelGroup) tileLabelGroup = GetComponentInChildren<TileLabelGroup>();
+
+
         // RotateTransform(currentRotation, transform);
         // UpdateHexagonSideEntries();
 
@@ -181,9 +186,10 @@ public class HexagonTile : MonoBehaviour
             EvaluateRotatedSideSockets();
         }
 
-
-
         if (!enableEditMode) return;
+
+        if (tileLabelGroup != null) tileLabelGroup.SetLabelsEnabled(_showSocketLabels != showSocketLabels);
+
 
         EvaluateSocketLabels(_showSocketLabels != showSocketLabels);
         EvaluateTextDisplay();
@@ -292,6 +298,8 @@ public class HexagonTile : MonoBehaviour
 
         // if (!showSocketColorMap) return;
 
+        if (socketTextDisplay == null || socketTextDisplay.Length == 0) return;
+
         for (int i = 0; i < _sides.Length; i++)
         {
             Gizmos.color = tileSocketDirectory ? tileSocketDirectory.sockets[sideSocketIds[i]].color : Color.white;
@@ -348,6 +356,8 @@ public class HexagonTile : MonoBehaviour
 [System.Serializable]
 public struct HexagonTilePrototype
 {
+    public string id;
+    public int size;
     public Vector3 center;
     public Vector3[] cornerPoints;
 }

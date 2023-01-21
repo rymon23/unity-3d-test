@@ -5,11 +5,12 @@ namespace ProceduralBase
 {
     public class SubZone : MonoBehaviour
     {
+
+        [SerializeField] private ZoneCellManager zoneCellManager;
         [SerializeField] private Location _locationParent;
-        [Range(24f, 128f)][SerializeField] private float radius = 102f;
+        [Range(24, 256)][SerializeField] private int radius = 102;
         [SerializeField] private int hexagonSize = 12;
         [SerializeField] private List<int> neighbors;
-        // [SerializeField] private List<HexagonTile> tiles;
         [SerializeField] private Vector3[] borderCorners;
         [SerializeField] private Vector3[] zoneConnectors;
 
@@ -23,12 +24,18 @@ namespace ProceduralBase
         [Header("Debug Settings")]
         [SerializeField] private bool showBounds;
         [SerializeField] private bool showTileGrid;
+        [SerializeField] private bool showEdgeCells;
+        [SerializeField] private bool showCellClusters;
+        [Range(-1, 128)][SerializeField] private int highlightCellCluster = 0;
         [SerializeField] private bool resetHexagonTilePrototypes;
 
         [SerializeField] private bool generateHexagonTileCells;
-
+        [SerializeField] private bool generateHexagonTileCellClusters;
+        [SerializeField] private bool generateModelingPlatforms;
         List<HexagonTilePrototype> hexagonTilePrototypes;
         [SerializeField] private List<HexagonCell> hexagonTileCells;
+        [SerializeField] private List<HexagonCell> edgeCells;
+        public List<HexagonCellCluster> cellClusters;
 
         public void Debug_ShowBounds(bool enable)
         {
@@ -53,6 +60,7 @@ namespace ProceduralBase
 
         [Header("Prefabs")]
         [SerializeField] private GameObject HexagonTileCell_prefab;
+        [SerializeField] private GameObject HexagonTilePlatformModel_prefab;
 
         [Header("WFC")]
         [SerializeField] private HexagonWaveFunctionCollapse_1 waveFunctionCollapse;
@@ -70,11 +78,18 @@ namespace ProceduralBase
 
         private void Awake()
         {
+            zoneCellManager = GetComponent<ZoneCellManager>();
             waveFunctionCollapse = GetComponent<HexagonWaveFunctionCollapse_1>();
+            waveFunctionCollapse.cells = hexagonTileCells;
         }
 
         private void OnValidate()
         {
+            if (zoneCellManager == null)
+            {
+                zoneCellManager = GetComponent<ZoneCellManager>();
+            }
+
             if (waveFunctionCollapse == null)
             {
                 waveFunctionCollapse = GetComponent<HexagonWaveFunctionCollapse_1>();
@@ -94,11 +109,50 @@ namespace ProceduralBase
                 {
                     generateHexagonTileCells = false;
 
-                    GenerateHexagonTileCellObjects(hexagonTilePrototypes);
-
-                    HexagonCell.PopulateNeighborsFromCornerPoints(hexagonTileCells, 0.33f);
+                    GenerateHexagonCellObjects(hexagonTilePrototypes);
+                    HexagonCell.PopulateNeighborsFromCornerPoints(hexagonTileCells, 0.33f * (hexagonSize / 12f));
 
                     waveFunctionCollapse.cells = hexagonTileCells;
+                }
+
+                if (generateHexagonTileCellClusters && hexagonTileCells.Count > 1)
+                {
+                    generateHexagonTileCellClusters = false;
+
+                    cellClusters = HexagonCellCluster.GetHexagonCellClusters(hexagonTileCells,
+                                                                        transform.position,
+                                                                        WFCCollapseOrder.Default,
+                                                                        true);
+                }
+
+                if (generateModelingPlatforms && hasTilePrototypes)
+                {
+                    generateModelingPlatforms = false;
+                    GenerateModelingPlatforms(hexagonTilePrototypes);
+                }
+
+                if (showEdgeCells)
+                {
+                    edgeCells = HexagonCell.GetEdgeCells(hexagonTileCells);
+
+                    if (edgeCells.Count == 0)
+                    {
+                        showEdgeCells = false;
+                    }
+                }
+
+                if (showCellClusters)
+                {
+                    if (cellClusters == null)
+                    {
+                        showCellClusters = false;
+                        highlightCellCluster = 0;
+                    }
+                    else if (cellClusters.Count == 0)
+                    {
+                        showCellClusters = false;
+                        highlightCellCluster = 0;
+                    }
                 }
             }
         }
@@ -135,12 +189,75 @@ namespace ProceduralBase
                 }
             }
 
+            if (showEdgeCells)
+            {
+                Gizmos.color = Color.red;
+
+                foreach (HexagonCell cell in edgeCells)
+                {
+                    Vector3 pointPos = cell.transform.position;
+                    Gizmos.DrawSphere(pointPos, 3f);
+                }
+            }
+
+            if (showCellClusters)
+            {
+                if (highlightCellCluster > cellClusters.Count - 1)
+                {
+                    highlightCellCluster = cellClusters.Count - 1;
+                }
+
+                foreach (HexagonCellCluster cluster in cellClusters)
+                {
+                    Vector3 pointPos = cluster.center;
+                    Vector3 foundationPos = cluster.GetFoundationCenter();
+
+                    if (cluster.id == highlightCellCluster)
+                    {
+                        Gizmos.color = Color.green;
+                        Gizmos.DrawSphere(pointPos, 9f);
+                    }
+                    else
+                    {
+                        Gizmos.color = Color.red;
+                        Gizmos.DrawSphere(pointPos, 6f);
+                        if (cluster.cells.Count > 5)
+                        {
+                            Gizmos.DrawWireSphere(pointPos, 24);
+                        }
+                    }
+
+                    Gizmos.color = Color.black;
+                    Gizmos.DrawSphere(foundationPos, 3f);
+
+                    Gizmos.color = Color.blue;
+                    foreach (HexagonCell cell in cluster.cells)
+                    {
+                        if (cluster.id == highlightCellCluster)
+                        {
+                            Gizmos.color = Color.green;
+                            Gizmos.DrawSphere(cell.transform.position, 6f);
+                        }
+                        else
+                        {
+                            // Vector3 direction = (cell.transform.position - pointPos);
+                            // Gizmos.DrawRay(cell.transform.position - pointPos, direction);
+                            // Gizmos.DrawSphere(cell.transform.position, 2f);
+                        }
+                    }
+                }
+            }
+
         }
 
-        private void GenerateHexagonTileCellObjects(List<HexagonTilePrototype> hexagonTilePrototypes)
+        private void GenerateHexagonCellObjects(List<HexagonTilePrototype> hexagonTilePrototypes)
         {
             List<HexagonCell> newHexagonTileCells = new List<HexagonCell>();
             int cellId = 0;
+
+            Transform folder = new GameObject("Cells").transform;
+            folder.transform.SetParent(gameObject.transform);
+
             foreach (HexagonTilePrototype tilePrototype in hexagonTilePrototypes)
             {
                 Vector3 pointPos = tilePrototype.center;
@@ -150,14 +267,26 @@ namespace ProceduralBase
                 hexagonTile._cornerPoints = tilePrototype.cornerPoints;
                 hexagonTile.size = hexagonSize;
                 hexagonTile.id = cellId;
+                hexagonTile.name = "HexagonCell_" + cellId;
 
                 newHexagonTileCells.Add(hexagonTile);
 
-                hexagonTile.transform.SetParent(gameObject.transform);
+                hexagonTile.transform.SetParent(folder);
 
                 cellId++;
             }
             hexagonTileCells = newHexagonTileCells;
+        }
+
+        private void GenerateModelingPlatforms(List<HexagonTilePrototype> hexagonTilePrototypes)
+        {
+            foreach (HexagonTilePrototype tilePrototype in hexagonTilePrototypes)
+            {
+                Vector3 pointPos = tilePrototype.center;
+                pointPos.y += 0.2f;
+
+                GameObject newModel = Instantiate(HexagonTilePlatformModel_prefab, pointPos, Quaternion.identity);
+            }
         }
     }
 

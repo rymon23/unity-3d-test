@@ -2,6 +2,19 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+public enum TileSocketConstants
+{
+    Any = 0,
+    Edge = 1,
+    Entrance = 2,
+    OuterWall = 3,
+    InnerWall = 4,
+    WallPart = 5,
+    InnerCell = 6, //Generic for any nonEdge cell
+    InnerCuster = 7 //Generic for any nonEdge cell
+}
+
+
 [CreateAssetMenu(fileName = "New Socket Directory", menuName = "Socket Directory")]
 public class TileSocketDirectory : ScriptableObject
 {
@@ -38,12 +51,11 @@ public class TileSocketDirectory : ScriptableObject
 
     public SocketEntry[] sockets;
     private int socketsLength = 0;
-
+    [SerializeField] private bool revaluate = true;
     [SerializeField] private bool defaultCompatibility = true;
     [SerializeField] private List<SocketCompatibility> compatibilityTable;
     public bool[,] matrix;
 
-    [SerializeField] private bool revaluate = true;
 
 
     // [System.Serializable]
