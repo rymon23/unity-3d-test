@@ -231,7 +231,7 @@ public class HexagonCellCluster
             allCells.AddRange(cells.Except(allCells));
         }
 
-        HashSet<int> addedToCluster = new HashSet<int>();
+        HashSet<string> addedToCluster = new HashSet<string>();
         List<HexagonCellCluster> clusters = new List<HexagonCellCluster>();
         int clusterId = -1;
 
@@ -344,6 +344,67 @@ public class HexagonCellCluster
         return clusters.OrderByDescending(x => x.cells.Count).ToList();
     }
 
+
+    public static List<HexagonCell> GetCellsFromConsecutiveNeighboringClusters(List<HexagonCellCluster> cellClusters, float maxPercentOfCells)
+    {
+        List<HexagonCell> result = new List<HexagonCell>();
+        int totalCells = cellClusters.Sum(cluster => cluster.cells.Count);
+        int maxCells = (int)(totalCells * maxPercentOfCells);
+
+        // Create a list of visited clusters
+        List<HexagonCellCluster> visitedClusters = new List<HexagonCellCluster>();
+
+        // Iterate through each cluster
+        foreach (HexagonCellCluster cluster in cellClusters)
+        {
+            // Skip visited clusters
+            if (visitedClusters.Contains(cluster))
+                continue;
+
+            // Create a queue of clusters to visit
+            Queue<HexagonCellCluster> clustersToVisit = new Queue<HexagonCellCluster>();
+            clustersToVisit.Enqueue(cluster);
+
+            // Add the current cluster to the visited clusters
+            visitedClusters.Add(cluster);
+
+            // Iterate through the clusters in the queue
+            while (clustersToVisit.Count > 0)
+            {
+                HexagonCellCluster currentCluster = clustersToVisit.Dequeue();
+
+                // Add the cells of the current cluster to the result
+                result.AddRange(currentCluster.cells);
+
+                // Check if adding the cells of the current cluster exceeds the maxCells
+                if (result.Count > maxCells)
+                    return result.Take(maxCells).ToList();
+
+                // Iterate through the cells of the current cluster
+                foreach (HexagonCell cell in currentCluster.cells)
+                {
+                    // Iterate through the neighbors of the current cell
+                    foreach (HexagonCell neighbor in cell._neighbors)
+                    {
+                        // Get the cluster of the neighbor
+                        HexagonCellCluster neighborCluster = cellClusters.Find(c => c.cells.Contains(neighbor));
+
+                        // Check if the cluster of the neighbor has not been visited yet
+                        if (!visitedClusters.Contains(neighborCluster))
+                        {
+                            // Add the cluster of the neighbor to the visited clusters
+                            visitedClusters.Add(neighborCluster);
+
+                            // Add the cluster of the neighbor to the queue
+                            clustersToVisit.Enqueue(neighborCluster);
+                        }
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
 
 
 

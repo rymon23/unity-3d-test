@@ -33,7 +33,7 @@ public enum TileType
     RoadLarge,
 }
 
-public enum HexagonSides
+public enum HexagonSide
 {
     Front = 0,
     FrontRight,
@@ -42,6 +42,34 @@ public enum HexagonSides
     BackLeft,
     FrontLeft,
 }
+
+public enum HexagonCorner
+{
+    FrontA = 0,
+    FrontB,
+    FrontRightA,
+    FrontRightB,
+    BackRightA,
+    BackRightB,
+
+    BackA,
+    BackB,
+    BackLeftA,
+    BackLeftB,
+    FrontLeftA,
+    FrontLeftB,
+}
+
+public enum HexagonSideEdge
+{
+    Bottom = 0,
+    Right,
+    Top,
+    Left,
+}
+
+
+
 
 [System.Serializable]
 public class HexagonTile : MonoBehaviour
@@ -55,35 +83,206 @@ public class HexagonTile : MonoBehaviour
     [SerializeField] private TileType _tileType;
     public TileType GetTileType() => _tileType;
     public bool IsExteriorWall() => _tileCategory == TileCategory.Wall && (_tileType == TileType.ExteriorWallLarge || _tileType == TileType.ExteriorWallSmall);
+    [Header("Layer Settings")]
+    public bool baseLayerOnly;
+    public bool isLayerConnector;
 
     [Header("Tile Compatibility / Probability")]
     public bool isInClusterSet; // Is part of a set of tiles that make a cluster
     public bool isClusterCenterTile; // Is the center part of a set of tiles that make a cluster
     public bool isEdgeable; // can be placed on the edge / border or the grid
+    public bool isEntrance;
+    public bool isPath;
+    public bool isLeveledTile;
+    public bool isLeveledRamp;
+    public bool isVerticalWFC;
     public bool isFragment; // Is incomplete by itself, needs neighbor tiles like itself
     [Range(0.05f, 1f)] public float probabilityWeight = 0.3f;
 
     [Header("Tile Socket Configuration")]
     [SerializeField] private TileSocketDirectory tileSocketDirectory;
     [SerializeField] private TileLabelGroup tileLabelGroup;
-    [SerializeField] public int[] sideSocketIds = new int[6];
-    public int GetSideSocketId(HexagonSides side) => sideSocketIds[(int)side];
-    public int GetInnerClusterSocketCount()
+    [Range(-10f, 0f)][SerializeField] private float bottomLabelYOffset = -3f;
+    [Range(0f, 10f)][SerializeField] private float topLabelYOffset = 4f;
+    [Range(0f, 10f)][SerializeField] private float labelXZOffset = 1f;
+    [Range(0f, 10f)][SerializeField] private float labelForwardOffset = 2f;
+
+    #region Tile Sockets
+    [Header("Tile Sockets")]
+    [SerializeField] private TileSocketPrimitive resetAllToSocket;
+    [SerializeField] private bool resetAllSockets;
+    [SerializeField] private SocketMirrorState useSocketMirroring = SocketMirrorState.Unset;
+
+    private int[] topCornerSocketIds = new int[12];
+    private int[] bottomCornerSocketIds = new int[12];
+
+    [Header("Bottom Sockets")]
+    [SerializeField] private TileSocketPrimitive bottomFrontA;
+    [SerializeField] private TileSocketPrimitive bottomFrontB;
+    [SerializeField] private TileSocketPrimitive bottomFrontRightA;
+    [SerializeField] private TileSocketPrimitive bottomFrontRightB;
+    [SerializeField] private TileSocketPrimitive bottomBackRightA;
+    [SerializeField] private TileSocketPrimitive bottomBackRightB;
+    [SerializeField] private TileSocketPrimitive bottomBackA;
+    [SerializeField] private TileSocketPrimitive bottomBackB;
+    [SerializeField] private TileSocketPrimitive bottomBackLeftA;
+    [SerializeField] private TileSocketPrimitive bottomBackLeftB;
+    [SerializeField] private TileSocketPrimitive bottomFrontLeftA;
+    [SerializeField] private TileSocketPrimitive bottomFrontLeftB;
+
+    [Header("Top Sockets")]
+    [SerializeField] private TileSocketPrimitive topFrontA;
+    [SerializeField] private TileSocketPrimitive topFrontB;
+    [SerializeField] private TileSocketPrimitive topFrontRightA;
+    [SerializeField] private TileSocketPrimitive topFrontRightB;
+    [SerializeField] private TileSocketPrimitive topBackRightA;
+    [SerializeField] private TileSocketPrimitive topBackRightB;
+    [SerializeField] private TileSocketPrimitive topBackA;
+    [SerializeField] private TileSocketPrimitive topBackB;
+    [SerializeField] private TileSocketPrimitive topBackLeftA;
+    [SerializeField] private TileSocketPrimitive topBackLeftB;
+    [SerializeField] private TileSocketPrimitive topFrontLeftA;
+    [SerializeField] private TileSocketPrimitive topFrontLeftB;
+    #endregion
+
+    private void UpdateAllSocketIDs()
     {
-        int found = 0;
-        foreach (int socket in sideSocketIds)
+        if (useSocketMirroring != SocketMirrorState.Unset)
         {
-            if (socket == (int)TileSocketConstants.InnerCuster) found++;
+            if (useSocketMirroring == SocketMirrorState.MirrorBottom)
+            {
+                topFrontA = bottomFrontA;
+                topFrontB = bottomFrontB;
+                topFrontRightA = bottomFrontRightA;
+                topFrontRightB = bottomFrontRightB;
+                topBackRightA = bottomBackRightA;
+                topBackRightB = bottomBackRightB;
+                topBackA = bottomBackA;
+                topBackB = bottomBackB;
+                topBackLeftA = bottomBackLeftA;
+                topBackLeftB = bottomBackLeftB;
+                topFrontLeftA = bottomFrontLeftA;
+                topFrontLeftB = bottomFrontLeftB;
+            }
+            else
+            {
+                bottomFrontA = topFrontA;
+                bottomFrontB = topFrontB;
+                bottomFrontRightA = topFrontRightA;
+                bottomFrontRightB = topFrontRightB;
+                bottomBackRightA = topBackRightA;
+                bottomBackRightB = topBackRightB;
+                bottomBackA = topBackA;
+                bottomBackB = topBackB;
+                bottomBackLeftA = topBackLeftA;
+                bottomBackLeftB = topBackLeftB;
+                bottomFrontLeftA = topFrontLeftA;
+                bottomFrontLeftB = topFrontLeftB;
+            }
         }
-        return found;
+
+        bottomCornerSocketIds[0] = (int)bottomFrontA;
+        bottomCornerSocketIds[1] = (int)bottomFrontB;
+        bottomCornerSocketIds[2] = (int)bottomFrontRightA;
+        bottomCornerSocketIds[3] = (int)bottomFrontRightB;
+        bottomCornerSocketIds[4] = (int)bottomBackRightA;
+        bottomCornerSocketIds[5] = (int)bottomBackRightB;
+        bottomCornerSocketIds[6] = (int)bottomBackA;
+        bottomCornerSocketIds[7] = (int)bottomBackB;
+        bottomCornerSocketIds[8] = (int)bottomBackLeftA;
+        bottomCornerSocketIds[9] = (int)bottomBackLeftB;
+        bottomCornerSocketIds[10] = (int)bottomFrontLeftA;
+        bottomCornerSocketIds[11] = (int)bottomFrontLeftB;
+
+        topCornerSocketIds[0] = (int)topFrontA;
+        topCornerSocketIds[1] = (int)topFrontB;
+        topCornerSocketIds[2] = (int)topFrontRightA;
+        topCornerSocketIds[3] = (int)topFrontRightB;
+        topCornerSocketIds[4] = (int)topBackRightA;
+        topCornerSocketIds[5] = (int)topBackRightB;
+        topCornerSocketIds[6] = (int)topBackA;
+        topCornerSocketIds[7] = (int)topBackB;
+        topCornerSocketIds[8] = (int)topBackLeftA;
+        topCornerSocketIds[9] = (int)topBackLeftB;
+        topCornerSocketIds[10] = (int)topFrontLeftA;
+        topCornerSocketIds[11] = (int)topFrontLeftB;
     }
-    [SerializeField] private float sideDisplayOffsetY = 6f;
+    // // TEMP 
+    // private void TransferAllSocketIDValues()
+    // {
+    //     bottomFrontA = (TileSocketPrimitive)bottomCornerSocketIds[0];
+    //     bottomFrontB = (TileSocketPrimitive)bottomCornerSocketIds[1];
+    //     bottomFrontRightA = (TileSocketPrimitive)bottomCornerSocketIds[2];
+    //     bottomFrontRightB = (TileSocketPrimitive)bottomCornerSocketIds[3];
+    //     bottomBackRightA = (TileSocketPrimitive)bottomCornerSocketIds[4];
+    //     bottomBackRightB = (TileSocketPrimitive)bottomCornerSocketIds[5];
+    //     bottomBackA = (TileSocketPrimitive)bottomCornerSocketIds[6];
+    //     bottomBackB = (TileSocketPrimitive)bottomCornerSocketIds[7];
+    //     bottomBackLeftA = (TileSocketPrimitive)bottomCornerSocketIds[8];
+    //     bottomBackLeftB = (TileSocketPrimitive)bottomCornerSocketIds[9];
+    //     bottomFrontLeftA = (TileSocketPrimitive)bottomCornerSocketIds[10];
+    //     bottomFrontLeftB = (TileSocketPrimitive)bottomCornerSocketIds[11];
+
+    //     topFrontA = (TileSocketPrimitive)topCornerSocketIds[0];
+    //     topFrontB = (TileSocketPrimitive)topCornerSocketIds[1];
+    //     topFrontRightA = (TileSocketPrimitive)topCornerSocketIds[2];
+    //     topFrontRightB = (TileSocketPrimitive)topCornerSocketIds[3];
+    //     topBackRightA = (TileSocketPrimitive)topCornerSocketIds[4];
+    //     topBackRightB = (TileSocketPrimitive)topCornerSocketIds[5];
+    //     topBackA = (TileSocketPrimitive)topCornerSocketIds[6];
+    //     topBackB = (TileSocketPrimitive)topCornerSocketIds[7];
+    //     topBackLeftA = (TileSocketPrimitive)topCornerSocketIds[8];
+    //     topBackLeftB = (TileSocketPrimitive)topCornerSocketIds[9];
+    //     topFrontLeftA = (TileSocketPrimitive)topCornerSocketIds[10];
+    //     topFrontLeftB = (TileSocketPrimitive)topCornerSocketIds[11];
+    // }
+
+    private void ResetAllSockets()
+    {
+        bottomFrontA = resetAllToSocket;
+        bottomFrontB = resetAllToSocket;
+        bottomFrontRightA = resetAllToSocket;
+        bottomFrontRightB = resetAllToSocket;
+        bottomBackRightA = resetAllToSocket;
+        bottomBackRightB = resetAllToSocket;
+        bottomBackA = resetAllToSocket;
+        bottomBackB = resetAllToSocket;
+        bottomBackLeftA = resetAllToSocket;
+        bottomBackLeftB = resetAllToSocket;
+        bottomFrontLeftA = resetAllToSocket;
+        bottomFrontLeftB = resetAllToSocket;
+        topFrontA = resetAllToSocket;
+        topFrontB = resetAllToSocket;
+        topFrontRightA = resetAllToSocket;
+        topFrontRightB = resetAllToSocket;
+        topBackRightA = resetAllToSocket;
+        topBackRightB = resetAllToSocket;
+        topBackA = resetAllToSocket;
+        topBackB = resetAllToSocket;
+        topBackLeftA = resetAllToSocket;
+        topBackLeftB = resetAllToSocket;
+        topFrontLeftA = resetAllToSocket;
+        topFrontLeftB = resetAllToSocket;
+    }
+
+
+    public int GetCornerSocketId(HexagonCorner corner, bool top) => top ? topCornerSocketIds[(int)corner] : bottomCornerSocketIds[(int)corner];
+    // public int GetInnerClusterSocketCount()
+    // {
+    //     int found = 0;
+    //     foreach (int socket in cornerSocketIds)
+    //     {
+    //         if (socket == (int)TileSocketConstants.InnerCuster) found++;
+    //     }
+    //     return found;
+    // }
 
     private Transform center;
     [SerializeField] private Vector3[] _corners;
     [SerializeField] private Vector3[] _sides;
 
 
+    [SerializeField] private HexagonSideEntry[] sideSockets;
 
 
     public GameObject[] socketTextDisplay;
@@ -100,52 +299,104 @@ public class HexagonTile : MonoBehaviour
     private Vector3 _currentCenterPosition;
     #endregion
 
-    public int[][] rotatedSideSocketIds { get; private set; }
-    public int GetRotatedSideSocketId(HexagonSides side, int rotation)
-    {
-        EvaluateRotatedSideSockets();
+    public int[][] rotatedTopCornerSockets { get; private set; }
+    public int[][] rotatedBottomCornerSockets { get; private set; }
 
-        Debug.Log("GetRotatedSideSocketId - rotation: " + rotation + ", side: " + side);
-        int val = rotatedSideSocketIds[rotation][(int)side];
-        Debug.Log("GetRotatedSideSocketId - val: " + val);
+    public int GetRotatedCornerSocketId(HexagonCorner corner, int rotation, bool top)
+    {
+        EvaluateRotatedCornerSockets();
+
+        Debug.Log("GetRotatedCornerSocketId - rotation: " + rotation + ", corner: " + corner + ", top: " + top);
+        int val = top ? rotatedTopCornerSockets[rotation][(int)corner] : rotatedBottomCornerSockets[rotation][(int)corner];
+        Debug.Log("GetRotatedCornerSocketId - val: " + val);
         return val;
     }
-    private void EvaluateRotatedSideSockets()
+
+    public int[] GetRotatedCornerSockets(bool top, int rotation)
     {
-        int[][] newRotatedSideSocketIds = new int[6][];
-        for (int i = 0; i < 6; i++)
+        EvaluateRotatedCornerSockets();
+
+        return top ? rotatedTopCornerSockets[rotation] : rotatedBottomCornerSockets[rotation];
+    }
+
+    public (int[], int[]) GetRotatedCornerSocketsBySide(HexagonSide side, int rotation)
+    {
+        EvaluateRotatedCornerSockets();
+
+        (HexagonCorner cornerA, HexagonCorner cornerB) = HexagonCell.GetCornersFromSide(side);
+
+        int[] top = new int[2];
+        int[] bottom = new int[2];
+
+        bottom[0] = GetRotatedCornerSocketId(cornerA, rotation, true);
+        bottom[1] = GetRotatedCornerSocketId(cornerB, rotation, true);
+
+        top[0] = GetRotatedCornerSocketId(cornerA, rotation, true);
+        top[1] = GetRotatedCornerSocketId(cornerB, rotation, true);
+
+        return (bottom, top);
+    }
+
+    private void EvaluateRotatedCornerSockets()
+    {
+        int sides = 6;
+        int corners = 12;
+        int[][] newRotatedTopCornerSocketIds = new int[sides][];
+        int[][] newRotatedBottomCornerSocketIds = new int[sides][];
+
+        for (int i = 0; i < sides; i++)
         {
-            newRotatedSideSocketIds[i] = new int[6];
+            newRotatedTopCornerSocketIds[i] = new int[corners];
+            newRotatedBottomCornerSocketIds[i] = new int[corners];
         }
         // Initialize rotatedSideSocketIds with the sideSocketIds of the unrotated tile
-        for (int i = 0; i < 6; i++)
+        for (int i = 0; i < corners; i++)
         {
-            newRotatedSideSocketIds[0][i] = sideSocketIds[i];
+            newRotatedTopCornerSocketIds[0][i] = topCornerSocketIds[i];
+            newRotatedBottomCornerSocketIds[0][i] = bottomCornerSocketIds[i];
         }
 
         // Update rotatedSideSocketIds with the sideSocketIds of the rotated tiles
-        for (int i = 1; i < 6; i++)
+        for (int i = 1; i < sides; i++)
         {
-            newRotatedSideSocketIds[i][(int)HexagonSides.Front] = newRotatedSideSocketIds[i - 1][(int)HexagonSides.FrontRight];
-            newRotatedSideSocketIds[i][(int)HexagonSides.FrontRight] = newRotatedSideSocketIds[i - 1][(int)HexagonSides.BackRight];
-            newRotatedSideSocketIds[i][(int)HexagonSides.BackRight] = newRotatedSideSocketIds[i - 1][(int)HexagonSides.Back];
-            newRotatedSideSocketIds[i][(int)HexagonSides.Back] = newRotatedSideSocketIds[i - 1][(int)HexagonSides.BackLeft];
-            newRotatedSideSocketIds[i][(int)HexagonSides.BackLeft] = newRotatedSideSocketIds[i - 1][(int)HexagonSides.FrontLeft];
-            newRotatedSideSocketIds[i][(int)HexagonSides.FrontLeft] = newRotatedSideSocketIds[i - 1][(int)HexagonSides.Front];
+            // Top
+            newRotatedTopCornerSocketIds[i][(int)HexagonCorner.FrontA] = newRotatedTopCornerSocketIds[i - 1][(int)HexagonCorner.FrontRightA];
+            newRotatedTopCornerSocketIds[i][(int)HexagonCorner.FrontB] = newRotatedTopCornerSocketIds[i - 1][(int)HexagonCorner.FrontRightB];
+            newRotatedTopCornerSocketIds[i][(int)HexagonCorner.FrontRightA] = newRotatedTopCornerSocketIds[i - 1][(int)HexagonCorner.BackRightA];
+            newRotatedTopCornerSocketIds[i][(int)HexagonCorner.FrontRightB] = newRotatedTopCornerSocketIds[i - 1][(int)HexagonCorner.BackRightB];
+            newRotatedTopCornerSocketIds[i][(int)HexagonCorner.BackRightA] = newRotatedTopCornerSocketIds[i - 1][(int)HexagonCorner.BackA];
+            newRotatedTopCornerSocketIds[i][(int)HexagonCorner.BackRightB] = newRotatedTopCornerSocketIds[i - 1][(int)HexagonCorner.BackB];
+            newRotatedTopCornerSocketIds[i][(int)HexagonCorner.BackA] = newRotatedTopCornerSocketIds[i - 1][(int)HexagonCorner.BackLeftA];
+            newRotatedTopCornerSocketIds[i][(int)HexagonCorner.BackB] = newRotatedTopCornerSocketIds[i - 1][(int)HexagonCorner.BackLeftB];
+            newRotatedTopCornerSocketIds[i][(int)HexagonCorner.BackLeftA] = newRotatedTopCornerSocketIds[i - 1][(int)HexagonCorner.FrontLeftA];
+            newRotatedTopCornerSocketIds[i][(int)HexagonCorner.BackLeftB] = newRotatedTopCornerSocketIds[i - 1][(int)HexagonCorner.FrontLeftB];
+            newRotatedTopCornerSocketIds[i][(int)HexagonCorner.FrontLeftA] = newRotatedTopCornerSocketIds[i - 1][(int)HexagonCorner.FrontA];
+            newRotatedTopCornerSocketIds[i][(int)HexagonCorner.FrontLeftB] = newRotatedTopCornerSocketIds[i - 1][(int)HexagonCorner.FrontB];
+
+            // Bottom
+            newRotatedBottomCornerSocketIds[i][(int)HexagonCorner.FrontA] = newRotatedBottomCornerSocketIds[i - 1][(int)HexagonCorner.FrontRightA];
+            newRotatedBottomCornerSocketIds[i][(int)HexagonCorner.FrontB] = newRotatedBottomCornerSocketIds[i - 1][(int)HexagonCorner.FrontRightB];
+            newRotatedBottomCornerSocketIds[i][(int)HexagonCorner.FrontRightA] = newRotatedBottomCornerSocketIds[i - 1][(int)HexagonCorner.BackRightA];
+            newRotatedBottomCornerSocketIds[i][(int)HexagonCorner.FrontRightB] = newRotatedBottomCornerSocketIds[i - 1][(int)HexagonCorner.BackRightB];
+            newRotatedBottomCornerSocketIds[i][(int)HexagonCorner.BackRightA] = newRotatedBottomCornerSocketIds[i - 1][(int)HexagonCorner.BackA];
+            newRotatedBottomCornerSocketIds[i][(int)HexagonCorner.BackRightB] = newRotatedBottomCornerSocketIds[i - 1][(int)HexagonCorner.BackB];
+            newRotatedBottomCornerSocketIds[i][(int)HexagonCorner.BackA] = newRotatedBottomCornerSocketIds[i - 1][(int)HexagonCorner.BackLeftA];
+            newRotatedBottomCornerSocketIds[i][(int)HexagonCorner.BackB] = newRotatedBottomCornerSocketIds[i - 1][(int)HexagonCorner.BackLeftB];
+            newRotatedBottomCornerSocketIds[i][(int)HexagonCorner.BackLeftA] = newRotatedBottomCornerSocketIds[i - 1][(int)HexagonCorner.FrontLeftA];
+            newRotatedBottomCornerSocketIds[i][(int)HexagonCorner.BackLeftB] = newRotatedBottomCornerSocketIds[i - 1][(int)HexagonCorner.FrontLeftB];
+            newRotatedBottomCornerSocketIds[i][(int)HexagonCorner.FrontLeftA] = newRotatedBottomCornerSocketIds[i - 1][(int)HexagonCorner.FrontA];
+            newRotatedBottomCornerSocketIds[i][(int)HexagonCorner.FrontLeftB] = newRotatedBottomCornerSocketIds[i - 1][(int)HexagonCorner.FrontB];
         }
 
-        rotatedSideSocketIds = newRotatedSideSocketIds;
-
-        // Debug.Log("EvaluateRotatedSideSockets - Updated");
+        rotatedTopCornerSockets = newRotatedTopCornerSocketIds;
+        rotatedBottomCornerSockets = newRotatedBottomCornerSocketIds;
     }
-
-
 
     private void RecalculateEdgePoints()
     {
         _corners = ProceduralTerrainUtility.GenerateHexagonPoints(transform.position, size);
         _sides = HexagonGenerator.GenerateHexagonSidePoints(_corners);
-        EvaluateRotatedSideSockets();
+        EvaluateRotatedCornerSockets();
     }
 
 
@@ -172,27 +423,33 @@ public class HexagonTile : MonoBehaviour
     {
         center = transform;
 
-        if (!tileLabelGroup) tileLabelGroup = GetComponentInChildren<TileLabelGroup>();
-
-
-        // RotateTransform(currentRotation, transform);
-        // UpdateHexagonSideEntries();
+        // TransferAllSocketIDValues();
 
         if (resetPoints || _currentCenterPosition != center.position || _corners == null || _corners.Length == 0 || _sides == null || _sides.Length == 0)
         {
             resetPoints = false;
             _currentCenterPosition = center.position;
             RecalculateEdgePoints();
-            EvaluateRotatedSideSockets();
+            EvaluateRotatedCornerSockets();
         }
+
+        if (resetAllSockets)
+        {
+            resetAllSockets = false;
+            ResetAllSockets();
+        }
+
+        UpdateAllSocketIDs();
+
 
         if (!enableEditMode) return;
 
-        if (tileLabelGroup != null) tileLabelGroup.SetLabelsEnabled(_showSocketLabels != showSocketLabels);
+        if (!tileLabelGroup) tileLabelGroup = GetComponentInChildren<TileLabelGroup>();
 
+        if (socketTextDisplay == null || socketTextDisplay.Length == 0) socketTextDisplay = TileLabelGroup.Reevaluate(this.gameObject);
 
-        EvaluateSocketLabels(_showSocketLabels != showSocketLabels);
         EvaluateTextDisplay();
+        EvaluateSocketLabels(_showSocketLabels != showSocketLabels);
 
         if (generateMesh)
         {
@@ -219,7 +476,6 @@ public class HexagonTile : MonoBehaviour
 
     [Header("Debug Settings")]
     [SerializeField] private bool enableEditMode;
-    // [SerializeField] private bool showSocketColorMap;
     [SerializeField] private bool showSocketLabels;
     private bool _showSocketLabels = false;
     [SerializeField] private bool showCorners;
@@ -229,12 +485,17 @@ public class HexagonTile : MonoBehaviour
 
     private void EvaluateTextDisplay()
     {
-        string[] sideNames = Enum.GetNames(typeof(HexagonSides));
+        if (socketTextDisplay == null) return;
+
+        string[] sideNames = Enum.GetNames(typeof(HexagonCorner));
         for (int i = 0; i < socketTextDisplay.Length; i++)
         {
-            socketTextDisplay[i].gameObject.name = sideNames[i];
-            RectTransform rectTransform = socketTextDisplay[i].GetComponent<RectTransform>();
-            rectTransform.rotation = new Quaternion(0, 180, 0, 0);
+            if (socketTextDisplay[i] == null) break;
+
+            string str = i < sideNames.Length ? "Bottom " : "Top ";
+            socketTextDisplay[i].gameObject.name = str + sideNames[i % sideNames.Length];
+            // RectTransform rectTransform = socketTextDisplay[i].GetComponent<RectTransform>();
+            // rectTransform.rotation = new Quaternion(0, 180, 0, 0);
         }
     }
 
@@ -272,23 +533,27 @@ public class HexagonTile : MonoBehaviour
             }
         }
 
-        if (showSides)
-        {
-            for (int i = 0; i < _sides.Length; i++)
-            {
-                // Fix if out of bounds
-                if (sideSocketIds[i] > tileSocketDirectory.sockets.Length - 1)
-                {
-                    sideSocketIds[i] = tileSocketDirectory.sockets.Length - 1;
-                }
+        // if (showSides)
+        // {
+        //     for (int i = 0; i < _sides.Length; i++)
+        //     {
+        //         // // Fix if out of bounds
+        //         // if (sideSocketIds[i] > tileSocketDirectory.sockets.Length - 1)
+        //         // {
+        //         //     sideSocketIds[i] = tileSocketDirectory.sockets.Length - 1;
+        //         // }
 
-                Gizmos.color = tileSocketDirectory.sockets[sideSocketIds[i]].color;
-                Vector3 pos = _sides[i];
-                pos = pos - UtilityHelpers.FaceAwayFromPoint(center.position, _sides[i]);
-                // pos = pos - pos * 0.1f;
-                Gizmos.DrawSphere(pos, 1f);
-            }
-        }
+        //         Gizmos.color = tileSocketDirectory.sockets[sideSocketIds[i]].color;
+        //         Vector3 pos = _sides[i];
+        //         pos = pos - UtilityHelpers.FaceAwayFromPoint(center.position, _sides[i]);
+        //         // pos = pos - pos * 0.1f;
+        //         Gizmos.DrawSphere(pos, 1f);
+        //     }
+        // }
+
+
+        string[] cornerNames = Enum.GetNames(typeof(HexagonCorner));
+
 
         if (showEdges)
         {
@@ -296,35 +561,130 @@ public class HexagonTile : MonoBehaviour
             ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(_corners);
         }
 
-        // if (!showSocketColorMap) return;
-
         if (socketTextDisplay == null || socketTextDisplay.Length == 0) return;
 
+        int rotationAmount = 180;
         for (int i = 0; i < _sides.Length; i++)
         {
-            Gizmos.color = tileSocketDirectory ? tileSocketDirectory.sockets[sideSocketIds[i]].color : Color.white;
-            Gizmos.DrawSphere(_sides[i], 0.1f * transform.lossyScale.z);
-            socketTextDisplay[i].GetComponent<RectTransform>().position = _sides[i] + new Vector3(0, sideDisplayOffsetY, 0);
+            // float xzOffset = (i % 2 == 0) ? labelXZOffset : -labelXZOffset;
+            // bool useOffset = (i % 2 == 0) ? false : true;
+
+            HexagonSide side = (HexagonSide)i;
+            UpdateSocketLabelPlacement(side, true);
+            UpdateSocketLabel(side, true, rotationAmount); // Top
+
+            UpdateSocketLabelPlacement(side, false);
+            UpdateSocketLabel(side, false, rotationAmount); // Bottom
+            rotationAmount += 60;
+        }
+        // for (int i = 0; i < cornerNames.Length; i++)
+        // {
+        //     // float xzOffset = (i % 2 == 0) ? labelXZOffset : -labelXZOffset;
+        //     bool useOffset = (i % 2 == 0) ? false : true;
+
+        //     UpdateSocketLabelPlacement((HexagonCorner)i, true, useOffset);
+        //     UpdateSocketLabel((HexagonCorner)i, true); // Top
+
+        //     UpdateSocketLabelPlacement((HexagonCorner)i, false, useOffset);
+        //     UpdateSocketLabel((HexagonCorner)i, false); // Bottom
+        // }
+    }
+
+    private void UpdateSocketLabelPlacement(HexagonSide _side, bool top)
+    {
+        (HexagonCorner _cornerA, HexagonCorner _cornerB) = HexagonCell.GetCornersFromSide(_side);
+
+        int cornerA = (int)_cornerA;
+        int cornerB = (int)_cornerB;
+
+        int side = (int)_side;
+
+        int labelAIX = top ? (12 + cornerA) : cornerA;
+        int labelBIX = top ? (12 + cornerB) : cornerB;
+
+        // Vector3 pos = _sides[side];
+
+        Vector3 pos = (_sides[side] - center.position) * labelForwardOffset;
+        Quaternion rot = Quaternion.LookRotation(center.position - _sides[side]);
+        pos.y += top ? topLabelYOffset : bottomLabelYOffset;
+
+        int[] cornerSocketIds = top ? topCornerSocketIds : bottomCornerSocketIds;
+
+        // Corner A
+        pos.x += labelXZOffset;
+        Gizmos.color = tileSocketDirectory ? tileSocketDirectory.compatibilityTable[cornerSocketIds[cornerA]].color : Color.white;
+        Gizmos.DrawSphere(pos, 0.1f * transform.lossyScale.z);
+        socketTextDisplay[labelAIX].GetComponent<RectTransform>().position = pos;
+        socketTextDisplay[labelAIX].GetComponent<RectTransform>().rotation = rot;
+
+        // Corner B
+        pos.x -= labelXZOffset * 2;
+        Gizmos.color = tileSocketDirectory ? tileSocketDirectory.compatibilityTable[cornerSocketIds[cornerB]].color : Color.white;
+        Gizmos.DrawSphere(pos, 0.1f * transform.lossyScale.z);
+        socketTextDisplay[labelBIX].GetComponent<RectTransform>().position = pos;
+        socketTextDisplay[labelBIX].GetComponent<RectTransform>().rotation = rot;
+    }
+
+    private void UpdateSocketLabel(HexagonSide _side, bool top, int rotationAmount)
+    {
+        (HexagonCorner _cornerA, HexagonCorner _cornerB) = HexagonCell.GetCornersFromSide(_side);
+
+        int cornerA = (int)_cornerA;
+        int cornerB = (int)_cornerB;
+
+        int side = (int)_side;
+
+        int labelAIX = top ? (12 + cornerA) : cornerA;
+        int labelBIX = top ? (12 + cornerB) : cornerB;
+
+        TextMesh textMeshA = socketTextDisplay[labelAIX].GetComponent<TextMesh>();
+        TextMesh textMeshB = socketTextDisplay[labelBIX].GetComponent<TextMesh>();
+
+        // RectTransform rectTransform = socketTextDisplay[labelIX].GetComponent<RectTransform>();
+        // rectTransform.rotation = new Quaternion(0, 90, -90, 0);
+
+        // rectTransform.rotation = new Quaternion(0, 180, -90, 0);
+
+        // Vector3 direction = center.position - rectTransform.position;
+        // rectTransform.rotation = Quaternion.LookRotation(direction);
+
+        string strA;
+        string strB;
+
+        if (top)
+        {
+            textMeshA.color = tileSocketDirectory.compatibilityTable[topCornerSocketIds[cornerA]].color;
+            strA = "id_" + topCornerSocketIds[cornerA] + " - " + tileSocketDirectory.compatibilityTable[topCornerSocketIds[cornerA]].name + "\n" + "Top " + _cornerA;
+
+            textMeshB.color = tileSocketDirectory.compatibilityTable[topCornerSocketIds[cornerB]].color;
+            strB = "id_" + topCornerSocketIds[cornerB] + " - " + tileSocketDirectory.compatibilityTable[topCornerSocketIds[cornerB]].name + "\n" + "Top " + _cornerB;
+        }
+        else
+        {
+            textMeshA.color = tileSocketDirectory.compatibilityTable[bottomCornerSocketIds[cornerA]].color;
+            strA = "id_" + bottomCornerSocketIds[cornerA] + " - " + tileSocketDirectory.compatibilityTable[bottomCornerSocketIds[cornerA]].name + "\n" + "BTM " + _cornerA;
+
+            textMeshB.color = tileSocketDirectory.compatibilityTable[bottomCornerSocketIds[cornerB]].color;
+            strB = "id_" + bottomCornerSocketIds[cornerB] + " - " + tileSocketDirectory.compatibilityTable[bottomCornerSocketIds[cornerB]].name + "\n" + "BTM " + _cornerB;
         }
 
-        if (showSocketLabels && socketTextDisplay != null && socketTextDisplay.Length == 6)
-        {
-            string[] sideNames = Enum.GetNames(typeof(HexagonSides));
-            for (int i = 0; i < socketTextDisplay.Length; i++)
-            {
-                RectTransform rectTransform = socketTextDisplay[i].GetComponent<RectTransform>();
-                rectTransform.rotation = new Quaternion(0, 180, 0, 0);
-                socketTextDisplay[i].GetComponent<RectTransform>().rotation = new Quaternion(0, 180, 0, 0);
-                TextMesh textMesh = socketTextDisplay[i].GetComponent<TextMesh>();
-                textMesh.color = tileSocketDirectory.sockets[sideSocketIds[i]].color;
-                string str = "id_" + sideSocketIds[i] + " - " + tileSocketDirectory.sockets[sideSocketIds[i]].name + "\n" + sideNames[i];
-                textMesh.text = str;
-                textMesh.fontSize = 12;
-            }
-        }
+        textMeshA.text = strA;
+        textMeshA.fontSize = 11;
+
+        textMeshB.text = strB;
+        textMeshB.fontSize = 11;
     }
 
     #endregion
+
+
+    public enum SocketMirrorState
+    {
+        Unset = 0,
+        MirrorBottom = 1,
+        MirrorTop = 2,
+    }
+
 
     [Header("Mesh Generation")]
     [SerializeField] private bool generateMesh;
@@ -349,7 +709,10 @@ public class HexagonTile : MonoBehaviour
     {
         public string name;
         public string socketName;
-        [Range(0, 128)] public int socketId;
+        [Range(0, 128)] public int TopA;
+        [Range(0, 128)] public int TopB;
+        [Range(0, 128)] public int BottomA;
+        [Range(0, 128)] public int BottomB;
     }
 }
 
@@ -357,6 +720,8 @@ public class HexagonTile : MonoBehaviour
 public struct HexagonTilePrototype
 {
     public string id;
+    public string topNeighborId;
+    public string bottomNeighborId;
     public int size;
     public Vector3 center;
     public Vector3[] cornerPoints;

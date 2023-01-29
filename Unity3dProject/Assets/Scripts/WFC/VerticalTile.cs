@@ -235,21 +235,21 @@ public class VerticalTile : MonoBehaviour
         //     }
         // }
 
-        if (showSocketLabels && tileLabelGroup.labels != null && tileLabelGroup.labels.Length == 6)
-        {
-            string[] sideNames = Enum.GetNames(typeof(VerticalEdges));
-            for (int i = 0; i < tileLabelGroup.labels.Length; i++)
-            {
-                RectTransform rectTransform = tileLabelGroup.labels[i].GetComponent<RectTransform>();
-                rectTransform.rotation = new Quaternion(0, 180, 0, 0);
-                tileLabelGroup.labels[i].GetComponent<RectTransform>().rotation = new Quaternion(0, 180, 0, 0);
-                TextMesh textMesh = tileLabelGroup.labels[i].GetComponent<TextMesh>();
-                textMesh.color = tileSocketDirectory.sockets[edgeSockets[i]].color;
-                string str = "id_" + edgeSockets[i] + " - " + tileSocketDirectory.sockets[edgeSockets[i]].name + "\n" + sideNames[i];
-                textMesh.text = str;
-                textMesh.fontSize = 12;
-            }
-        }
+        // if (showSocketLabels && tileLabelGroup.labels != null && tileLabelGroup.labels.Length == 6)
+        // {
+        //     string[] sideNames = Enum.GetNames(typeof(VerticalEdges));
+        //     for (int i = 0; i < tileLabelGroup.labels.Length; i++)
+        //     {
+        //         RectTransform rectTransform = tileLabelGroup.labels[i].GetComponent<RectTransform>();
+        //         rectTransform.rotation = new Quaternion(0, 180, 0, 0);
+        //         tileLabelGroup.labels[i].GetComponent<RectTransform>().rotation = new Quaternion(0, 180, 0, 0);
+        //         TextMesh textMesh = tileLabelGroup.labels[i].GetComponent<TextMesh>();
+        //         textMesh.color = tileSocketDirectory.sockets[edgeSockets[i]].color;
+        //         string str = "id_" + edgeSockets[i] + " - " + tileSocketDirectory.sockets[edgeSockets[i]].name + "\n" + sideNames[i];
+        //         textMesh.text = str;
+        //         textMesh.fontSize = 12;
+        //     }
+        // }
     }
 
     #endregion

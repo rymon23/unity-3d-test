@@ -30,7 +30,7 @@ public class HexagonCellPrimitive : MonoBehaviour
     public Vector3[] _sides;
     public List<HexagonCellPrimitive> _neighbors;
     public HexagonCellPrimitive[] neighborsBySide = new HexagonCellPrimitive[6];
-    public int GetNeighborsRelativeSide(HexagonSides side)
+    public int GetNeighborsRelativeSide(HexagonSide side)
     {
         if (neighborsBySide[(int)side] == null) return -1;
 

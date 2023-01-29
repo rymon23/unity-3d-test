@@ -9,10 +9,15 @@ using UnityEditor;
 [System.Serializable]
 public class HexagonCell : MonoBehaviour
 {
-    public int id = -1;
+    public string id = "-1";
     public int size = 12;
     public Vector3[] _cornerPoints;
     public Vector3[] _sides;
+    public List<HexagonCell> _neighbors;
+    public List<Vector3> _vertices;
+    public HexagonCell[] layeredNeighbor = new HexagonCell[2]; // 0= bottom , 1= top
+    public HexagonCell[] neighborsBySide = new HexagonCell[6];
+    public bool road;
 
     private Dictionary<TileCategory, float> categoyBias;
     public void SetCategoryBias(TileCategory category, float value)
@@ -29,10 +34,7 @@ public class HexagonCell : MonoBehaviour
         }
     }
 
-
-    public List<HexagonCell> _neighbors;
-    public HexagonCell[] neighborsBySide = new HexagonCell[6];
-    public int GetNeighborsRelativeSide(HexagonSides side)
+    public int GetNeighborsRelativeSide(HexagonSide side)
     {
         if (neighborsBySide[(int)side] == null) return -1;
 
@@ -45,60 +47,224 @@ public class HexagonCell : MonoBehaviour
         }
         return -1;
     }
-    public int[] GetNeighborTileSockets(bool useWalledEdgePreference = false)
+
+    public static (HexagonCorner, HexagonCorner) GetCornersFromSide(HexagonSide side)
     {
-        int[] neighborSocketsBySide = new int[6];
+        switch (side)
+        {
+            case HexagonSide.Front:
+                return (HexagonCorner.FrontA, HexagonCorner.FrontB);
+            case HexagonSide.FrontRight:
+                return (HexagonCorner.FrontRightA, HexagonCorner.FrontRightB);
+            case HexagonSide.BackRight:
+                return (HexagonCorner.BackRightA, HexagonCorner.BackRightB);
+            case HexagonSide.Back:
+                return (HexagonCorner.BackA, HexagonCorner.BackB);
+            case HexagonSide.BackLeft:
+                return (HexagonCorner.BackLeftA, HexagonCorner.BackLeftB);
+            case HexagonSide.FrontLeft:
+                return (HexagonCorner.FrontLeftA, HexagonCorner.FrontLeftB);
+            // Front
+            default:
+                return (HexagonCorner.FrontA, HexagonCorner.FrontB);
+        }
+    }
+
+    public static HexagonSide GetSideFromCorner(HexagonCorner corner)
+    {
+        if (corner == HexagonCorner.FrontA || corner == HexagonCorner.FrontB) return HexagonSide.Front;
+        if (corner == HexagonCorner.FrontRightA || corner == HexagonCorner.FrontRightB) return HexagonSide.FrontRight;
+        if (corner == HexagonCorner.BackRightA || corner == HexagonCorner.BackRightB) return HexagonSide.BackRight;
+
+        if (corner == HexagonCorner.BackA || corner == HexagonCorner.BackB) return HexagonSide.Back;
+        if (corner == HexagonCorner.BackLeftA || corner == HexagonCorner.BackLeftB) return HexagonSide.BackLeft;
+        if (corner == HexagonCorner.FrontLeftA || corner == HexagonCorner.FrontLeftB) return HexagonSide.FrontLeft;
+
+        return HexagonSide.Front;
+    }
+
+    public int[] GetBottomNeighborTileSockets(bool top)
+    {
+        if (GetGridLayer() == 0) return null;
+
+        if (layeredNeighbor[0] == null) return null;
+
+        if (layeredNeighbor[0].currentTile == null) return null;
+
+        return layeredNeighbor[0].currentTile.GetRotatedCornerSockets(top, layeredNeighbor[0].currentRotation);
+    }
+
+    public int[] GetDefaultSocketSet(TileSocketPrimitive tileSocketConstant)
+    {
+        int[] sockets = new int[2];
+        sockets[0] = (int)tileSocketConstant;
+        sockets[1] = (int)tileSocketConstant;
+        return sockets;
+    }
+
+    public NeighborSideCornerSockets[] GetSideNeighborTileSockets(bool useWalledEdgePreference = false)
+    {
+        // int[] neighborSocketsBySide = new int[6];
+        NeighborSideCornerSockets[] neighborCornerSocketsBySide = new NeighborSideCornerSockets[6];
 
         for (int side = 0; side < 6; side++)
         {
-            // If no neighbor socket is Edge socket value
-            if (neighborsBySide[side] == null)
+            NeighborSideCornerSockets neighborCornerSockets = new NeighborSideCornerSockets();
+            HexagonCell sideNeighbor = neighborsBySide[side];
+
+            // If no neighbor, socket is Edge socket value
+            if (sideNeighbor == null)
             {
-                neighborSocketsBySide[side] = 1;
+                neighborCornerSockets.bottomCorners = GetDefaultSocketSet(TileSocketPrimitive.Edge);
+                neighborCornerSockets.topCorners = GetDefaultSocketSet(TileSocketPrimitive.Edge);
             }
             else
             {
+
                 if (useWalledEdgePreference && isEdgeCell && !IsInCluster())
                 {
-
-                    if (!neighborsBySide[side].isEdgeCell && !neighborsBySide[side].isEntryCell)
+                    if (!sideNeighbor.isEdgeCell && !sideNeighbor.isEntryCell)
                     {
-                        neighborSocketsBySide[side] = (int)TileSocketConstants.InnerCell;
+                        neighborCornerSockets.bottomCorners = GetDefaultSocketSet(TileSocketPrimitive.InnerCell);
+                        neighborCornerSockets.topCorners = GetDefaultSocketSet(TileSocketPrimitive.InnerCell);
                     }
                     else
                     {
-                        // If neighbor has no tile set -1
-                        if (neighborsBySide[side].currentTile == null)
+                        // check if neighbor is edge or entry cell
+                        if (sideNeighbor.currentTile == null)
                         {
-                            neighborSocketsBySide[side] = neighborsBySide[side].isEntryCell ? (int)TileSocketConstants.Entrance : (int)TileSocketConstants.WallPart;
+                            if (sideNeighbor.isEntryCell || (isEntryCell && sideNeighbor.isEntryCell == false))
+                            {
+                                neighborCornerSockets.bottomCorners = GetDefaultSocketSet(TileSocketPrimitive.EntranceSide);
+                                neighborCornerSockets.topCorners = GetDefaultSocketSet(TileSocketPrimitive.EntranceSide);
+                            }
+                            else
+                            {
+                                neighborCornerSockets.bottomCorners = GetDefaultSocketSet(TileSocketPrimitive.WallPart);
+                                neighborCornerSockets.topCorners = GetDefaultSocketSet(TileSocketPrimitive.WallPart);
+                            }
                         }
                         else
                         {
-                            int neighborRelativeSide = GetNeighborsRelativeSide((HexagonSides)side);
-                            int facingSocket = neighborsBySide[side].currentTile.GetRotatedSideSocketId((HexagonSides)neighborRelativeSide, neighborsBySide[side].currentRotation);
-                            neighborSocketsBySide[side] = facingSocket;
+                            int neighborRelativeSide = GetNeighborsRelativeSide((HexagonSide)side);
+
+                            (HexagonCorner cornerA, HexagonCorner cornerB) = GetCornersFromSide((HexagonSide)neighborRelativeSide);
+
+                            neighborCornerSockets.bottomCorners = new int[2];
+                            neighborCornerSockets.topCorners = new int[2];
+
+                            neighborCornerSockets.bottomCorners[0] = sideNeighbor.currentTile.GetRotatedCornerSocketId(cornerA, sideNeighbor.currentRotation, false);
+                            neighborCornerSockets.bottomCorners[1] = sideNeighbor.currentTile.GetRotatedCornerSocketId(cornerB, sideNeighbor.currentRotation, false);
+                            neighborCornerSockets.topCorners[0] = sideNeighbor.currentTile.GetRotatedCornerSocketId(cornerA, sideNeighbor.currentRotation, true);
+                            neighborCornerSockets.topCorners[1] = sideNeighbor.currentTile.GetRotatedCornerSocketId(cornerB, sideNeighbor.currentRotation, true);
                         }
                     }
                 }
                 else
                 {
-                    // If neighbor has no tile set -1
-                    if (neighborsBySide[side].currentTile == null)
+
+                    if (isLeveledCell)
                     {
-                        neighborSocketsBySide[side] = -1;
+                        if (isLeveledEdge)
+                        {
+                            if (!sideNeighbor.isLeveledCell)
+                            {
+                                neighborCornerSockets.bottomCorners = GetDefaultSocketSet(TileSocketPrimitive.InnerCell);
+                                neighborCornerSockets.topCorners = GetDefaultSocketSet(TileSocketPrimitive.InnerCell);
+                            }
+                            else
+                            {
+                                // check if neighbor is edge or entry cell
+                                if (sideNeighbor.currentTile == null)
+                                {
+                                    if (sideNeighbor.isLeveledEdge)
+                                    {
+                                        neighborCornerSockets.bottomCorners = GetDefaultSocketSet(TileSocketPrimitive.LeveledEdgePart);
+                                        neighborCornerSockets.topCorners = GetDefaultSocketSet(TileSocketPrimitive.LeveledEdgePart);
+                                    }
+                                    else
+                                    {
+                                        neighborCornerSockets.bottomCorners = GetDefaultSocketSet(TileSocketPrimitive.LeveledInner);
+                                        neighborCornerSockets.topCorners = GetDefaultSocketSet(TileSocketPrimitive.LeveledInner);
+                                    }
+
+                                }
+                                else
+                                {
+
+                                    int neighborRelativeSide = GetNeighborsRelativeSide((HexagonSide)side);
+
+                                    (HexagonCorner cornerA, HexagonCorner cornerB) = GetCornersFromSide((HexagonSide)neighborRelativeSide);
+
+                                    neighborCornerSockets.bottomCorners = new int[2];
+                                    neighborCornerSockets.topCorners = new int[2];
+
+                                    neighborCornerSockets.bottomCorners[0] = sideNeighbor.currentTile.GetRotatedCornerSocketId(cornerA, sideNeighbor.currentRotation, false);
+                                    neighborCornerSockets.bottomCorners[1] = sideNeighbor.currentTile.GetRotatedCornerSocketId(cornerB, sideNeighbor.currentRotation, false);
+                                    neighborCornerSockets.topCorners[0] = sideNeighbor.currentTile.GetRotatedCornerSocketId(cornerA, sideNeighbor.currentRotation, true);
+                                    neighborCornerSockets.topCorners[1] = sideNeighbor.currentTile.GetRotatedCornerSocketId(cornerB, sideNeighbor.currentRotation, true);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if (sideNeighbor.currentTile == null)
+                            {
+                                neighborCornerSockets.bottomCorners = GetDefaultSocketSet(TileSocketPrimitive.LeveledInner);
+                                neighborCornerSockets.topCorners = GetDefaultSocketSet(TileSocketPrimitive.LeveledInner);
+                            }
+                            else
+                            {
+                                int neighborRelativeSide = GetNeighborsRelativeSide((HexagonSide)side);
+
+                                (HexagonCorner cornerA, HexagonCorner cornerB) = GetCornersFromSide((HexagonSide)neighborRelativeSide);
+
+                                neighborCornerSockets.bottomCorners = new int[2];
+                                neighborCornerSockets.topCorners = new int[2];
+
+                                neighborCornerSockets.bottomCorners[0] = sideNeighbor.currentTile.GetRotatedCornerSocketId(cornerA, sideNeighbor.currentRotation, false);
+                                neighborCornerSockets.bottomCorners[1] = sideNeighbor.currentTile.GetRotatedCornerSocketId(cornerB, sideNeighbor.currentRotation, false);
+                                neighborCornerSockets.topCorners[0] = sideNeighbor.currentTile.GetRotatedCornerSocketId(cornerA, sideNeighbor.currentRotation, true);
+                                neighborCornerSockets.topCorners[1] = sideNeighbor.currentTile.GetRotatedCornerSocketId(cornerB, sideNeighbor.currentRotation, true);
+                            }
+
+                        }
                     }
                     else
                     {
-                        int neighborRelativeSide = GetNeighborsRelativeSide((HexagonSides)side);
-                        int facingSocket = neighborsBySide[side].currentTile.GetRotatedSideSocketId((HexagonSides)neighborRelativeSide, neighborsBySide[side].currentRotation);
-                        neighborSocketsBySide[side] = facingSocket;
+
+
+
+                        // If neighbor has no tile set -1
+                        if (sideNeighbor.currentTile == null)
+                        {
+                            neighborCornerSockets.bottomCorners = GetDefaultSocketSet(TileSocketPrimitive.InnerCell);
+                            neighborCornerSockets.topCorners = GetDefaultSocketSet(TileSocketPrimitive.InnerCell);
+                        }
+                        else
+                        {
+                            int neighborRelativeSide = GetNeighborsRelativeSide((HexagonSide)side);
+
+                            (HexagonCorner cornerA, HexagonCorner cornerB) = GetCornersFromSide((HexagonSide)neighborRelativeSide);
+
+                            neighborCornerSockets.bottomCorners = new int[2];
+                            neighborCornerSockets.topCorners = new int[2];
+
+                            neighborCornerSockets.bottomCorners[0] = sideNeighbor.currentTile.GetRotatedCornerSocketId(cornerA, sideNeighbor.currentRotation, false);
+                            neighborCornerSockets.bottomCorners[1] = sideNeighbor.currentTile.GetRotatedCornerSocketId(cornerB, sideNeighbor.currentRotation, false);
+                            neighborCornerSockets.topCorners[0] = sideNeighbor.currentTile.GetRotatedCornerSocketId(cornerA, sideNeighbor.currentRotation, true);
+                            neighborCornerSockets.topCorners[1] = sideNeighbor.currentTile.GetRotatedCornerSocketId(cornerB, sideNeighbor.currentRotation, true);
+                        }
                     }
+
+
                 }
-
-
             }
+
+            neighborCornerSocketsBySide[side] = neighborCornerSockets;
         }
-        return neighborSocketsBySide;
+
+        return neighborCornerSocketsBySide;
     }
 
     public int currentRotation = 0;
@@ -111,10 +277,39 @@ public class HexagonCell : MonoBehaviour
     {
         isEntryCell = enable;
     }
-    public bool isEdgeCell { private set; get; }
+    public bool isEdgeCell;//{ private set; get; }
     public void SetEdgeCell(bool enable)
     {
         isEdgeCell = enable;
+    }
+    public bool isPathCell;//{ private set; get; }
+    public void SetPathCell(bool enable)
+    {
+        isPathCell = enable;
+    }
+
+    public bool isLeveledCell;//{ private set; get; }
+    public void SetLeveledCell(bool enable)
+    {
+        isLeveledCell = enable;
+    }
+    public bool isLeveledEdge;//{ private set; get; }
+    public void SetLeveledEdge(bool enable)
+    {
+        isLeveledEdge = enable;
+    }
+    public bool isLeveledRampCell;//{ private set; get; }
+    public void SetLeveledRampCell(bool enable)
+    {
+        isLeveledRampCell = enable;
+    }
+
+    [Header("Grid Layer")]
+    [SerializeField] private int _gridLayer = 0;
+    public int GetGridLayer() => _gridLayer;
+    public void SetGridLayer(int gridlayer)
+    {
+        _gridLayer = gridlayer;
     }
 
     [Header("Cluster")]
@@ -145,7 +340,8 @@ public class HexagonCell : MonoBehaviour
 
     [Header("Tile")]
     [SerializeField] private HexagonTile currentTile;
-    public bool IsAssigned() => currentTile != null || IsInCluster();
+    public bool isIgnored;
+    public bool IsAssigned() => currentTile != null || IsInCluster() || isIgnored;
     public HexagonTile GetTile() => currentTile;
     public void SetTile(HexagonTile newTile, int rotation)
     {
@@ -278,7 +474,7 @@ public class HexagonCell : MonoBehaviour
     public void SetNeighborsBySide(float offset = 0.33f)
     {
         HexagonCell[] _neighborsBySide = new HexagonCell[6];
-        HashSet<int> added = new HashSet<int>();
+        HashSet<string> added = new HashSet<string>();
 
         // Debug.Log("Cell id: " + id + ", SetNeighborsBySide: ");
         RecalculateEdgePoints();
@@ -289,7 +485,7 @@ public class HexagonCell : MonoBehaviour
 
             for (int neighbor = 0; neighbor < _neighbors.Count; neighbor++)
             {
-                if (added.Contains(_neighbors[neighbor].id)) continue;
+                if (_neighbors[neighbor].GetGridLayer() != GetGridLayer() || added.Contains(_neighbors[neighbor].id)) continue;
 
                 _neighbors[neighbor].RecalculateEdgePoints();
 
@@ -303,7 +499,6 @@ public class HexagonCell : MonoBehaviour
 
                     if (Vector2.Distance(new Vector2(sidePoint.x, sidePoint.z), new Vector2(neighborSidePoint.x, neighborSidePoint.z)) <= offset)
                     {
-
                         _neighborsBySide[side] = _neighbors[neighbor];
                         added.Add(_neighbors[neighbor].id);
                         break;
@@ -333,16 +528,70 @@ public class HexagonCell : MonoBehaviour
     public static List<HexagonCell> GetEdgeCells(List<HexagonCell> cells)
     {
         List<HexagonCell> edgeCells = new List<HexagonCell>();
+        bool hasMultilayerCells = cells.Any(c => c.GetGridLayer() > 0);
+
         foreach (HexagonCell cell in cells)
         {
-            if (cell._neighbors.Count < 6)
+            int neighborCount = cell._neighbors.Count;
+            if (neighborCount < 6 || (hasMultilayerCells && neighborCount < 7) || (cell.GetGridLayer() > 0 && cell.layeredNeighbor[0]._neighbors.Count < 7))
             {
                 edgeCells.Add(cell);
+
                 cell.SetEdgeCell(true);
+
             }
         }
         // Order edge cells by the fewest neighbors first
         return edgeCells.OrderByDescending(x => x._neighbors.Count).ToList();
+    }
+
+    public static List<HexagonCell> GetLeveledEdgeCells(List<HexagonCell> layerCells, bool assign)
+    {
+        List<HexagonCell> edgeCells = new List<HexagonCell>();
+
+        foreach (HexagonCell cell in layerCells)
+        {
+            int neighborCount = cell._neighbors.FindAll(n => layerCells.Contains(n) && n.GetGridLayer() == cell.GetGridLayer()).Count;
+            if (neighborCount < 6)
+            {
+                edgeCells.Add(cell);
+                if (assign) cell.SetLeveledEdge(true);
+            }
+        }
+        // Order edge cells by the fewest neighbors first
+        return edgeCells.OrderByDescending(x => x._neighbors.Count).ToList();
+    }
+
+    public static List<HexagonCell> GetRandomEntryCells(List<HexagonCell> edgeCells, int num, bool assign, int gridLayer = 0)
+    {
+        List<HexagonCell> cells = new List<HexagonCell>();
+        cells.AddRange(edgeCells.Except(edgeCells.FindAll(c => c.GetGridLayer() != gridLayer)));
+
+        ShuffleCells(cells);
+
+        List<HexagonCell> entrances = new List<HexagonCell>();
+
+        foreach (HexagonCell cell in cells)
+        {
+            if (entrances.Count == num) break;
+
+            bool isNeighbor = false;
+            foreach (HexagonCell item in entrances)
+            {
+                if (item._neighbors.Contains(cell))
+                {
+                    isNeighbor = true;
+                    break;
+                }
+            }
+            if (!isNeighbor)
+            {
+                entrances.Add(cell);
+                if (assign) cell.SetEntryCell(true);
+            }
+
+        }
+        return entrances.OrderByDescending(x => x._neighbors.Count).ToList();
     }
 
     // public static void PopulateNeighborsFromSidePoints(List<HexagonCell> cells, float offset = 0.3f)
@@ -432,7 +681,7 @@ public class HexagonCell : MonoBehaviour
                 for (int j = 0; j < cells.Count; j++)
                 {
                     //skip if the hexagontile is the current tile
-                    if (cells[j] == cell)
+                    if (cells[j] == cell || cells[j].GetGridLayer() != cell.GetGridLayer())
                         continue;
 
                     //loop through the _cornerPoints of the neighboring tile
@@ -468,5 +717,426 @@ public class HexagonCell : MonoBehaviour
             }
         }
         return nearestCellToPos;
+    }
+
+    public static List<HexagonCell> GetRandomCellPaths(List<HexagonCell> entryCells, List<HexagonCell> allCells, Vector3 centerPosition, bool ignoreEdgeCells = true)
+    {
+        Debug.Log("GetRandomCellPaths => entryCells: " + entryCells.Count + ", allCells: " + allCells.Count);
+
+        List<HexagonCell> finalPath = new List<HexagonCell>();
+        HexagonCell centerCell = HexagonCell.GetClosestCellByCenterPoint(allCells, centerPosition);
+        // entryCells = HexagonCell.GetRandomEntryCells(edgeCells, 3, false);
+
+        foreach (HexagonCell entryCell in entryCells)
+        {
+            HexagonCell innerNeighbor = entryCell._neighbors.Find(n => n.isEdgeCell == false);
+
+            List<HexagonCell> cellPath = HexagonCell.FindPath(innerNeighbor, centerCell, ignoreEdgeCells);
+            if (cellPath != null)
+            {
+                finalPath.AddRange(cellPath);
+                if (finalPath.Contains(innerNeighbor) == false) finalPath.Add(innerNeighbor);
+            }
+        }
+
+        Debug.Log("GetRandomCellPaths => finalPath: " + finalPath.Count + ", centerCell: " + centerCell.id);
+        return finalPath;
+    }
+
+    public static List<HexagonCell> FindPath(HexagonCell startCell, HexagonCell endCell, bool ignoreEdgeCells)
+    {
+        // Create a queue to store the cells to be visited
+        Queue<HexagonCell> queue = new Queue<HexagonCell>();
+
+        // Create a dictionary to store the parent of each cell
+        Dictionary<HexagonCell, HexagonCell> parent = new Dictionary<HexagonCell, HexagonCell>();
+
+        // Create a set to store the visited cells
+        HashSet<HexagonCell> visited = new HashSet<HexagonCell>();
+
+        // Enqueue the start cell and mark it as visited
+        queue.Enqueue(startCell);
+        visited.Add(startCell);
+
+        // Run the BFS loop
+        while (queue.Count > 0)
+        {
+            HexagonCell currentCell = queue.Dequeue();
+
+            // Check if the current cell is the end cell
+            if (currentCell == endCell)
+            {
+                // Create a list to store the path
+                List<HexagonCell> path = new List<HexagonCell>();
+
+                // Trace back the path from the end cell to the start cell
+                HexagonCell current = endCell;
+                while (current != startCell)
+                {
+                    path.Add(current);
+                    current = parent[current];
+                }
+                path.Reverse();
+                return path;
+            }
+
+            // Enqueue the unvisited neighbors
+            foreach (HexagonCell neighbor in currentCell._neighbors)
+            {
+                if (!visited.Contains(neighbor))
+                {
+                    visited.Add(neighbor);
+                    if (!ignoreEdgeCells || !neighbor.isEdgeCell)
+                    {
+                        queue.Enqueue(neighbor);
+                        parent[neighbor] = currentCell;
+                    }
+                }
+            }
+        }
+        // If there is no path between the start and end cells
+        return null;
+    }
+
+
+    public static List<HexagonCell> GetRandomLevelConnectorCells(List<HexagonCell> levelPathCells, int max = 2)
+    {
+        List<HexagonCell> results = new List<HexagonCell>();
+        foreach (HexagonCell item in levelPathCells)
+        {
+            if (results.Count == max) break;
+
+            HexagonCell found = item._neighbors.Find(c => !c.isEntryCell && !c.isEdgeCell && !levelPathCells.Contains(c) && c.GetGridLayer() == item.GetGridLayer());
+            if (found != null && !results.Contains(found)) results.Add(found);
+        }
+        return results;
+    }
+
+
+
+    public static List<HexagonCell> GetRandomConsecutiveCells(List<HexagonCell> allLevelCells, float maxPercentOfCells = 0.5f)
+    {
+        List<HexagonCell> allCells = new List<HexagonCell>();
+        allCells.AddRange(allLevelCells);
+
+        // Randomly shuffle the list of cells
+        ShuffleCells(allCells);
+
+        // Initialize the list of consecutive cells
+        List<HexagonCell> consecutiveCells = new List<HexagonCell>();
+
+        // Iterate through the shuffled list of cells
+        for (int i = 0; i < allCells.Count; i++)
+        {
+            HexagonCell currentCell = allCells[i];
+
+            // Check if the current cell is already in the consecutive cells list
+            if (consecutiveCells.Contains(currentCell))
+                continue;
+
+            // Add the current cell to the consecutive cells list
+            consecutiveCells.Add(currentCell);
+
+            // Iterate through the current cell's neighbors
+            for (int j = 0; j < 6; j++)
+            {
+                HexagonCell neighbor = currentCell._neighbors[j];
+
+                // Check if the neighbor is in the allCells list and is not already in the consecutive cells list
+                if (allCells.Contains(neighbor) && !consecutiveCells.Contains(neighbor))
+                    consecutiveCells.Add(neighbor);
+            }
+
+            //Check if the consecutive cells list is larger than the maximum percent allowed and return it
+            if ((float)consecutiveCells.Count / (float)allCells.Count > maxPercentOfCells)
+                return consecutiveCells;
+        }
+
+        //Return the final consecutive cells list
+        return consecutiveCells;
+    }
+
+
+    public static List<HexagonCell> SelectCellsInRadiusOfCell(List<HexagonCell> cells, HexagonCell centerCell, float radius)
+    {
+        Vector2 centerPos = new Vector2(centerCell.transform.position.x, centerCell.transform.position.z);
+        //Initialize a list to store cells within the radius distance
+        List<HexagonCell> selectedCells = new List<HexagonCell>();
+
+        //Iterate through each cell in the input list
+        foreach (HexagonCell cell in cells)
+        {
+            Vector2 cellPos = new Vector2(cell.transform.position.x, cell.transform.position.z);
+
+            // Check if the distance between the cell and the center cell is within the given radius
+            if (Vector2.Distance(centerPos, cellPos) <= radius)
+            {
+                //If the distance is within the radius, add the current cell to the list of selected cells
+                selectedCells.Add(cell);
+            }
+        }
+        //Return the list of selected cells
+        return selectedCells;
+    }
+
+    public static List<HexagonCell> SelectCellsInRadiusOfRandomCell(List<HexagonCell> cells, float radius)
+    {
+        //Select a random center cell
+        HexagonCell centerCell = cells[UnityEngine.Random.Range(0, cells.Count)];
+        return SelectCellsInRadiusOfCell(cells, centerCell, radius);
+    }
+
+
+    public static List<HexagonCell> GetRandomLeveledCells(List<HexagonCell> alllevelCells, float maxRadius, bool assign, int clumpSets = 4)
+    {
+        List<HexagonCell> result = SelectCellsInRadiusOfRandomCell(alllevelCells, maxRadius);
+
+        for (int i = 0; i < clumpSets; i++)
+        {
+            List<HexagonCell> newClump = SelectCellsInRadiusOfCell(alllevelCells, result[UnityEngine.Random.Range(0, result.Count)], maxRadius * 0.9f);
+            result.AddRange(newClump.FindAll(c => result.Contains(c) == false));
+        }
+
+        if (assign)
+        {
+            foreach (HexagonCell cell in result)
+            {
+                cell.SetLeveledCell(true);
+            }
+        }
+        return result;
+    }
+
+    // public static List<HexagonCell> SyncNextLeveledCells(List<HexagonCell> levelCells, float maxRadius, bool assign)
+    // {
+
+    //     foreach (HexagonCell cell in levelCells)
+    //     {
+    //         HexagonCell topNeighbor = cell.layeredNeighbor[1];
+    //         if (topNeighbor != null) {
+    //             topNeighbor
+    //         }
+    //     }
+    //     if (assign)
+    //     {
+    //         foreach (HexagonCell cell in result)
+    //         {
+    //             cell.SetLeveledCell(true);
+    //         }
+    //     }
+    //     return result;
+    // }
+
+
+    public static List<HexagonCell> GetRandomLeveledRampCells(List<HexagonCell> leveledEdgeCells, int num, bool assign, bool allowNeighbors = true)
+    {
+        List<HexagonCell> cells = new List<HexagonCell>();
+        cells.AddRange(leveledEdgeCells);
+
+        ShuffleCells(cells);
+
+        List<HexagonCell> rampCells = new List<HexagonCell>();
+
+        foreach (HexagonCell cell in cells)
+        {
+            if (rampCells.Count == num) break;
+
+            bool isNeighbor = false;
+            if (allowNeighbors == false)
+            {
+                foreach (HexagonCell item in rampCells)
+                {
+                    if (item._neighbors.Contains(cell))
+                    {
+                        isNeighbor = true;
+                        break;
+                    }
+                }
+            }
+            if (allowNeighbors || !isNeighbor)
+            {
+                rampCells.Add(cell);
+                if (assign) cell.SetLeveledRampCell(true);
+            }
+
+        }
+        return rampCells.OrderByDescending(x => x._neighbors.Count).ToList();
+    }
+
+    public static (Dictionary<int, List<HexagonCell>>, Dictionary<int, List<HexagonCell>>) GetRandomGridPathsForLevels(Dictionary<int, List<HexagonCell>> cellsByLevel, Vector3 position, int max, bool ignoreEdgeCells, int maxEntryCellsPerLevel = 2)
+    {
+        Dictionary<int, List<HexagonCell>> pathsByLevel = new Dictionary<int, List<HexagonCell>>();
+        Dictionary<int, List<HexagonCell>> rampsByLevel = new Dictionary<int, List<HexagonCell>>();
+
+        int lastLevel = cellsByLevel.Count;
+
+        foreach (var kvp in cellsByLevel)
+        {
+            int level = kvp.Key;
+            List<HexagonCell> levelCells = kvp.Value;
+
+            List<HexagonCell> entryCells = GetRandomEntryCells(levelCells.FindAll(c => c.isEdgeCell), maxEntryCellsPerLevel, false, level);
+            List<HexagonCell> newPaths = GetRandomCellPaths(entryCells, levelCells, position, ignoreEdgeCells);
+
+            if (newPaths.Count > 0)
+            {
+                pathsByLevel.Add(level, newPaths);
+
+                if (level < lastLevel)
+                {
+                    List<HexagonCell> newRamps = GetRandomLevelConnectorCells(newPaths, maxEntryCellsPerLevel);
+                    rampsByLevel.Add(level, newRamps);
+                }
+            }
+        }
+
+        return (pathsByLevel, rampsByLevel);
+    }
+
+
+
+
+    public static Dictionary<int, List<HexagonCell>> OrganizeCellsByLevel(List<HexagonCell> cells)
+    {
+        Dictionary<int, List<HexagonCell>> cellsByLevel = new Dictionary<int, List<HexagonCell>>();
+
+        foreach (HexagonCell cell in cells)
+        {
+            int level = cell.GetGridLayer();
+
+            if (cellsByLevel.ContainsKey(level) == false)
+            {
+                cellsByLevel.Add(level, new List<HexagonCell>());
+            }
+
+            cellsByLevel[level].Add(cell);
+        }
+        return cellsByLevel;
+    }
+
+    public static HexagonCell[,] CreateRectangularGrid(List<HexagonCell> cellGrid)
+    {
+        float hexagonSize = cellGrid[0].size;
+
+        //Find the minimum and maximum x and z coordinates of the hexagon cells in the grid
+        float minX = cellGrid.Min(cell => cell.transform.position.x);
+        float maxX = cellGrid.Max(cell => cell.transform.position.x);
+        float minZ = cellGrid.Min(cell => cell.transform.position.z);
+        float maxZ = cellGrid.Max(cell => cell.transform.position.z);
+        //Determine the number of rows and columns needed for the rectangular grid
+        int rows = (int)((maxZ - minZ) / hexagonSize) + 1;
+        int cols = (int)((maxX - minX) / (hexagonSize * 0.75f)) + 1;
+
+        //Initialize the rectangular grid with the determined number of rows and columns
+        HexagonCell[,] rectGrid = new HexagonCell[rows, cols];
+
+        //Iterate through each hexagon cell in the cell grid
+        foreach (HexagonCell cell in cellGrid)
+        {
+            //Determine the row and column index of the current cell in the rectangular grid
+            int row = (int)((cell.transform.position.z - minZ) / hexagonSize);
+            int col = (int)((cell.transform.position.x - minX) / (hexagonSize * 0.75f));
+
+            //Assign the current cell to the corresponding position in the rectangular grid
+            rectGrid[row, col] = cell;
+        }
+
+        return rectGrid;
+    }
+
+
+    public static void MapHeightmapValues(float[,] heightmap, HexagonCell[,] cellGrid, bool assign)
+    {
+        //Check that the dimensions of the heightmap match the dimensions of the cell grid
+        // if (heightmap.GetLength(0) != cellGrid.GetLength(0) || heightmap.GetLength(1) != cellGrid.GetLength(1))
+        // {
+        //     Debug.LogError("The dimensions of the heightmap do not match the dimensions of the cell grid.");
+        //     return;
+        // }
+
+        //Iterate through each element of the cell grid
+        for (int row = 0; row < cellGrid.GetLength(0); row++)
+        {
+            for (int col = 0; col < cellGrid.GetLength(1); col++)
+            {
+                HexagonCell cell = cellGrid[row, col];
+
+                //Check if there is a HexagonCell at the current element
+                if (cell != null)
+                {
+                    //Assign the value of the corresponding element in the heightmap to the HexagonCell's height property
+                    // cellGrid[row, col].height = heightmap[row, col];
+                    // Set cell to path if value within a set range
+
+
+                    if (assign)
+                    {
+                        cell.road = (heightmap[row, col] <= 0.2f);
+
+                        if (cell.isEdgeCell == false)
+                        {
+                            cell.SetPathCell(cell.road);
+                        }
+                    }
+                    else
+                    {
+                        cell.road = !cell.isEdgeCell && (heightmap[row, col] <= 0.2f);
+                    }
+
+
+                }
+            }
+        }
+    }
+
+    public static List<HexagonCell> ClearSoloPathCells(List<HexagonCell> pathCells)
+    {
+        foreach (HexagonCell cell in pathCells)
+        {
+            bool hasPathNeighbor = cell._neighbors.Any(c => c.isPathCell == true);
+            if (hasPathNeighbor == false) cell.SetPathCell(false);
+        }
+        return pathCells.FindAll(c => c.isPathCell);
+    }
+
+    public static void AssignVerticesToCells(List<HexagonCell> cells, List<Vector3> vertices)
+    {
+        foreach (Vector3 vertex in vertices)
+        {
+            HexagonCell closestCell = cells[0];
+            float closestDistance = Vector3.Distance(vertex, closestCell.transform.position);
+            for (int i = 1; i < cells.Count; i++)
+            {
+                float distance = Vector3.Distance(vertex, cells[i].transform.position);
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closestCell = cells[i];
+                }
+            }
+            closestCell._vertices.Add(vertex);
+        }
+    }
+
+
+    public static void ShuffleCells(List<HexagonCell> cells)
+    {
+        int n = cells.Count;
+        for (int i = 0; i < n; i++)
+        {
+            // Get a random index from the remaining elements
+            int r = i + UnityEngine.Random.Range(0, n - i);
+            // Swap the current element with the random one
+            HexagonCell temp = cells[r];
+            cells[r] = cells[i];
+            cells[i] = temp;
+        }
+    }
+
+    [System.Serializable]
+    public struct NeighborSideCornerSockets
+    {
+        public int[] topCorners;
+        public int[] bottomCorners;
     }
 }

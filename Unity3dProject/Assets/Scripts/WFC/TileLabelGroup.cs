@@ -1,14 +1,17 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class TileLabelGroup : MonoBehaviour
 {
     public GameObject[] labels;
+    public bool reset;
 
     private void OnValidate()
     {
-        Reevaluate();
+        if (reset)
+        {
+            reset = false;
+            Reevaluate();
+        }
     }
 
     private void Reevaluate()
@@ -20,10 +23,20 @@ public class TileLabelGroup : MonoBehaviour
             for (int i = 0; i < updated.Length; i++)
             {
                 updated[i] = found[i].gameObject;
-                updated[i].name = "label_" + i;
+                // updated[i].name = "label_" + i;
             }
             labels = updated;
         }
+    }
+    public static GameObject[] Reevaluate(GameObject go)
+    {
+        RectTransform[] found = go.GetComponentsInChildren<RectTransform>();
+        GameObject[] updated = new GameObject[found.Length];
+        for (int i = 0; i < updated.Length; i++)
+        {
+            updated[i] = found[i].gameObject;
+        }
+        return updated;
     }
 
     public void SetLabelsEnabled(bool enable)
