@@ -53,15 +53,7 @@ public enum TileSocketPrimitive
     LeveledEdgePart,
     LeveledRampTop,
     LeveledRampSide,
-
-    // LevelBlockGeneric,
-    // LevelBlockPart,
-    // LevelBlockRampTop,
-
-    // RampBottom,
-    // RampTop,
-    // RampBack,
-    // RampSide,
+    LeveledRampBottom,
 
     BuildingFront,
     BuildingSide,

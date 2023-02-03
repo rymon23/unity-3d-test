@@ -14,17 +14,18 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
     [Header("Settings")]
     [SerializeField] private WFCCollapseOrder collapseOrder = 0;
 
-    [SerializeField] private int minEntrances = 1;
-    [SerializeField] private int maxEntrances = 2;
-
-    [SerializeField] private int maxAttempts = 9999;
+    [Range(1, 10)][SerializeField] private int minEntrances = 1;
+    [Range(1, 10)][SerializeField] private int maxEntrances = 2;
+    [Range(1, 9999)][SerializeField] private int maxAttempts = 9999;
     [SerializeField] private int remainingAttempts;
     [SerializeField] private bool generatePaths = true;
     [SerializeField] private bool isWalledEdge;
     [SerializeField] private bool ignoreFailures = true;
     [Header("Layering")]
-    [Range(0.1f, 1f)][SerializeField] private float layerStackChance = 0.5f;
+    [Range(0.1f, 1f)][SerializeField] private float leveledCellRadiusMult = 0.5f;
+    [Range(1, 10)][SerializeField] private int leveledCellClumpSets = 5;
     [SerializeField] private int totalLayers = 1;
+    [Range(0.1f, 1f)][SerializeField] private float layerStackChance = 0.5f;
 
     [Header("Clusters")]
     [SerializeField] private bool enableClusters;
@@ -56,13 +57,17 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
     public List<HexagonCell> cells;
     public List<HexagonCell> edgeCells;
     public List<HexagonCell> entryCells;
-    public List<HexagonCell> pathCells;
-    public List<HexagonCell> allLeveledCells;
+    // public List<HexagonCell> pathCells;
 
     [SerializeField] private List<HexagonCellCluster> activeCellClusters;
     [SerializeField] private List<HexagonCellCluster> allCellClusters;
     [SerializeField] private int availableCellClusters = 0;
     [SerializeField] private int totalEdgeCells = 0;
+
+    public Dictionary<int, List<HexagonCell>> allCellsByLayer;
+    public Dictionary<int, List<HexagonCell>> allLevelCellsByLayer;
+    public Dictionary<int, List<HexagonCell>> allPathCells;
+    public List<HexagonCell> topLevelCells;
 
     float[] rotationValues = { 0f, 60f, 120f, 180f, 240f, 300f };
 
@@ -95,20 +100,25 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         }
 
         CollapseLeveledCells();
+        Debug.Log("Level Cells Assigned");
 
-        // CollapsePathCells();
+        CollapsePathCells();
+        Debug.Log("Path Cells Assigned");
+
+        CollapseRemainingCellsByLayer();
+
         // if (generatePaths)
         // {
         //     CollapsePathCells();
         //     Debug.Log("Path Cells Assigned");
         // }
 
-        remainingAttempts = maxAttempts;
-        while (remainingAttempts > 0 && IsUnassignedCells())
-        {
-            remainingAttempts--;
-            SelectNext();
-        }
+        // remainingAttempts = maxAttempts;
+        // while (remainingAttempts > 0 && IsUnassignedCells())
+        // {
+        //     remainingAttempts--;
+        //     SelectNext();
+        // }
 
         InstantiateTiles();
 
@@ -151,41 +161,176 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
 
     private void CollapseLeveledCells()
     {
-        List<HexagonCell> leveledEdgeCells = allLeveledCells.FindAll(c => c.isLeveledEdge);
         List<HexagonTile> tilePrefabs_LeveledRamp = tilePrefabs_Leveled.FindAll(c => c.isLeveledRamp);
+        List<HexagonTile> tilePrefabs_LeveledNoRamp = tilePrefabs_Leveled.FindAll(c => c.isLeveledRamp == false);
 
-        foreach (HexagonCell cell in leveledEdgeCells)
+        foreach (var kvp in allLevelCellsByLayer)
         {
-            if (cell.IsAssigned()) continue;
+            int layer = kvp.Key;
+            List<HexagonCell> leveledCells = kvp.Value;
 
-            List<HexagonTile> prefabs = cell.isLeveledRampCell ? tilePrefabs_LeveledRamp : tilePrefabs_Leveled;
+            topLevelCells = leveledCells;
 
-            (HexagonTile nextTile, List<int> rotations) = SelectNextTile(cell, prefabs, false);
-            AssignTileToCell(cell, nextTile, rotations);
+            List<HexagonCell> leveledEdgeCells = leveledCells.FindAll(c => c.isLeveledEdge);
+            foreach (HexagonCell cell in leveledEdgeCells)
+            {
+
+                if (cell.IsAssigned()) continue;
+
+                List<HexagonTile> prefabs = cell.isLeveledRampCell ? tilePrefabs_LeveledRamp : tilePrefabs_LeveledNoRamp;
+
+                (HexagonTile nextTile, List<int> rotations) = SelectNextTile(cell, prefabs, false);
+                AssignTileToCell(cell, nextTile, rotations);
+
+                if (cell.isPathCell) cell.highlight = true;
+            }
+
+            foreach (HexagonCell cell in leveledCells)
+            {
+                // if (cell.isPathCell)
+                // {
+                //     cell.highlight = true;
+                //     if (!cell.isLeveledEdge && cell.layeredNeighbor[1] != null)
+                //     {
+
+                //         cell.layeredNeighbor[1].SetPathCell(true);
+                //         AssignTileToCell(cell, tilePrefabs_Path[0], 0);
+                //     }
+                // }
+
+                if (cell.IsAssigned()) continue;
+
+                (HexagonTile nextTile, List<int> rotations) = SelectNextTile(cell, tilePrefabs_Leveled, false);
+                AssignTileToCell(cell, nextTile, rotations);
+            }
         }
 
-        foreach (HexagonCell cell in allLeveledCells)
+        foreach (var kvp in allCellsByLayer)
         {
-            if (cell.IsAssigned()) continue;
+            int layer = kvp.Key;
+            List<HexagonCell> layerCells = kvp.Value;
 
-            (HexagonTile nextTile, List<int> rotations) = SelectNextTile(cell, tilePrefabs_Leveled, false);
-            AssignTileToCell(cell, nextTile, rotations);
+            if (layer == 0) continue;
+
+            foreach (HexagonCell cell in layerCells)
+            {
+                if (cell.IsAssigned()) continue;
+
+                if (!cell.isLeveledGroundCell) continue;
+
+                (HexagonTile nextTile, List<int> rotations) = SelectNextTile(cell, tilePrefabs, false);
+                AssignTileToCell(cell, nextTile, rotations);
+            }
         }
     }
 
     private void CollapsePathCells()
     {
-        for (int i = 0; i < pathCells.Count; i++)
+        Debug.Log("topLevelCells: " + topLevelCells.Count);
+
+        allPathCells = HexagonCell.GenerateRandomCellPaths(entryCells,
+                allCellsByLayer,
+                transform.position);
+        // allPathCells = HexagonCell.GenerateRandomCellPaths(entryCells,
+        //         topLevelCells.Find(c => c.isLeveledEdge),
+        //         allCellsByLayer,
+        //         transform.position);
+
+        foreach (var kvp in allPathCells)
         {
-            HexagonCell currentCell = pathCells[i];
-            if (currentCell.IsAssigned()) continue;
+            int key = kvp.Key;
+            List<HexagonCell> pathCells = kvp.Value;
 
-            currentCell.SetPathCell(true);
+            foreach (HexagonCell item in pathCells)
+            {
 
-            (HexagonTile nextTile, List<int> rotations) = SelectNextTile(currentCell, tilePrefabs_Path, false);
-            AssignTileToCell(currentCell, nextTile, rotations);
+                HexagonCell updatedPathCell = HexagonCell.EvaluateLevelGroundPath(item);
+                if (updatedPathCell != item)
+                {
+                    // (HexagonTile nextTile, List<int> rotations) = SelectNextTile(item, tilePrefabs_Path, false);
+                    AssignTileToCell(updatedPathCell, updatedPathCell.isEdgeCell ? tilePrefabs_Leveled.FindAll(t => t.isLeveledRamp)[0] : tilePrefabs_Path[0], 0);
+                }
+                else
+                {
+                    if (item.isLeveledCell)
+                    {
+                        // Check if a neighbor is a leveled ramp, if not set as ramp
+                        List<HexagonCell> layerNeighbors = item.GetLayerNeighbors();
+                        bool hasRampAsNeighbor = false;
+                        foreach (var neighbor in layerNeighbors)
+                        {
+                            if (neighbor.isLeveledRampCell && neighbor.isPathCell)
+                            {
+                                hasRampAsNeighbor = true;
+                                break;
+                            }
+                        }
+                        if (hasRampAsNeighbor == false)
+                        {
+                            item.SetLeveledRampCell(true);
+                            item.ClearTile();
+                            (HexagonTile tile, List<int> rot) = SelectNextTile(item, tilePrefabs_Leveled.FindAll(t => t.isLeveledRamp), false);
+                            AssignTileToCell(item, tile, rot);
+                        }
+                        else
+                        {
+                            item.SetPathCell(false);
+                            continue;
+                        }
+                    }
+
+                    item.SetPathCell(true);
+
+                    if (item.IsAssigned()) continue;
+
+                    (HexagonTile nextTile, List<int> rotations) = SelectNextTile(item, tilePrefabs_Path, false);
+                    AssignTileToCell(item, nextTile, rotations);
+
+                }
+            }
         }
     }
+    private void CollapseRemainingCellsByLayer()
+    {
+        for (int currentLayer = 0; currentLayer < totalLayers; currentLayer++)
+        {
+            List<HexagonCell> layerCells;
+            if (currentLayer == 0)
+            {
+                layerCells = allCellsByLayer[0].FindAll(c => !c.IsAssigned() && !c.isLeveledCell);
+            }
+            else
+            {
+                layerCells = HexagonCell.GetAvailableCellsForNextLayer(allCellsByLayer[currentLayer]);
+            }
+
+            foreach (HexagonCell cell in layerCells)
+            {
+                if (cell.IsAssigned()) continue;
+
+                cell.highlight = true;
+
+                (HexagonTile nextTile, List<int> rotations) = SelectNextTile(cell, tilePrefabs, false);
+
+                if (nextTile == null) cell.isIgnored = true;
+
+                if (nextTile == null && !ignoreFailures)
+                {
+                    Debug.LogError("No tile found for cell: " + cell.id);
+
+                    for (int i = 0; i < cell._neighbors.Count; i++)
+                    {
+                        Debug.LogError("neighbor: " + cell._neighbors[i].id + ",");
+                    }
+                }
+
+                // Assign tile to the next cell
+                AssignTileToCell(cell, nextTile, rotations);
+            }
+        }
+    }
+
+
 
     private void SetIgnoreCellCluster(HexagonCellCluster cluster)
     {
@@ -428,6 +573,10 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         {
             if (cell.isEntryCell && !prefabsList[i].isEntrance) continue;
 
+            if (prefabsList[i].isLeveledTile && !cell.isLeveledCell) continue;
+
+            if (cell.isLeveledRampCell && !prefabsList[i].isLeveledRamp) continue;
+
             if (prefabsList[i].baseLayerOnly && cell.GetGridLayer() > 0) continue;
 
             // if (IsClusterCell && prefabsList[i].GetInnerClusterSocketCount() != cell.GetNumberofNeighborsInCluster()) continue;
@@ -451,6 +600,10 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
             else if (cell.isEdgeCell)
             {
                 Debug.LogError("No compatible tiles for Edge Cell: " + cell.id);
+            }
+            else if (cell.isLeveledEdge)
+            {
+                Debug.LogError("No compatible tiles for Leveled Edge Cell: " + cell.id);
             }
             else
             {
@@ -511,16 +664,16 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         HexagonCell.NeighborSideCornerSockets[] neighborTileCornerSocketsBySide = currentCell.GetSideNeighborTileSockets(isWalledEdge);
 
         string tileName = currentTile.gameObject.name;
-        if (currentCell.id == "0-4" && neighborTileCornerSocketsBySide.Length > 0)
-        {
-            Debug.LogError("neighborTileCornerSocketsBySide: " + currentCell.id + ", currentTile: " + currentTile.gameObject.name);
+        // if (currentCell.id == "0-4" && neighborTileCornerSocketsBySide.Length > 0)
+        // {
+        //     Debug.LogError("neighborTileCornerSocketsBySide: " + currentCell.id + ", currentTile: " + currentTile.gameObject.name);
 
-            for (int i = 0; i < neighborTileCornerSocketsBySide.Length; i++)
-            {
-                Debug.LogError("side: " + (HexagonSide)i + ", bottomCorners: " + neighborTileCornerSocketsBySide[i].bottomCorners[0] + ", " + neighborTileCornerSocketsBySide[i].bottomCorners[1]);
-                Debug.LogError("side: " + (HexagonSide)i + ", topCorners: " + neighborTileCornerSocketsBySide[i].topCorners[0] + ", " + neighborTileCornerSocketsBySide[i].topCorners[1]);
-            }
-        }
+        //     for (int i = 0; i < neighborTileCornerSocketsBySide.Length; i++)
+        //     {
+        //         Debug.LogError("side: " + (HexagonSide)i + ", bottomCorners: " + neighborTileCornerSocketsBySide[i].bottomCorners[0] + ", " + neighborTileCornerSocketsBySide[i].bottomCorners[1]);
+        //         Debug.LogError("side: " + (HexagonSide)i + ", topCorners: " + neighborTileCornerSocketsBySide[i].topCorners[0] + ", " + neighborTileCornerSocketsBySide[i].topCorners[1]);
+        //     }
+        // }
 
         // Check every rotation
         for (int rotation = 0; rotation < 6; rotation++)
@@ -1016,7 +1169,7 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         edgeCells = HexagonCell.GetEdgeCells(cells);
         totalEdgeCells = edgeCells.Count;
 
-        entryCells = HexagonCell.GetRandomEntryCells(edgeCells, maxEntrances, true);
+        entryCells = HexagonCell.GetRandomEntryCells(edgeCells, maxEntrances, true, 0);
 
         // TODO: find a better way to jsut provide this without doing this extra stuff
         totalLayers = edgeCells.OrderByDescending(c => c.GetGridLayer()).ToList()[0].GetGridLayer() + 1;
@@ -1024,22 +1177,8 @@ public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
         allCellClusters = HexagonCellCluster.GetHexagonCellClusters(cells, transform.position, collapseOrder, isWalledEdge);
         availableCellClusters = allCellClusters.Count;
 
-
-        pathCells = new List<HexagonCell>();
-        if (generatePaths)
-        {
-            // Debug.Log("entryCells: " + entryCells.Count);
-            pathCells = HexagonCell.GetRandomCellPaths(entryCells, cells, transform.position, false);
-        }
-        else
-        {
-            pathCells = cells.FindAll(c => c.isPathCell);
-        }
-        pathCells = HexagonCell.ClearSoloPathCells(pathCells);
-
-        allLeveledCells = HexagonCell.GetRandomLeveledCells(cells.FindAll(c => c.isEdgeCell == false), subZone.radius * 0.5f, true);
-        List<HexagonCell> leveledEdgeCells = HexagonCell.GetLeveledEdgeCells(allLeveledCells, true);
-        HexagonCell.GetRandomLeveledRampCells(leveledEdgeCells, 4, true, true);
+        allCellsByLayer = HexagonCell.OrganizeCellsByLevel(cells);
+        allLevelCellsByLayer = HexagonCell.SetRandomLeveledCellsForAllLayers(allCellsByLayer, subZone.radius * leveledCellRadiusMult, leveledCellClumpSets);
 
         // Temp
         subZone.cellClusters = allCellClusters;
