@@ -2,115 +2,74 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System;
-using ProceduralBase;
-using UnityEditor;
 
 
 namespace WFCSystem
 {
-    // public enum TileMetaSocket
-    // {
-    //     Any = 0,
-    //     Edge = 1,
-    //     Empty = 2,
-    //     Entrance = 3,
-    //     Path = 4,
-    //     PathSide = 4,
-    //     WallSide = 3,
-    //     WallSideOuter = 3,
-    //     WallSideInner = 4,
-    //     WallPart = 5,
-    //     InnerCell = 6, 
-    //     InnerCuster = 7
-    //     BuildingFront
-    //     BuildingBack
-    //     BuildingSide
-    //     BuildingOutlet
+    public enum TileSocketEnvironment
+    {
+        Any,
+        Interior,
+        Exterior
+    }
+    public enum TileSocketFragType
+    {
+        Unset,
+        Generic,
+        Part,
+        End,
+        Outlet,
+        Start,
+    }
 
-    //     VerticalFront
-    //     VerticalBack
-    //     VerticalSide
-    //     VerticalOutlet
-    // }
-
-    public enum TileSocketPrimitive
+    public enum MicroTileSocket
     {
         Any = 0,
         Edge = 1,
-        InnerCell = 2, //Generic for any nonEdge cell
-
-        EntranceOuter = 3,
-        EntrancePart = 4,
-        EntranceSide = 5,
-        EntranceInner = 6,
-
-        WallBegin,
-        WallPart,
-        OuterWall,
-        InnerWall,
-        WallEnd,
-
-
-        Cluster,
-        ClusterPart,
-
-        PathGeneric = 14,
-        PathBegin,
-        PathFinish,
-        PathPart,
-        PathSide,
-
-        LeveledInner,
-        LeveledOuter,
-        LeveledEdgePart,
-        LeveledRampTop,
-        LeveledRampSide,
-        LeveledRampBottom,
-
-        EmptySpace,
-
-        BuildingFront,
-        BuildingSide,
-        BuildingBack,
-        BuildingEntry,
-        BuildingPart,
-        BuildingLevelOutlet,
-        BuildingLevelConnector,
-
-        VerticalPart,
-        VerticalPartFront,
-        VerticalPartSide,
-        VerticalPartBack,
-
+        EmptySpace = 2,
+        UnassignedEdge = 3,
+        UnassignedInner = 4,
+        EntranceGeneric,
+        EntranceSide,
+        InnerCellGeneric,
+        WallGeneric,
+        WallGenericPart,
+        WallGenericCorner,
+        WallGenericEnd,
+        GenericStructureEnd,
+        FloorGenericPart,
+        FloorGenericEnd,
+        StairwayGenericTop,
+        StairwayGenericBottom,
+        StairwayGenericConnector,
+        DoorWay,
+        DoorWayPart,
+        DoorWaySide,
+        RoofGeneric,
+        RoofGenericPart,
+        CeilingGeneric,
+        VerticalCorner_M,
+        VerticalCorner_F,
+        BalconyEntry,
     }
 
-    // public enum TileSocketConstants
-    // {
-    //     Any = 0,
-    //     Edge = 1,
-    //     Entrance = 2,
-    //     OuterWall = 3,
-    //     InnerWall = 4,
-    //     WallPart = 5,
-    //     InnerCell = 6, //Generic for any nonEdge cell
-    //     InnerCuster = 7 //Generic for any nonEdge cell
-    // }
 
+    [System.Serializable]
 
-    [CreateAssetMenu(fileName = "New Socket Directory", menuName = "Socket Directory")]
-    public class TileSocketDirectory : ScriptableObject, ITileSocketDirectory
+    [CreateAssetMenu(fileName = "New Micro Tile Socket Directory", menuName = "Micro Tile Socket Directory")]
+    public class MicroTileSocketDirectory : ScriptableObject, ITileSocketDirectory
     {
         [SerializeField] private bool revaluate = true;
         [SerializeField] private bool defaultCompatibility = true;
         public List<SocketCompatibility> compatibilityTable;
         [SerializeField] private List<Color> generatedColors = new List<Color>();
-        [SerializeField] private string[] enums = Enum.GetNames(typeof(TileSocketPrimitive));
+        [SerializeField] private string[] enums = Enum.GetNames(typeof(MicroTileSocket));
         public bool[,] matrix;
 
 
         private void OnValidate()
         {
-            enums = Enum.GetNames(typeof(TileSocketPrimitive));
+            enums = Enum.GetNames(typeof(MicroTileSocket));
 
             // UpdateSocketLabels();
             if (compatibilityTable == null) return;
@@ -142,10 +101,12 @@ namespace WFCSystem
             }
             return matrix;
         }
+
         public List<SocketCompatibility> GetCompatibilityTable()
         {
             return compatibilityTable;
         }
+
         private void ResizeCompatibilityTable()
         {
             if (compatibilityTable.Count < enums.Length)
@@ -270,7 +231,7 @@ namespace WFCSystem
                     // Set the name of the socket and the name of the relations
                     bool compatibility = compatibilityTable[index].relations[relationIX].isCompatible;
 
-                    if (index == (int)TileSocketPrimitive.Any || relationIX == (int)TileSocketPrimitive.Any)
+                    if (index == (int)MicroTileSocket.Any || relationIX == (int)MicroTileSocket.Any)
                     {
                         compatibility = true;
                     }
@@ -281,8 +242,7 @@ namespace WFCSystem
 
                     compatibilityTable[index].relations[relationIX] = new SocketRelation("ID: " + relationIX + " - " + enums[relationIX], compatibility);
 
-                    if (relationIX < compatibilityTable.Count && relationIX < compatibilityTable[index].relations.Count
-                        )// && index == (int)TileSocketPrimitive.Any || index == (int)TileSocketPrimitive.Edge)
+                    if (relationIX < compatibilityTable.Count && relationIX < compatibilityTable[index].relations.Count)
                     {
 
                         compatibilityTable[relationIX].relations[index] = new SocketRelation("ID: " + index + " - " + enums[index], compatibility);
@@ -301,43 +261,40 @@ namespace WFCSystem
 
             UpdateRelationsData();
         }
+    }
 
+    [System.Serializable]
+    public struct SocketCompatibility
+    {
+        public string name;
+        public Color color;
+        public ITileSocketDirectory.ResetCompatibilityState resetCompatibility;
+        public List<SocketRelation> relations;
+        public SocketCompatibility(string _name, List<SocketRelation> _relations, Color _color)
+        {
+            this.name = _name;
+            this.relations = _relations;
+            this.color = _color;
+            this.resetCompatibility = ITileSocketDirectory.ResetCompatibilityState.Unset;
+        }
+    }
+    [System.Serializable]
+    public struct SocketEntry
+    {
+        public string name;
+        public string description;
+        public Color color;
+    }
+    [System.Serializable]
+    public struct SocketRelation
+    {
+        public string name;
+        public bool isCompatible;
 
-        // [System.Serializable]
-        // public struct SocketEntry
-        // {
-        //     public string name;
-        //     public string description;
-        //     public Color color;
-        // }
-        // [System.Serializable]
-        // public struct SocketRelation
-        // {
-        //     public string name;
-        //     public bool isCompatible;
-
-        //     public SocketRelation(string name, bool isCompatible)
-        //     {
-        //         this.name = name;
-        //         this.isCompatible = isCompatible;
-        //     }
-        // }
-        // [System.Serializable]
-        // public struct SocketCompatibility
-        // {
-        //     public string name;
-        //     public Color color;
-        //     public ResetCompatibilityState resetCompatibility;
-        //     public List<SocketRelation> relations;
-        //     public SocketCompatibility(string _name, List<SocketRelation> _relations, Color _color)
-        //     {
-        //         this.name = _name;
-        //         this.relations = _relations;
-        //         this.color = _color;
-        //         this.resetCompatibility = ResetCompatibilityState.Unset;
-        //     }
-        // }
-        // public enum ResetCompatibilityState { Unset = 0, None, All }
-
+        public SocketRelation(string name, bool isCompatible)
+        {
+            this.name = name;
+            this.isCompatible = isCompatible;
+        }
     }
 }

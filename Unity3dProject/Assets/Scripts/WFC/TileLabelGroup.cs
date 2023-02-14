@@ -4,17 +4,19 @@ public class TileLabelGroup : MonoBehaviour
 {
     public GameObject[] labels;
     public bool reset;
+    public bool resetLabels;
 
     private void OnValidate()
     {
         if (reset)
         {
             reset = false;
-            Reevaluate();
+            Reevaluate(resetLabels);
+            resetLabels = false;
         }
     }
 
-    private void Reevaluate()
+    private void Reevaluate(bool resetLabels)
     {
         RectTransform[] found = GetComponentsInChildren<RectTransform>();
         if (found.Length != labels.Length)
@@ -23,7 +25,7 @@ public class TileLabelGroup : MonoBehaviour
             for (int i = 0; i < updated.Length; i++)
             {
                 updated[i] = found[i].gameObject;
-                // updated[i].name = "label_" + i;
+                if (resetLabels) updated[i].name = "label_" + i;
             }
             labels = updated;
         }

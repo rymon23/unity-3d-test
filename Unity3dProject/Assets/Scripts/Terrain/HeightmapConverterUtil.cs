@@ -5,6 +5,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using ProceduralBase;
+using WFCSystem;
 
 public class HeightmapConverterUtil : MonoBehaviour
 {
@@ -64,7 +65,7 @@ public class HeightmapConverterUtil : MonoBehaviour
             minHeight = min;
             maxHeight = max;
 
-            rectangularHexGrid = HexagonCell.CreateRectangularGrid(subZone.hexagonTileCells);
+            // rectangularHexGrid = HexagonCell.CreateRectangularGrid(subZone.hexagonTileCells);
 
 
             HexagonCell.MapHeightmapValues(zoomedMap, rectangularHexGrid, assignPathCells);
@@ -284,7 +285,7 @@ public class HeightmapConverterUtil : MonoBehaviour
                 if (cells[i, j] != null)
                 {
                     Vector3 cellPosition = cells[i, j].transform.position;
-                    float size = cells[i, j].size;
+                    float size = cells[i, j].GetSize();
 
                     if (cells[i, j].road)
                     {

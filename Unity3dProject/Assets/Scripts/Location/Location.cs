@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
 using UnityEditor;
-
+using WFCSystem;
 
 namespace ProceduralBase
 {
@@ -88,8 +88,8 @@ namespace ProceduralBase
                 {
                     _subZones[i].Debug_ShowTiles(showZoneBounds);
                     _subZones[i].Debug_ShowBounds(showTileGrid);
-                    _subZones[i].Debug_ResetHexagonTilePrototypes(resetHexagonTilePrototypes);
-                    _subZones[i].Debug_GenerateHexagonTileCells(generateHexagonTileCells);
+                    _subZones[i].Debug_ResetHexagonellPrototypes(resetHexagonTilePrototypes);
+                    _subZones[i].Debug_GenerateHexagonCells(generateHexagonTileCells);
                 }
 
                 if (_resetHexagonTilePrototypes != resetHexagonTilePrototypes ||

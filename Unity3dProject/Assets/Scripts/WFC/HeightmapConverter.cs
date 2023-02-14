@@ -3,6 +3,7 @@ using System;
 using UnityEngine;
 using UnityEngine.UI;
 using ProceduralBase;
+using WFCSystem;
 
 public class HeightmapConverter : MonoBehaviour
 {

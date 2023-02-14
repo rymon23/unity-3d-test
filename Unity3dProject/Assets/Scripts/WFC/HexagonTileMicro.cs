@@ -6,96 +6,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
-
 namespace WFCSystem
 {
 
-    // public enum SmallBuidings
-    // {
-    //     Unset = 0,
-    //     Brazier,
-    //     StreetLamp,
-    //     Pipe,
-    //     Statue,
-    //     Fountain,
-    //     GuardStation,
-    //     Barricade,
-    // }
-
-    public enum TileCategory
-    {
-        Unset = 0,
-        Building,
-        Road,
-        Bridge,
-        Wall,
-        Gate,
-        Interior,
-        Misc,
-    }
-
-    public enum TileType
-    {
-        Unset = 0,
-        ExteriorWallSmall,
-        ExteriorWallLarge,
-        TowerSmall,
-        TowerLarge,
-        InteriorWall,
-        BuildingSmall,
-        BuildingMedium,
-        BuildingLarge,
-        RoadSmall,
-        RoadLarge,
-    }
-
-    public enum HexagonSide
-    {
-        Front = 0,
-        FrontRight,
-        BackRight,
-        Back,
-        BackLeft,
-        FrontLeft,
-    }
-
-    public enum MirroredSideState
-    {
-        Unset = 0,
-        SymmetricalRightAndLeft = 1,
-        Mirror_FrontAndBack,
-    }
-
-    public enum HexagonCorner
-    {
-        FrontA = 0,
-        FrontB,
-        FrontRightA,
-        FrontRightB,
-        BackRightA,
-        BackRightB,
-
-        BackA,
-        BackB,
-        BackLeftA,
-        BackLeftB,
-        FrontLeftA,
-        FrontLeftB,
-    }
-
-    public enum HexagonSideEdge
-    {
-        Bottom = 0,
-        Right,
-        Top,
-        Left,
-    }
-
-
-
-
     [System.Serializable]
-    public class HexagonTile : MonoBehaviour, IHexagonTile
+    public class HexagonTileMicro : MonoBehaviour, IHexagonTile
     {
         public int id = -1;
         public int size = 12;
@@ -117,19 +32,20 @@ namespace WFCSystem
         public bool isLayerConnector;
 
         [Header("Tile Compatibility / Probability")]
-        public bool isInClusterSet; // Is part of a set of tiles that make a cluster
-        public bool isClusterCenterTile; // Is the center part of a set of tiles that make a cluster
         public bool isEdgeable; // can be placed on the edge / border or the grid
         public bool isEntrance;
+        public bool isStairway;
         public bool isPath;
         public bool isLeveledTile;
-        public bool isLeveledRamp;
         public bool isVerticalWFC;
+        public bool isLeveledRamp;
         public bool isFragment; // Is incomplete by itself, needs neighbor tiles like itself
+        public bool isInClusterSet; // Is part of a set of tiles that make a cluster
+        public bool isClusterCenterTile; // Is the center part of a set of tiles that make a cluster
         [Range(0.05f, 1f)] public float probabilityWeight = 0.3f;
 
         [Header("Tile Socket Configuration")]
-        [SerializeField] private TileSocketDirectory tileSocketDirectory;
+        [SerializeField] private MicroTileSocketDirectory tileSocketDirectory;
         [SerializeField] private TileLabelGroup tileLabelGroup;
         [Range(-10f, 0f)][SerializeField] private float sideBottomLabelYOffset = -4f;
         [Range(0f, 10f)][SerializeField] private float sideTopLabelYOffset = 4f;
@@ -139,11 +55,14 @@ namespace WFCSystem
         [Range(0f, 10f)][SerializeField] private float labelForwardOffset = 2f;
 
         #region Tile Sockets
+        [Header("Tile Environment")]
+        public TileSocketEnvironment tileEnvironment = TileSocketEnvironment.Any;
+
         [Header("Tile Sockets")]
-        [SerializeField] private TileSocketPrimitive resetToSocket;
+        [Header("Controls")]
+        [SerializeField] private MicroTileSocket resetToSocket;
         [SerializeField] private SocketResetState resetSockets = SocketResetState.Unset;
         [SerializeField] private SocketMirrorState useSocketMirroring = SocketMirrorState.Unset;
-
         private int[] sideTopCornerSocketIds = new int[12];
         private int[] sideBtmCornerSocketIds = new int[12];
         private int[] topCornerSocketIds = new int[12];
@@ -151,60 +70,60 @@ namespace WFCSystem
         public void SetCornerSocketSetIds(CornerSocketSetType socketSetType, int[] _newCornerSocketIds) { }
 
         [Header("Side Bottom Sockets")]
-        [SerializeField] private TileSocketPrimitive sideBtmFrontA;
-        [SerializeField] private TileSocketPrimitive sideBtmFrontB;
-        [SerializeField] private TileSocketPrimitive sideBtmFrontRightA;
-        [SerializeField] private TileSocketPrimitive sideBtmFrontRightB;
-        [SerializeField] private TileSocketPrimitive sideBtmBackRightA;
-        [SerializeField] private TileSocketPrimitive sideBtmBackRightB;
-        [SerializeField] private TileSocketPrimitive sideBtmBackA;
-        [SerializeField] private TileSocketPrimitive sideBtmBackB;
-        [SerializeField] private TileSocketPrimitive sideBtmBackLeftA;
-        [SerializeField] private TileSocketPrimitive sideBtmBackLeftB;
-        [SerializeField] private TileSocketPrimitive sideBtmFrontLeftA;
-        [SerializeField] private TileSocketPrimitive sideBtmFrontLeftB;
+        [SerializeField] private MicroTileSocket sideBtmFrontA;
+        [SerializeField] private MicroTileSocket sideBtmFrontB;
+        [SerializeField] private MicroTileSocket sideBtmFrontRightA;
+        [SerializeField] private MicroTileSocket sideBtmFrontRightB;
+        [SerializeField] private MicroTileSocket sideBtmBackRightA;
+        [SerializeField] private MicroTileSocket sideBtmBackRightB;
+        [SerializeField] private MicroTileSocket sideBtmBackA;
+        [SerializeField] private MicroTileSocket sideBtmBackB;
+        [SerializeField] private MicroTileSocket sideBtmBackLeftA;
+        [SerializeField] private MicroTileSocket sideBtmBackLeftB;
+        [SerializeField] private MicroTileSocket sideBtmFrontLeftA;
+        [SerializeField] private MicroTileSocket sideBtmFrontLeftB;
 
         [Header("Side Top Sockets")]
-        [SerializeField] private TileSocketPrimitive sideTopFrontA;
-        [SerializeField] private TileSocketPrimitive sideTopFrontB;
-        [SerializeField] private TileSocketPrimitive sideTopFrontRightA;
-        [SerializeField] private TileSocketPrimitive sideTopFrontRightB;
-        [SerializeField] private TileSocketPrimitive sideTopBackRightA;
-        [SerializeField] private TileSocketPrimitive sideTopBackRightB;
-        [SerializeField] private TileSocketPrimitive sideTopBackA;
-        [SerializeField] private TileSocketPrimitive sideTopBackB;
-        [SerializeField] private TileSocketPrimitive sideTopBackLeftA;
-        [SerializeField] private TileSocketPrimitive sideTopBackLeftB;
-        [SerializeField] private TileSocketPrimitive sideTopFrontLeftA;
-        [SerializeField] private TileSocketPrimitive sideTopFrontLeftB;
+        [SerializeField] private MicroTileSocket sideTopFrontA;
+        [SerializeField] private MicroTileSocket sideTopFrontB;
+        [SerializeField] private MicroTileSocket sideTopFrontRightA;
+        [SerializeField] private MicroTileSocket sideTopFrontRightB;
+        [SerializeField] private MicroTileSocket sideTopBackRightA;
+        [SerializeField] private MicroTileSocket sideTopBackRightB;
+        [SerializeField] private MicroTileSocket sideTopBackA;
+        [SerializeField] private MicroTileSocket sideTopBackB;
+        [SerializeField] private MicroTileSocket sideTopBackLeftA;
+        [SerializeField] private MicroTileSocket sideTopBackLeftB;
+        [SerializeField] private MicroTileSocket sideTopFrontLeftA;
+        [SerializeField] private MicroTileSocket sideTopFrontLeftB;
 
         [Header("Bottom Edge Sockets")]
-        [SerializeField] private TileSocketPrimitive bottomFrontA;
-        [SerializeField] private TileSocketPrimitive bottomFrontB;
-        [SerializeField] private TileSocketPrimitive bottomFrontRightA;
-        [SerializeField] private TileSocketPrimitive bottomFrontRightB;
-        [SerializeField] private TileSocketPrimitive bottomBackRightA;
-        [SerializeField] private TileSocketPrimitive bottomBackRightB;
-        [SerializeField] private TileSocketPrimitive bottomBackA;
-        [SerializeField] private TileSocketPrimitive bottomBackB;
-        [SerializeField] private TileSocketPrimitive bottomBackLeftA;
-        [SerializeField] private TileSocketPrimitive bottomBackLeftB;
-        [SerializeField] private TileSocketPrimitive bottomFrontLeftA;
-        [SerializeField] private TileSocketPrimitive bottomFrontLeftB;
+        [SerializeField] private MicroTileSocket bottomFrontA;
+        [SerializeField] private MicroTileSocket bottomFrontB;
+        [SerializeField] private MicroTileSocket bottomFrontRightA;
+        [SerializeField] private MicroTileSocket bottomFrontRightB;
+        [SerializeField] private MicroTileSocket bottomBackRightA;
+        [SerializeField] private MicroTileSocket bottomBackRightB;
+        [SerializeField] private MicroTileSocket bottomBackA;
+        [SerializeField] private MicroTileSocket bottomBackB;
+        [SerializeField] private MicroTileSocket bottomBackLeftA;
+        [SerializeField] private MicroTileSocket bottomBackLeftB;
+        [SerializeField] private MicroTileSocket bottomFrontLeftA;
+        [SerializeField] private MicroTileSocket bottomFrontLeftB;
 
         [Header("Top Edge Sockets")]
-        [SerializeField] private TileSocketPrimitive topFrontA;
-        [SerializeField] private TileSocketPrimitive topFrontB;
-        [SerializeField] private TileSocketPrimitive topFrontRightA;
-        [SerializeField] private TileSocketPrimitive topFrontRightB;
-        [SerializeField] private TileSocketPrimitive topBackRightA;
-        [SerializeField] private TileSocketPrimitive topBackRightB;
-        [SerializeField] private TileSocketPrimitive topBackA;
-        [SerializeField] private TileSocketPrimitive topBackB;
-        [SerializeField] private TileSocketPrimitive topBackLeftA;
-        [SerializeField] private TileSocketPrimitive topBackLeftB;
-        [SerializeField] private TileSocketPrimitive topFrontLeftA;
-        [SerializeField] private TileSocketPrimitive topFrontLeftB;
+        [SerializeField] private MicroTileSocket topFrontA;
+        [SerializeField] private MicroTileSocket topFrontB;
+        [SerializeField] private MicroTileSocket topFrontRightA;
+        [SerializeField] private MicroTileSocket topFrontRightB;
+        [SerializeField] private MicroTileSocket topBackRightA;
+        [SerializeField] private MicroTileSocket topBackRightB;
+        [SerializeField] private MicroTileSocket topBackA;
+        [SerializeField] private MicroTileSocket topBackB;
+        [SerializeField] private MicroTileSocket topBackLeftA;
+        [SerializeField] private MicroTileSocket topBackLeftB;
+        [SerializeField] private MicroTileSocket topFrontLeftA;
+        [SerializeField] private MicroTileSocket topFrontLeftB;
         #endregion
 
         private void UpdateAllSocketIDs()
@@ -462,15 +381,6 @@ namespace WFCSystem
                 return top ? sideTopCornerSocketIds[(int)corner] : sideBtmCornerSocketIds[(int)corner];
             }
         }
-        // public int GetInnerClusterSocketCount()
-        // {
-        //     int found = 0;
-        //     foreach (int socket in cornerSocketIds)
-        //     {
-        //         if (socket == (int)TileSocketConstants.InnerCuster) found++;
-        //     }
-        //     return found;
-        // }
 
         private Transform center;
         [SerializeField] private Vector3[] _corners;
@@ -1029,16 +939,4 @@ namespace WFCSystem
             [Range(0, 128)] public int BottomB;
         }
     }
-
-    [System.Serializable]
-    public struct HexagonTilePrototype
-    {
-        public string id;
-        public string topNeighborId;
-        public string bottomNeighborId;
-        public int size;
-        public Vector3 center;
-        public Vector3[] cornerPoints;
-    }
-
 }
