@@ -5,33 +5,8 @@ using System;
 using ProceduralBase;
 using UnityEditor;
 
-
 namespace WFCSystem
 {
-    // public enum TileMetaSocket
-    // {
-    //     Any = 0,
-    //     Edge = 1,
-    //     Empty = 2,
-    //     Entrance = 3,
-    //     Path = 4,
-    //     PathSide = 4,
-    //     WallSide = 3,
-    //     WallSideOuter = 3,
-    //     WallSideInner = 4,
-    //     WallPart = 5,
-    //     InnerCell = 6, 
-    //     InnerCuster = 7
-    //     BuildingFront
-    //     BuildingBack
-    //     BuildingSide
-    //     BuildingOutlet
-
-    //     VerticalFront
-    //     VerticalBack
-    //     VerticalSide
-    //     VerticalOutlet
-    // }
 
     public enum TileSocketPrimitive
     {
@@ -82,20 +57,20 @@ namespace WFCSystem
         VerticalPartSide,
         VerticalPartBack,
 
+        FloorPart,
+        FloorCorner,
+        FloorEnd,
+
+        WallCorner_1,
+        WallCorner_2,
     }
 
-    // public enum TileSocketConstants
-    // {
-    //     Any = 0,
-    //     Edge = 1,
-    //     Entrance = 2,
-    //     OuterWall = 3,
-    //     InnerWall = 4,
-    //     WallPart = 5,
-    //     InnerCell = 6, //Generic for any nonEdge cell
-    //     InnerCuster = 7 //Generic for any nonEdge cell
-    // }
 
+    public enum TileSocket_Vertical
+    {
+        WallCorner_1,
+        WallCorner_2,
+    }
 
     [CreateAssetMenu(fileName = "New Socket Directory", menuName = "Socket Directory")]
     public class TileSocketDirectory : ScriptableObject, ITileSocketDirectory
@@ -106,7 +81,7 @@ namespace WFCSystem
         [SerializeField] private List<Color> generatedColors = new List<Color>();
         [SerializeField] private string[] enums = Enum.GetNames(typeof(TileSocketPrimitive));
         public bool[,] matrix;
-
+        // public string[] sockets = new string[] { "Socket 1", "Socket 2", "Socket 3" };
 
         private void OnValidate()
         {
@@ -301,43 +276,6 @@ namespace WFCSystem
 
             UpdateRelationsData();
         }
-
-
-        // [System.Serializable]
-        // public struct SocketEntry
-        // {
-        //     public string name;
-        //     public string description;
-        //     public Color color;
-        // }
-        // [System.Serializable]
-        // public struct SocketRelation
-        // {
-        //     public string name;
-        //     public bool isCompatible;
-
-        //     public SocketRelation(string name, bool isCompatible)
-        //     {
-        //         this.name = name;
-        //         this.isCompatible = isCompatible;
-        //     }
-        // }
-        // [System.Serializable]
-        // public struct SocketCompatibility
-        // {
-        //     public string name;
-        //     public Color color;
-        //     public ResetCompatibilityState resetCompatibility;
-        //     public List<SocketRelation> relations;
-        //     public SocketCompatibility(string _name, List<SocketRelation> _relations, Color _color)
-        //     {
-        //         this.name = _name;
-        //         this.relations = _relations;
-        //         this.color = _color;
-        //         this.resetCompatibility = ResetCompatibilityState.Unset;
-        //     }
-        // }
-        // public enum ResetCompatibilityState { Unset = 0, None, All }
 
     }
 }

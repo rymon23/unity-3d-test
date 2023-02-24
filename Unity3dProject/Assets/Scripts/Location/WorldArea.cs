@@ -12,7 +12,10 @@ namespace ProceduralBase
     {
         public enum NoiseType { Perlin, Simplex, Value }
         [SerializeField] private HexagonCellManager cellManager;
-        [SerializeField] private HexagonWaveFunctionCollapse_1 wfc;
+        // [SerializeField] private HexagonWaveFunctionCollapse_1 wfc;
+        // [SerializeField] private Transform _wfcSource;
+        [SerializeField] private IWFCSystem wfc;
+
         [SerializeField] private MeshFilter meshFilter;
         [SerializeField] private MeshRenderer meshRenderer;
         [SerializeField] private MeshCollider meshCollider;
@@ -75,10 +78,13 @@ namespace ProceduralBase
             fastNoiseUnity = GetComponent<FastNoiseUnity>();
 
             cellManager = GetComponent<HexagonCellManager>();
-            wfc = GetComponent<HexagonWaveFunctionCollapse_1>();
             locations = GetComponentsInChildren<Location>().ToList();
             navMeshSurface = GetComponent<NavMeshSurface>();
             mapDisplay = GetComponent<MapDisplay>();
+
+            // wfc = GetComponent<HexagonWaveFunctionCollapse_1>();
+            wfc = GetComponent<IWFCSystem>();
+            if (wfc == null) Debug.LogError("Missing WFC system component!");
 
             if (!mesh)
             {

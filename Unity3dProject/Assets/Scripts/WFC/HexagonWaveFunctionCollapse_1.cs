@@ -6,18 +6,12 @@ using System.Linq;
 
 namespace WFCSystem
 {
-
-    public enum WFCCollapseOrder
-    {
-        Default = 0, // Edges -> Center => th rest
-        Contract, // Start at the edges
-        Expand // Start at the center
-    }
-
-    public class HexagonWaveFunctionCollapse_1 : MonoBehaviour
+    public class HexagonWaveFunctionCollapse_1 : MonoBehaviour, IWFCSystem
     {
         [Header("General Settings")]
         [SerializeField] private bool runOnStart = true;
+        [SerializeField] private HexagonSocketDirectory socketDirectory;
+        [SerializeField] private TileDirectory tileDirectory;
         [SerializeField] private WFCCollapseOrder collapseOrder = 0;
         [Range(1, 10)][SerializeField] private int minEntrances = 1;
         [Range(1, 10)][SerializeField] private int maxEntrances = 2;
@@ -53,11 +47,11 @@ namespace WFCSystem
             _radius = value;
         }
 
+
         //Temp
         [SerializeField] private SubZone subZone;
         [SerializeField] private ZoneCellManager zoneCellManager;
-        [SerializeField] private TileSocketMatrixGenerator socketMatrixGenerator;
-        [SerializeField] private TileDirectory tileDirectory;
+        // [SerializeField] private TileSocketMatrixGenerator socketMatrixGenerator;
 
         [SerializeField] private List<GameObject> activeTiles;
         [SerializeField] private int matrixLength;
@@ -100,11 +94,13 @@ namespace WFCSystem
         public void ExecuteWFC()
         {
             EvaluateTiles();
-            UpdateCompatibilityMatrix();
 
-            compatibilityMatrix = socketMatrixGenerator.GetCompatibilityMatrix();
-            if (compatibilityMatrix != null) matrixLength = compatibilityMatrix.Length;
-            matrixLength = socketMatrixGenerator.matrix.Length;
+            UpdateCompatibilityMatrix();
+            compatibilityMatrix = socketDirectory.GetCompatibilityMatrix();
+
+            // compatibilityMatrix = socketMatrixGenerator.GetCompatibilityMatrix();
+            // if (compatibilityMatrix != null) matrixLength = compatibilityMatrix.Length;
+            // matrixLength = socketMatrixGenerator.matrix.Length;
 
             EvaluateCells();
 
@@ -140,7 +136,7 @@ namespace WFCSystem
             //     SelectNext();
             // }
 
-            InstantiateTiles();
+            InstantiateAllTiles();
 
             Debug.Log("Execution of WFC Complete");
         }
@@ -932,9 +928,8 @@ namespace WFCSystem
         // }
 
         // Instantiate the tiles in the appropriate positions to create the final pattern
-        void InstantiateTiles()
+        public void InstantiateAllTiles()
         {
-
             Transform folder = new GameObject("Tiles").transform;
             folder.transform.SetParent(gameObject.transform);
 
@@ -994,7 +989,7 @@ namespace WFCSystem
                 if (prefab == null) continue;
 
 
-                int rotation = edgeCells[i].currentRotation;
+                int rotation = edgeCells[i].GetTileRotation();
 
                 Vector3 position = edgeCells[i].transform.position;
                 position.y += 0.2f;
@@ -1016,7 +1011,7 @@ namespace WFCSystem
 
                 if (prefab == null) continue;
 
-                int rotation = allCells[i].currentRotation;
+                int rotation = allCells[i].GetTileRotation();
 
                 Vector3 position = allCells[i].transform.position;
                 position.y += 0.2f;
@@ -1128,9 +1123,7 @@ namespace WFCSystem
 
         private void UpdateCompatibilityMatrix()
         {
-            socketMatrixGenerator = GetComponent<TileSocketMatrixGenerator>();
-
-            compatibilityMatrix = socketMatrixGenerator.GetCompatibilityMatrix();
+            compatibilityMatrix = socketDirectory.GetCompatibilityMatrix();
 
             if (compatibilityMatrix.Length == 0)
             {

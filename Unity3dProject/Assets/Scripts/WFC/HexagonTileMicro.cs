@@ -10,7 +10,7 @@ namespace WFCSystem
 {
 
     [System.Serializable]
-    public class HexagonTileMicro : MonoBehaviour, IHexagonTile
+    public class HexagonTileMicro : MonoBehaviour
     {
         public int id = -1;
         public int size = 12;
@@ -43,6 +43,10 @@ namespace WFCSystem
         public bool isInClusterSet; // Is part of a set of tiles that make a cluster
         public bool isClusterCenterTile; // Is the center part of a set of tiles that make a cluster
         [Range(0.05f, 1f)] public float probabilityWeight = 0.3f;
+
+        [Header("Tile Sides / Mirroring")]
+        [SerializeField] private MirroredSideState mirroredSideState = 0;
+        public MirroredSideState GetMirroredSideState() => mirroredSideState;
 
         [Header("Tile Socket Configuration")]
         [SerializeField] private MicroTileSocketDirectory tileSocketDirectory;

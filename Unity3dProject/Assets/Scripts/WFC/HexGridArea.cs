@@ -9,6 +9,7 @@ namespace ProceduralBase
 {
     public class HexGridArea : MonoBehaviour
     {
+
         [SerializeField] private HexagonCellManager cellManager;
         [SerializeField] private WFC_HexMicroGrid wfc;
         [SerializeField] private MeshFilter meshFilter;
@@ -22,12 +23,13 @@ namespace ProceduralBase
         private Mesh mesh;
 
         [Header("Generate")]
+        [SerializeField] private bool runOnStart = true;
         [SerializeField] private bool generateAll;
 
         [Header("World Space Data")]
         [SerializeField] private List<Transform> entranceMarkers;
 
-        private void InitialSetup()
+        public void InitialSetup()
         {
             meshFilter = GetComponent<MeshFilter>();
             meshRenderer = GetComponent<MeshRenderer>();
@@ -70,7 +72,7 @@ namespace ProceduralBase
         {
             InitialSetup();
 
-            Generate();
+            if (runOnStart) Generate();
         }
 
         #region Save Mesh

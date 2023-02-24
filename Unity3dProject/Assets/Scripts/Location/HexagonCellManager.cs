@@ -13,6 +13,10 @@ namespace WFCSystem
         [Range(3, 24)][SerializeField] private int cellSize = 12;
         [Range(1, 12)][SerializeField] private int cellLayers = 2;
         [Range(3, 12)][SerializeField] private int cellLayerElevation = 6;
+
+        [SerializeField] private bool randomizeCellLayers;
+        [Range(3, 12)][SerializeField] private int cellLayersMax = 6;
+
         [SerializeField] private bool enableGridGenerationCenterOffeset;
         [SerializeField] private Vector2 gridGenerationCenterPosXZOffeset = new Vector2(-1.18f, 0.35f);
 
@@ -53,14 +57,32 @@ namespace WFCSystem
         [SerializeField] private GameObject HexagonCell_prefab;
         [SerializeField] private GameObject HexagonTilePlatformModel_prefab;
 
+        [Header("Cluster Cell Manager")]
+        [SerializeField] private List<HexagonCell> allClusteredCells;
+        [SerializeField] private bool _isClusterParent;
+        public void SetClusterParent()
+        {
+            _isClusterParent = true;
+        }
+        public bool GetClusterParent() => _isClusterParent;
+
+
         public void GenerateCells(bool force)
         {
             if (force || allCells == null || allCells.Count == 0)
             {
+
                 Debug.Log("GenerateCells");
-                Generate_HexagonCellPrototypes();
+
+                if (randomizeCellLayers)
+                {
+                    cellLayers = UnityEngine.Random.Range(cellLayers, cellLayersMax);
+                }
+
+                if (!_isClusterParent) Generate_HexagonCellPrototypes();
+
                 Generate_HexagonCells(cellPrototypesByLayer, HexagonCell_prefab);
-                HexagonCell.PopulateNeighborsFromCornerPoints(allCells, 0.33f * (cellSize / 12f));
+                HexagonCell.PopulateNeighborsFromCornerPoints(allCells, HexagonCell.GetCornerNeighborSearchDist(cellSize));
             }
         }
 
@@ -160,7 +182,8 @@ namespace WFCSystem
             foreach (var prototype in prototypes)
             {
                 HexagonTilePrototype newPrototype = new HexagonTilePrototype();
-                newPrototype.id = prototype.id + "L" + layer;
+                newPrototype.id = prototype.id + "-L";
+                newPrototype.layer = layer;
                 newPrototype.bottomNeighborId = prototype.id;
 
                 newPrototype.size = prototype.size;
@@ -195,7 +218,8 @@ namespace WFCSystem
                     HexagonCell hexagonTile = newTile.GetComponent<HexagonCell>();
                     hexagonTile._cornerPoints = cellPrototype.cornerPoints;
                     hexagonTile.id = cellPrototype.id;
-                    hexagonTile.name = "HexagonCell_" + cellPrototype.id;
+                    // hexagonTile.name = "HexagonCell_" + cellPrototype.id;
+                    hexagonTile.name = "Cell_[" + cellPrototype.id + "] ";
                     hexagonTile.SetSize(cellPrototype.size);
                     hexagonTile.SetGridLayer(layer);
 
@@ -259,8 +283,32 @@ namespace WFCSystem
         }
 
 
-        #region STATIC METHODS
+        public bool InitializeMicroClusterGrid(HexagonCell parentCell, List<HexagonCell> allUnassisngedCells, int cellLayers, int cellLayerElevation = 4)
+        {
+            if (parentCell == null)
+            {
+                Debug.LogError("No parentCell found");
+                return false;
+            }
 
+            // Get child cells
+            List<HexagonCell> childCells = HexagonCell.GetChildrenForMicroClusterParent(parentCell);
+            if (childCells == null || childCells.Count == 0)
+            {
+                Debug.LogError("No childCells found");
+                return false;
+            }
+
+            allClusteredCells.Add(parentCell);
+            allClusteredCells.AddRange(childCells);
+
+            cellPrototypesByLayer = HexagonCell.GenerateMicroClusterGridProtoypes(parentCell, childCells, cellLayers, cellLayerElevation);
+
+            return true;
+        }
+
+
+        #region STATIC METHODS
 
         public static void DrawHexagonCellPrototypes(Dictionary<int, List<HexagonTilePrototype>> cellPrototypesByLayer)
         {
@@ -286,6 +334,49 @@ namespace WFCSystem
                     ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(item.cornerPoints);
                 }
             }
+        }
+
+
+
+        public static Dictionary<int, List<HexagonTilePrototype>> Generate_HexagonCellPrototypes(Vector3 centerPos, float radius, int cellSize, int cellLayers, int cellLayerElevation, Vector2 gridGenerationCenterPosXZOffeset, int baseLayerOffset)
+        {
+
+            centerPos.x += gridGenerationCenterPosXZOffeset.x;
+            centerPos.z += gridGenerationCenterPosXZOffeset.y;
+
+            List<HexagonTilePrototype> newCellPrototypes = LocationUtility.GetTilesWithinRadius(
+                                        HexagonGenerator.DetermineHexagonTilePrototypeGrideSize(
+                                                centerPos,
+                                                radius,
+                                                cellSize),
+                                                centerPos,
+                                                radius);
+            Dictionary<int, List<HexagonTilePrototype>> newPrototypesByLayer = new Dictionary<int, List<HexagonTilePrototype>>();
+
+            int startingLayer = 0 + baseLayerOffset;
+            newPrototypesByLayer.Add(startingLayer, newCellPrototypes);
+
+            if (cellLayers > 1)
+            {
+                cellLayers += startingLayer;
+
+                for (int i = startingLayer + 1; i < cellLayers; i++)
+                {
+                    List<HexagonTilePrototype> newLayer;
+                    if (i == startingLayer + 1)
+                    {
+                        newLayer = AddCellPrototypeLayer(newCellPrototypes, cellLayerElevation, i);
+                    }
+                    else
+                    {
+                        List<HexagonTilePrototype> previousLayer = newPrototypesByLayer[i - 1];
+                        newLayer = AddCellPrototypeLayer(previousLayer, cellLayerElevation, i);
+                    }
+                    newPrototypesByLayer.Add(i, newLayer);
+                    // Debug.Log("Added Layer: " + i + ", Count: " + newLayer.Count);
+                }
+            }
+            return newPrototypesByLayer;
         }
 
         #endregion

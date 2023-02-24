@@ -10,6 +10,15 @@ using System.Linq;
 static class UtilityHelpers
 {
 
+    public static string GenerateUniqueID(GameObject gameObject)
+    {
+        // Generate a new unique identifier for the object
+        Guid guid = Guid.NewGuid();
+        string _uid = $"{gameObject.GetInstanceID()}-{guid}";
+        return _uid;
+    }
+
+
     public static int ChooseDecision(Dictionary<int, float> decisions)
     {
         float totalWeight = decisions.Values.Sum();

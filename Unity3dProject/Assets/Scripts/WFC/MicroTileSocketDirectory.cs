@@ -39,20 +39,44 @@ namespace WFCSystem
         GenericStructureEnd,
         FloorGenericPart,
         FloorGenericEnd,
-        StairwayGenericTop,
-        StairwayGenericBottom,
-        StairwayGenericConnector,
+
         DoorWay,
         DoorWayPart,
         DoorWaySide,
+
+        BalconyEntry,
+
+        Floor_Part_A,
+        Floor_End_A,
+        Floor_Corner_A,
+        FloorWall_Part_A,
+        FloorWall_End_A,
+    }
+
+    public enum MicroTileSocket_Vertical
+    {
+        Any = 0,
+        Edge = 1,
+        EmptySpace = 2,
+        Unassigned_Edge = 3,
+        Unassigned_Inner = 4,
+        InnerCell = 5,
+
+        Wall_BTM,
+        Wall_End,
+        Wall_Corner90,
+
         RoofGeneric,
         RoofGenericPart,
         CeilingGeneric,
+
+        StairwayGenericTop,
+        StairwayGenericBottom,
+        StairwayGenericConnector,
+
         VerticalCorner_M,
         VerticalCorner_F,
-        BalconyEntry,
     }
-
 
     [System.Serializable]
 

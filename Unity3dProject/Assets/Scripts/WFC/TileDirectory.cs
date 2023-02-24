@@ -15,7 +15,6 @@ namespace WFCSystem
             public HexagonTile tilePrefab;
             public int id;
             public float probability;
-            // public Color color;
         }
 
 
@@ -35,9 +34,16 @@ namespace WFCSystem
             public float probability;
         }
 
-        [SerializeField] private TileEntry[] tileEntries;
+        [Header("Tile Prefabs")]
         [SerializeField] private MicroTileEntry[] microTileEntries;
+
+        [Header("Auto-Fill")]
+        [SerializeField] private TileContext tileContext;
+        [SerializeField] private bool autoFillFromFolder;
+
+        [Header("Cluster Tile Prefabs")]
         [SerializeField] private TileClusterEntry[] tileClusterEntries;
+        [SerializeField] private TileEntry[] tileEntries;
         [SerializeField] private VerticalTileEntry[] verticalTileEntries;
 
         [SerializeField] private bool revaluate;
@@ -54,7 +60,7 @@ namespace WFCSystem
             }
             return tileDictionary;
         }
-        public Dictionary<int, HexagonTileCore> CreateMicroTileDictionary()
+        public Dictionary<int, HexagonTileCore> CreateHexTileDictionary()
         {
             Dictionary<int, HexagonTileCore> tileDictionary = new Dictionary<int, HexagonTileCore>();
             for (int i = 0; i < microTileEntries.Length; i++)
@@ -150,9 +156,39 @@ namespace WFCSystem
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 GameObject go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                found1.Add(go);
+
+                IHexagonTile tile = (go != null) ? go.GetComponent<IHexagonTile>() : null;
+                if (tile != null) found1.Add(go);
             }
             tilePrefabs = found1;
+        }
+
+        private void AutoFillFromFolder()
+        {
+            List<MicroTileEntry> newTileEntries = new List<MicroTileEntry>();
+            string[] guids = AssetDatabase.FindAssets("t:GameObject", _assetPaths);
+            foreach (string guid in guids)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                GameObject go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+
+                HexagonTileCore hexTile = (go != null) ? go.GetComponent<HexagonTileCore>() : null;
+                if (hexTile != null)
+                {
+                    if (hexTile.GetTileContext() == tileContext)
+                    {
+                        MicroTileEntry entry = new MicroTileEntry();
+                        entry.tilePrefab = hexTile;
+                        newTileEntries.Add(entry);
+                    }
+                    // }
+                    // else
+                    // {
+                    //     Debug.Log("hexTile is null");
+                }
+            }
+
+            if (newTileEntries.Count > 0) microTileEntries = newTileEntries.ToArray();
         }
 
 
@@ -160,6 +196,12 @@ namespace WFCSystem
         {
             CheckForAssets();
 
+            if (autoFillFromFolder)
+            {
+                autoFillFromFolder = false;
+                AutoFillFromFolder();
+                revaluate = true;
+            }
             if (revaluate || tileEntries != null && tileEntries.Length != currentSize)
             {
                 revaluate = false;
@@ -167,6 +209,8 @@ namespace WFCSystem
 
                 EvaluateTiles();
             }
+
+
         }
 
 

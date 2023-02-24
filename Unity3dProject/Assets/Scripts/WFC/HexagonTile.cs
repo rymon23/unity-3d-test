@@ -64,6 +64,16 @@ namespace WFCSystem
         Unset = 0,
         SymmetricalRightAndLeft = 1,
         Mirror_FrontAndBack,
+        Mirror_AllSides,
+    }
+    public enum SymmetricalHexagonSide
+    {
+        Front = 0,
+        FrontRight = HexagonSide.FrontLeft,
+        BackRight = HexagonSide.BackLeft,
+        Back = HexagonSide.Back,
+        BackLeft = BackRight,
+        FrontLeft = FrontRight
     }
 
     public enum HexagonCorner
@@ -128,6 +138,10 @@ namespace WFCSystem
         public bool isFragment; // Is incomplete by itself, needs neighbor tiles like itself
         [Range(0.05f, 1f)] public float probabilityWeight = 0.3f;
 
+        [Header("Tile Sides / Mirroring")]
+        [SerializeField] private MirroredSideState mirroredSideState = 0;
+        public MirroredSideState GetMirroredSideState() => mirroredSideState;
+
         [Header("Tile Socket Configuration")]
         [SerializeField] private TileSocketDirectory tileSocketDirectory;
         [SerializeField] private TileLabelGroup tileLabelGroup;
@@ -144,10 +158,10 @@ namespace WFCSystem
         [SerializeField] private SocketResetState resetSockets = SocketResetState.Unset;
         [SerializeField] private SocketMirrorState useSocketMirroring = SocketMirrorState.Unset;
 
-        private int[] sideTopCornerSocketIds = new int[12];
-        private int[] sideBtmCornerSocketIds = new int[12];
-        private int[] topCornerSocketIds = new int[12];
-        private int[] bottomCornerSocketIds = new int[12];
+        public int[] sideTopCornerSocketIds = new int[12];
+        public int[] sideBtmCornerSocketIds = new int[12];
+        public int[] topCornerSocketIds = new int[12];
+        public int[] bottomCornerSocketIds = new int[12];
         public void SetCornerSocketSetIds(CornerSocketSetType socketSetType, int[] _newCornerSocketIds) { }
 
         [Header("Side Bottom Sockets")]
@@ -495,7 +509,7 @@ namespace WFCSystem
         public int[][] rotatedSideTopCornerSockets { get; private set; }
         public int[][] rotatedSideBtmCornerSockets { get; private set; }
 
-        public int GetRotatedSideCornerSocketId(HexagonCorner corner, int rotation, bool top)
+        public int GetRotatedSideCornerSocketId(HexagonCorner corner, int rotation, bool top, bool inverted = false)
         {
             EvaluateRotatedCornerSockets();
 
@@ -513,14 +527,12 @@ namespace WFCSystem
             Debug.Log("GetRotatedCornerSocketId - val: " + val);
             return val;
         }
-
-        public int[] GetRotatedLayerCornerSockets(bool top, int rotation)
+        public int[] GetRotatedLayerCornerSockets(bool top, int rotation, bool inverted = false)
         {
             EvaluateRotatedCornerSockets();
             return top ? rotatedTopCornerSockets[rotation] : rotatedBottomCornerSockets[rotation];
         }
-
-        public (int[], int[]) GetRotatedCornerSocketsBySide(HexagonSide side, int rotation)
+        public (int[], int[]) GetRotatedCornerSocketsBySide(HexagonSide side, int rotation, bool inverted = false)
         {
             EvaluateRotatedCornerSockets();
 
@@ -1037,6 +1049,7 @@ namespace WFCSystem
         public string topNeighborId;
         public string bottomNeighborId;
         public int size;
+        public int layer;
         public Vector3 center;
         public Vector3[] cornerPoints;
     }

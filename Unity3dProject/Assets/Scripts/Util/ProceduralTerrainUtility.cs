@@ -3,11 +3,58 @@ using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using WFCSystem;
 
 namespace ProceduralBase
 {
     public static class ProceduralTerrainUtility
     {
+
+        public static int[] GenerateTerrainTriangles(TerrainVertex[,] vertexGrid)
+        {
+            int numVertices = vertexGrid.GetLength(0);
+
+            // Create an array to store the triangle indices
+            int[] triangles = new int[(numVertices - 1) * (numVertices - 1) * 6];
+
+            // Iterate through the grid and create the triangles
+            int index = 0;
+            for (int x = 0; x < numVertices - 1; x++)
+            {
+                for (int y = 0; y < numVertices - 1; y++)
+                {
+                    triangles[index++] = x + y * numVertices;
+                    triangles[index++] = x + 1 + y * numVertices;
+                    triangles[index++] = x + (y + 1) * numVertices;
+
+                    triangles[index++] = x + 1 + y * numVertices;
+                    triangles[index++] = x + 1 + (y + 1) * numVertices;
+                    triangles[index++] = x + (y + 1) * numVertices;
+                }
+            }
+            return triangles;
+        }
+
+        public static Vector2[] GenerateTerrainUVs(TerrainVertex[,] vertexGrid)
+        {
+            // Get the grid size from the vertex grid
+            int gridSizeX = vertexGrid.GetLength(0);
+            int gridSizeZ = vertexGrid.GetLength(1);
+
+            // Create an array to store the UV data
+            Vector2[] uvs = new Vector2[gridSizeX * gridSizeZ];
+
+            // Iterate through the vertices and set the UVs of each vertex
+            for (int x = 0; x < gridSizeX; x++)
+            {
+                for (int z = 0; z < gridSizeZ; z++)
+                {
+                    uvs[x + z * gridSizeX] = new Vector2(x / (float)gridSizeX, z / (float)gridSizeZ);
+                }
+            }
+            return uvs;
+        }
+
         public static float Blend(float A, float B, float t)
         {
             return (1 - t) * A + t * B;
@@ -97,7 +144,7 @@ namespace ProceduralBase
             }
             return (nearestPoint, nearestDistance);
         }
-        public static (Vector3, float, int index) GetClosestPoint(Vector3[] points, Vector2 position)
+        public static (Vector3, float, int) GetClosestPoint(Vector3[] points, Vector2 position)
         {
             Vector3 nearestPoint = points[0];
             float nearestDistance = float.MaxValue;

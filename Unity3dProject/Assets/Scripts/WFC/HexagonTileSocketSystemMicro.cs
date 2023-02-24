@@ -1,6 +1,4 @@
 using UnityEngine;
-using System.Collections;
-using System.Collections.Generic;
 
 namespace WFCSystem
 {
@@ -12,7 +10,8 @@ namespace WFCSystem
 
         #region Tile Sockets
         [Header("Tile Sockets")]
-        [SerializeField] private MicroTileSocket resetToSocket;
+        [SerializeField] private MicroTileSocket resetSidesTo;
+        [SerializeField] private MicroTileSocket_Vertical resetLayersTo;
         [SerializeField] private SocketResetState resetSockets = SocketResetState.Unset;
         [SerializeField] private SocketMirrorState useSocketMirroring = SocketMirrorState.Unset;
 
@@ -45,38 +44,39 @@ namespace WFCSystem
         [SerializeField] private MicroTileSocket sideTopFrontLeftB;
 
         [Header("Bottom Edge Sockets")]
-        [SerializeField] private MicroTileSocket bottomFrontA;
-        [SerializeField] private MicroTileSocket bottomFrontB;
-        [SerializeField] private MicroTileSocket bottomFrontRightA;
-        [SerializeField] private MicroTileSocket bottomFrontRightB;
-        [SerializeField] private MicroTileSocket bottomBackRightA;
-        [SerializeField] private MicroTileSocket bottomBackRightB;
-        [SerializeField] private MicroTileSocket bottomBackA;
-        [SerializeField] private MicroTileSocket bottomBackB;
-        [SerializeField] private MicroTileSocket bottomBackLeftA;
-        [SerializeField] private MicroTileSocket bottomBackLeftB;
-        [SerializeField] private MicroTileSocket bottomFrontLeftA;
-        [SerializeField] private MicroTileSocket bottomFrontLeftB;
+        [SerializeField] private MicroTileSocket_Vertical bottomFrontA;
+        [SerializeField] private MicroTileSocket_Vertical bottomFrontB;
+        [SerializeField] private MicroTileSocket_Vertical bottomFrontRightA;
+        [SerializeField] private MicroTileSocket_Vertical bottomFrontRightB;
+        [SerializeField] private MicroTileSocket_Vertical bottomBackRightA;
+        [SerializeField] private MicroTileSocket_Vertical bottomBackRightB;
+        [SerializeField] private MicroTileSocket_Vertical bottomBackA;
+        [SerializeField] private MicroTileSocket_Vertical bottomBackB;
+        [SerializeField] private MicroTileSocket_Vertical bottomBackLeftA;
+        [SerializeField] private MicroTileSocket_Vertical bottomBackLeftB;
+        [SerializeField] private MicroTileSocket_Vertical bottomFrontLeftA;
+        [SerializeField] private MicroTileSocket_Vertical bottomFrontLeftB;
 
         [Header("Top Edge Sockets")]
-        [SerializeField] private MicroTileSocket topFrontA;
-        [SerializeField] private MicroTileSocket topFrontB;
-        [SerializeField] private MicroTileSocket topFrontRightA;
-        [SerializeField] private MicroTileSocket topFrontRightB;
-        [SerializeField] private MicroTileSocket topBackRightA;
-        [SerializeField] private MicroTileSocket topBackRightB;
-        [SerializeField] private MicroTileSocket topBackA;
-        [SerializeField] private MicroTileSocket topBackB;
-        [SerializeField] private MicroTileSocket topBackLeftA;
-        [SerializeField] private MicroTileSocket topBackLeftB;
-        [SerializeField] private MicroTileSocket topFrontLeftA;
-        [SerializeField] private MicroTileSocket topFrontLeftB;
+        [SerializeField] private MicroTileSocket_Vertical topFrontA;
+        [SerializeField] private MicroTileSocket_Vertical topFrontB;
+        [SerializeField] private MicroTileSocket_Vertical topFrontRightA;
+        [SerializeField] private MicroTileSocket_Vertical topFrontRightB;
+        [SerializeField] private MicroTileSocket_Vertical topBackRightA;
+        [SerializeField] private MicroTileSocket_Vertical topBackRightB;
+        [SerializeField] private MicroTileSocket_Vertical topBackA;
+        [SerializeField] private MicroTileSocket_Vertical topBackB;
+        [SerializeField] private MicroTileSocket_Vertical topBackLeftA;
+        [SerializeField] private MicroTileSocket_Vertical topBackLeftB;
+        [SerializeField] private MicroTileSocket_Vertical topFrontLeftA;
+        [SerializeField] private MicroTileSocket_Vertical topFrontLeftB;
         #endregion
 
         private void UpdateAllSocketIDs()
         {
             if (useSocketMirroring != SocketMirrorState.Unset)
             {
+                // Sides
                 if (useSocketMirroring == SocketMirrorState.MirrorSideBtmToTop)
                 {
                     sideTopFrontA = sideBtmFrontA;
@@ -107,6 +107,8 @@ namespace WFCSystem
                     sideBtmFrontLeftA = sideTopFrontLeftA;
                     sideBtmFrontLeftB = sideTopFrontLeftB;
                 }
+
+                // Layered
                 else if (useSocketMirroring == SocketMirrorState.MirrorBtmToTop)
                 {
                     topFrontA = bottomFrontA;
@@ -136,62 +138,6 @@ namespace WFCSystem
                     bottomBackLeftB = topBackLeftB;
                     bottomFrontLeftA = topFrontLeftA;
                     bottomFrontLeftB = topFrontLeftB;
-                }
-                else if (useSocketMirroring == SocketMirrorState.MirrorLayersToSides)
-                {
-                    sideBtmFrontA = bottomFrontA;
-                    sideBtmFrontB = bottomFrontB;
-                    sideBtmFrontRightA = bottomFrontRightA;
-                    sideBtmFrontRightB = bottomFrontRightB;
-                    sideBtmBackRightA = bottomBackRightA;
-                    sideBtmBackRightB = bottomBackRightB;
-                    sideBtmBackA = bottomBackA;
-                    sideBtmBackB = bottomBackB;
-                    sideBtmBackLeftA = bottomBackLeftA;
-                    sideBtmBackLeftB = bottomBackLeftB;
-                    sideBtmFrontLeftA = bottomFrontLeftA;
-                    sideBtmFrontLeftB = bottomFrontLeftB;
-
-                    sideTopFrontA = topFrontA;
-                    sideTopFrontB = topFrontB;
-                    sideTopFrontRightA = topFrontRightA;
-                    sideTopFrontRightB = topFrontRightB;
-                    sideTopBackRightA = topBackRightA;
-                    sideTopBackRightB = topBackRightB;
-                    sideTopBackA = topBackA;
-                    sideTopBackB = topBackB;
-                    sideTopBackLeftA = topBackLeftA;
-                    sideTopBackLeftB = topBackLeftB;
-                    sideTopFrontLeftA = topFrontLeftA;
-                    sideTopFrontLeftB = topFrontLeftB;
-                }
-                else if (useSocketMirroring == SocketMirrorState.MirrorSidesToLayers)
-                {
-                    bottomFrontA = sideBtmFrontA;
-                    bottomFrontB = sideBtmFrontB;
-                    bottomFrontRightA = sideBtmFrontRightA;
-                    bottomFrontRightB = sideBtmFrontRightB;
-                    bottomBackRightA = sideBtmBackRightA;
-                    bottomBackRightB = sideBtmBackRightB;
-                    bottomBackA = sideBtmBackA;
-                    bottomBackB = sideBtmBackB;
-                    bottomBackLeftA = sideBtmBackLeftA;
-                    bottomBackLeftB = sideBtmBackLeftB;
-                    bottomFrontLeftA = sideBtmFrontLeftA;
-                    bottomFrontLeftB = sideBtmFrontLeftB;
-
-                    topFrontA = sideTopFrontA;
-                    topFrontB = sideTopFrontB;
-                    topFrontRightA = sideTopFrontRightA;
-                    topFrontRightB = sideTopFrontRightB;
-                    topBackRightA = sideTopBackRightA;
-                    topBackRightB = sideTopBackRightB;
-                    topBackA = sideTopBackA;
-                    topBackB = sideTopBackB;
-                    topBackLeftA = sideTopBackLeftA;
-                    topBackLeftB = sideTopBackLeftB;
-                    topFrontLeftA = sideTopFrontLeftA;
-                    topFrontLeftB = sideTopFrontLeftB;
                 }
             }
 
@@ -264,63 +210,63 @@ namespace WFCSystem
             bool resetAll = resetState == SocketResetState.All;
             if (resetAll || resetState == SocketResetState.Bottom)
             {
-                bottomFrontA = resetToSocket;
-                bottomFrontB = resetToSocket;
-                bottomFrontRightA = resetToSocket;
-                bottomFrontRightB = resetToSocket;
-                bottomBackRightA = resetToSocket;
-                bottomBackRightB = resetToSocket;
-                bottomBackA = resetToSocket;
-                bottomBackB = resetToSocket;
-                bottomBackLeftA = resetToSocket;
-                bottomBackLeftB = resetToSocket;
-                bottomFrontLeftA = resetToSocket;
-                bottomFrontLeftB = resetToSocket;
+                bottomFrontA = resetLayersTo;
+                bottomFrontB = resetLayersTo;
+                bottomFrontRightA = resetLayersTo;
+                bottomFrontRightB = resetLayersTo;
+                bottomBackRightA = resetLayersTo;
+                bottomBackRightB = resetLayersTo;
+                bottomBackA = resetLayersTo;
+                bottomBackB = resetLayersTo;
+                bottomBackLeftA = resetLayersTo;
+                bottomBackLeftB = resetLayersTo;
+                bottomFrontLeftA = resetLayersTo;
+                bottomFrontLeftB = resetLayersTo;
             }
             if (resetAll || resetState == SocketResetState.SideBottom)
             {
-                sideBtmFrontA = resetToSocket;
-                sideBtmFrontB = resetToSocket;
-                sideBtmFrontRightA = resetToSocket;
-                sideBtmFrontRightB = resetToSocket;
-                sideBtmBackRightA = resetToSocket;
-                sideBtmBackRightB = resetToSocket;
-                sideBtmBackA = resetToSocket;
-                sideBtmBackB = resetToSocket;
-                sideBtmBackLeftA = resetToSocket;
-                sideBtmBackLeftB = resetToSocket;
-                sideBtmFrontLeftA = resetToSocket;
-                sideBtmFrontLeftB = resetToSocket;
+                sideBtmFrontA = resetSidesTo;
+                sideBtmFrontB = resetSidesTo;
+                sideBtmFrontRightA = resetSidesTo;
+                sideBtmFrontRightB = resetSidesTo;
+                sideBtmBackRightA = resetSidesTo;
+                sideBtmBackRightB = resetSidesTo;
+                sideBtmBackA = resetSidesTo;
+                sideBtmBackB = resetSidesTo;
+                sideBtmBackLeftA = resetSidesTo;
+                sideBtmBackLeftB = resetSidesTo;
+                sideBtmFrontLeftA = resetSidesTo;
+                sideBtmFrontLeftB = resetSidesTo;
             }
             if (resetAll || resetState == SocketResetState.SideTop)
             {
-                sideTopFrontA = resetToSocket;
-                sideTopFrontB = resetToSocket;
-                sideTopFrontRightA = resetToSocket;
-                sideTopFrontRightB = resetToSocket;
-                sideTopBackRightA = resetToSocket;
-                sideTopBackRightB = resetToSocket;
-                sideTopBackA = resetToSocket;
-                sideTopBackB = resetToSocket;
-                sideTopBackLeftA = resetToSocket;
-                sideTopBackLeftB = resetToSocket;
-                sideTopFrontLeftA = resetToSocket;
-                sideTopFrontLeftB = resetToSocket;
+                sideTopFrontA = resetSidesTo;
+                sideTopFrontB = resetSidesTo;
+                sideTopFrontRightA = resetSidesTo;
+                sideTopFrontRightB = resetSidesTo;
+                sideTopBackRightA = resetSidesTo;
+                sideTopBackRightB = resetSidesTo;
+                sideTopBackA = resetSidesTo;
+                sideTopBackB = resetSidesTo;
+                sideTopBackLeftA = resetSidesTo;
+                sideTopBackLeftB = resetSidesTo;
+                sideTopFrontLeftA = resetSidesTo;
+                sideTopFrontLeftB = resetSidesTo;
             }
             if (resetAll || resetState == SocketResetState.Top)
             {
-                topFrontA = resetToSocket;
-                topFrontB = resetToSocket;
-                topFrontRightA = resetToSocket;
-                topFrontRightB = resetToSocket;
-                topBackRightA = resetToSocket;
-                topBackRightB = resetToSocket;
-                topBackA = resetToSocket;
-                topBackB = resetToSocket;
-                topBackLeftA = resetToSocket;
-                topBackLeftB = resetToSocket;
-                topFrontLeftA = resetToSocket;
-                topFrontLeftB = resetToSocket;
+                topFrontA = resetLayersTo;
+                topFrontB = resetLayersTo;
+                topFrontRightA = resetLayersTo;
+                topFrontRightB = resetLayersTo;
+                topBackRightA = resetLayersTo;
+                topBackRightB = resetLayersTo;
+                topBackA = resetLayersTo;
+                topBackB = resetLayersTo;
+                topBackLeftA = resetLayersTo;
+                topBackLeftB = resetLayersTo;
+                topFrontLeftA = resetLayersTo;
+                topFrontLeftB = resetLayersTo;
             }
         }
 
@@ -354,8 +300,8 @@ namespace WFCSystem
             MirrorSideTopToBtm = 2,
             MirrorTopToBtm = 3,
             MirrorBtmToTop = 4,
-            MirrorSidesToLayers = 5,
-            MirrorLayersToSides = 6,
+            // MirrorSidesToLayers = 5,
+            // MirrorLayersToSides = 6,
         }
     }
 }

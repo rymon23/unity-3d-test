@@ -27,20 +27,53 @@ namespace WFCSystem
     {
         [SerializeField] private int entries = 0;
         [SerializeField] private int totalRotations = 0;
-        // [SerializeField] private bool anyCompatibilities;
-        public Dictionary<HexagonTileCompatibilitySide, bool[]>[,] tileDirectCompatibilityMatrix; // by Tile id, existing tile side => rotations
+        public Dictionary<HexagonTileCompatibilitySide, HashSet<int>>[,] tileDirectCompatibilityMatrix; // by Tile id, existing tile side => rotations
+        public bool AreTilesCombatible(int incomingTileId, int existingTileId, HexagonTileCompatibilitySide existingTileSide, int incomingTileRotation, int existingTileRotation)
+        {
+            HexagonTileCompatibilitySide existingTileRotatedSide = GetRotatedTargetSide(existingTileSide, existingTileRotation);
 
-        // public Dictionary<HexagonTileCompatibilitySide, List<int>>[,] tileDirectCompatibilityMatrix; // by Tile id, existing tile side => rotations
-        // public bool AreTilesCombatible(int incomingTileId, int existingTileId, HexagonTileCompatibilitySide side, int incomingTileRotation, int existingTileRotation)
-        // {
-        //     if (tileDirectCompatibilityMatrix[incomingTileId, existingTileId][side].Count == 0) return false;
-        //     foreach (int rotationOffset in tileDirectCompatibilityMatrix[incomingTileId, existingTileId][side])
-        //     {
-        //         int validRotation = (existingTileRotation + rotationOffset) % 6;
-        //         if (validRotation == incomingTileRotation) return true;
-        //     }
-        //     return false;
-        // }
+            if (tileDirectCompatibilityMatrix[incomingTileId, existingTileId][existingTileRotatedSide].Count == 0) return false;
+
+
+            foreach (int rotationOffset in tileDirectCompatibilityMatrix[incomingTileId, existingTileId][existingTileRotatedSide])
+            {
+                int validRotation = (existingTileRotation + rotationOffset) % 6;
+
+                // Debug.Log("validRotation: " + validRotation + ", rotationOffset: " + rotationOffset);
+
+
+                if (validRotation == incomingTileRotation) return true;
+            }
+            // Debug.Log("existingTileSide: " + existingTileSide + ", incomingTileId: " + incomingTileId);
+
+            return false;
+        }
+
+        public List<int> GetCompatibleTileRotations(int incomingTileId, int existingTileId, HexagonTileCompatibilitySide side, int existingTileRotation)
+        {
+            if (tileDirectCompatibilityMatrix[incomingTileId, existingTileId][side].Count == 0) return null;
+            List<int> rotations = new List<int>();
+
+            foreach (int rotationOffset in tileDirectCompatibilityMatrix[incomingTileId, existingTileId][side])
+            {
+                int validRotation = (existingTileRotation + rotationOffset) % 6;
+                rotations.Add(validRotation);
+            }
+            return rotations;
+        }
+
+
+        public HexagonTileCompatibilitySide GetRotatedTargetSide(HexagonTileCompatibilitySide existingTileSide, int existingTileRotation)
+        {
+            if (existingTileSide < HexagonTileCompatibilitySide.Bottom)
+            {
+                return (HexagonTileCompatibilitySide)(((int)existingTileSide + existingTileRotation) % 6);
+            }
+            return existingTileSide;
+        }
+
+        public int GetRotatedTargetSide(int existingTileSide, int existingTileRotation) => GetRotatedTargetSide(existingTileSide, existingTileRotation);
+
         public int GetRotationOffset(int rotationA, int rotationB)
         {
             int rotationOffset = rotationB - rotationA;
@@ -49,6 +82,16 @@ namespace WFCSystem
                 rotationOffset += 6;
             }
             return rotationOffset;
+        }
+
+        public int GetSideOffset(HexagonSide sideA, HexagonSide SideB)
+        {
+            int sideOffset = SideB - sideA;
+            if (sideOffset < 0)
+            {
+                sideOffset += 6;
+            }
+            return sideOffset;
         }
 
         public List<TileCompatibilityEntry> _tileEntries;
@@ -86,29 +129,42 @@ namespace WFCSystem
 
         }
 
-        public Dictionary<HexagonTileCompatibilitySide, bool[]>[,] GetCompatibilityMatrix()
+        public Dictionary<HexagonTileCompatibilitySide, HashSet<int>>[,] GetCompatibilityMatrix()
         {
             return tileDirectCompatibilityMatrix;
         }
 
-        public void UpdateTable(Dictionary<HexagonTileCompatibilitySide, bool[]>[,] _newMatrix)
+        public void UpdateTable(Dictionary<HexagonTileCompatibilitySide, HashSet<int>>[,] updatedMatrix)
         {
 
-            Dictionary<HexagonTileCompatibilitySide, bool[]>[,] newMatrix
-                    = new Dictionary<HexagonTileCompatibilitySide, bool[]>[_newMatrix.GetLength(0), _newMatrix.GetLength(1)];
+            Dictionary<HexagonTileCompatibilitySide, HashSet<int>>[,] newMatrix
+                    = new Dictionary<HexagonTileCompatibilitySide, HashSet<int>>[updatedMatrix.GetLength(0), updatedMatrix.GetLength(1)];
+
+            // Debug.Log("updatedMatrix.GetLength(0): " + updatedMatrix.GetLength(0) + ", newMatrix.GetLength(0): " + newMatrix.GetLength(0));
+            // Debug.Log("updatedMatrix.GetLength(1): " + updatedMatrix.GetLength(1) + ", newMatrix.GetLength(1): " + newMatrix.GetLength(1));
 
             for (int i = 0; i < newMatrix.GetLength(0); i++)
             {
                 for (int j = 0; j < newMatrix.GetLength(1); j++)
                 {
-                    newMatrix[i, j] = new Dictionary<HexagonTileCompatibilitySide, bool[]>();
+                    newMatrix[i, j] = new Dictionary<HexagonTileCompatibilitySide, HashSet<int>>();
+
                     for (int compSide = 0; compSide < 8; compSide++)
                     {
-                        newMatrix[i, j].Add((HexagonTileCompatibilitySide)compSide, new bool[6]);
+                        newMatrix[i, j].Add((HexagonTileCompatibilitySide)compSide, new HashSet<int>());
 
-                        for (int rotation = 0; rotation < 6; rotation++)
+                        // Debug.Log("newMatrix[" + i + " ," + j + "]: " + newMatrix[i, j]);
+                        // Debug.Log("updatedMatrix[" + i + " ," + j + "]: " + updatedMatrix[i, j]);
+
+                        if (updatedMatrix[i, j] == null)
                         {
-                            newMatrix[i, j][(HexagonTileCompatibilitySide)compSide][rotation] = _newMatrix[i, j][(HexagonTileCompatibilitySide)compSide][rotation];
+                            // Debug.LogError(" Nothing there");
+                            continue;
+                        }
+
+                        foreach (int item in updatedMatrix[i, j][(HexagonTileCompatibilitySide)compSide])
+                        {
+                            newMatrix[i, j][(HexagonTileCompatibilitySide)compSide].Add(item);
                         }
                     }
                 }
@@ -143,22 +199,16 @@ namespace WFCSystem
             {
                 for (int j = 0; j < tileDirectCompatibilityMatrix.GetLength(1); j++)
                 {
-                    Dictionary<HexagonTileCompatibilitySide, bool[]> row = tileDirectCompatibilityMatrix[i, j];
+                    Dictionary<HexagonTileCompatibilitySide, HashSet<int>> row = tileDirectCompatibilityMatrix[i, j];
 
                     int compatibleRotationsFound = 0;
 
-                    foreach (KeyValuePair<HexagonTileCompatibilitySide, bool[]> entry in row)
+                    foreach (KeyValuePair<HexagonTileCompatibilitySide, HashSet<int>> entry in row)
                     {
                         HexagonTileCompatibilitySide key = entry.Key;
-                        bool[] value = entry.Value;
-                        // Do something with key and value
+                        HashSet<int> value = entry.Value;
 
-                        foreach (var item in value)
-                        {
-                            if (item) compatibleRotationsFound++;
-                        }
-                        // compatibleRotationsFound += value.ToList().FindAll(r => r == true).Count;
-
+                        compatibleRotationsFound += value.Count;
                     }
 
                     if (compatibleRotationsFound > 0 && hasAnyCompatibilities == false)
@@ -193,7 +243,7 @@ namespace WFCSystem
         [SerializeField] private string savedfilePath = "Assets/WFC/";
         [SerializeField] private string savefileName = "saved_tile_compatibility_Data";
 
-        public static void SaveData(Dictionary<HexagonTileCompatibilitySide, bool[]>[,] table, string directoryPath, string fileName)
+        public static void SaveData(Dictionary<HexagonTileCompatibilitySide, HashSet<int>>[,] table, string directoryPath, string fileName)
         {
             // string json = JsonUtility.ToJson(table);
             string json = JsonConvert.SerializeObject(table, Formatting.Indented);
@@ -217,7 +267,7 @@ namespace WFCSystem
         }
 
 
-        public static Dictionary<HexagonTileCompatibilitySide, bool[]>[,] LoadData(string directoryPath, string fileName)
+        public static Dictionary<HexagonTileCompatibilitySide, HashSet<int>>[,] LoadData(string directoryPath, string fileName)
         {
             try
             {
@@ -225,7 +275,7 @@ namespace WFCSystem
                 if (File.Exists(filePath))
                 {
                     string json = File.ReadAllText(filePath);
-                    Dictionary<HexagonTileCompatibilitySide, bool[]>[,] table = JsonConvert.DeserializeObject<Dictionary<HexagonTileCompatibilitySide, bool[]>[,]>(json);
+                    Dictionary<HexagonTileCompatibilitySide, HashSet<int>>[,] table = JsonConvert.DeserializeObject<Dictionary<HexagonTileCompatibilitySide, HashSet<int>>[,]>(json);
 
                     Debug.Log("LoadData!");
                     return table;
@@ -242,124 +292,6 @@ namespace WFCSystem
                 return null;
             }
         }
-
-        // private const string FILE_NAME = "saved_table.dat";
-        // public void SaveTable(Dictionary<HexagonTileCompatibilitySide, bool[]>[,] table, string _path = "/Assets/WFC")
-        // {
-        //     BinaryFormatter formatter = new BinaryFormatter();
-        //     string path = Application.persistentDataPath + _path + "/" + FILE_NAME;
-        //     FileStream stream = new FileStream(path, FileMode.Create);
-
-        //     formatter.Serialize(stream, table);
-        //     stream.Close();
-        // }
-
-        // public Dictionary<int, bool[]>[,] LoadTable()
-        // {
-        //     string path = Application.persistentDataPath + "/" + FILE_NAME;
-
-        //     if (File.Exists(path))
-        //     {
-        //         BinaryFormatter formatter = new BinaryFormatter();
-        //         FileStream stream = new FileStream(path, FileMode.Open);
-
-        //         Dictionary<int, bool[]>[,] table = formatter.Deserialize(stream) as Dictionary<int, bool[]>[,];
-        //         stream.Close();
-
-        //         return table;
-        //     }
-        //     else
-        //     {
-        //         Debug.LogError("Save file not found in " + path);
-        //         return null;
-        //     }
-        // }
-
-
-
-        // public static void SaveTable(Dictionary<HexagonTileCompatibilitySide, bool[]>[,] table, string filePath)
-        // {
-        //     int rows = table.GetLength(0);
-        //     int columns = table.GetLength(1);
-
-        //     for (int row = 0; row < rows; row++)
-        //     {
-        //         for (int col = 0; col < columns; col++)
-        //         {
-        //             foreach (var item in table[row, col])
-        //             {
-        //                 int key = (int)item.Key;
-        //                 PlayerPrefs.SetInt(filePath + "_" + row + "_" + col + "_key", key);
-        //                 for (int i = 0; i < item.Value.Length; i++)
-        //                 {
-        //                     PlayerPrefs.SetInt(filePath + "_" + row + "_" + col + "_value_" + i, item.Value[i] ? 1 : 0);
-        //                 }
-        //             }
-        //         }
-        //     }
-
-        //     Debug.Log("SaveTable!");
-        //     PlayerPrefs.Save();
-        // }
-        // public static Dictionary<HexagonTileCompatibilitySide, bool[]>[,] LoadTable(string filePath)
-        // {
-        //     int rows = PlayerPrefs.GetInt(filePath + "_rows");
-        //     int columns = PlayerPrefs.GetInt(filePath + "_columns");
-        //     Dictionary<HexagonTileCompatibilitySide, bool[]>[,] table = new Dictionary<HexagonTileCompatibilitySide, bool[]>[rows, columns];
-
-        //     for (int i = 0; i < rows; i++)
-        //     {
-        //         for (int j = 0; j < columns; j++)
-        //         {
-        //             int keyCount = PlayerPrefs.GetInt(filePath + "_" + i + "_" + j + "_keyCount");
-        //             Dictionary<HexagonTileCompatibilitySide, bool[]> dict = new Dictionary<HexagonTileCompatibilitySide, bool[]>();
-        //             for (int k = 0; k < keyCount; k++)
-        //             {
-        //                 int dictKey = PlayerPrefs.GetInt(filePath + "_" + i + "_" + j + "_key_" + k);
-        //                 int arrayLength = PlayerPrefs.GetInt(filePath + "_" + i + "_" + j + "_arrayLength_" + k);
-        //                 bool[] array = new bool[arrayLength];
-        //                 for (int l = 0; l < arrayLength; l++)
-        //                 {
-        //                     array[l] = PlayerPrefs.GetInt(filePath + "_" + i + "_" + j + "_array_" + k + "_" + l) == 1 ? true : false;
-        //                 }
-        //                 dict.Add((HexagonTileCompatibilitySide)dictKey, array);
-        //             }
-        //             table[i, j] = dict;
-        //         }
-        //     }
-        //     return table;
-        // }
-        // public static void SaveTable(Dictionary<HexagonTileCompatibilitySide, bool[]>[,] table, string filePath = "Assets/")
-        // {
-        //     string json = JsonConvert.SerializeObject(table, Formatting.Indented);
-
-        //     File.WriteAllText(filePath, json);
-
-        //     Debug.Log("SaveTable!");
-        // }
-        // public static void SaveData(Dictionary<HexagonTileCompatibilitySide, bool[]>[,] table, string filePath)
-        // {
-        //     // Convert the 2D dictionary to a 1D list
-        //     List<Dictionary<HexagonTileCompatibilitySide, bool[]>> list = new List<Dictionary<HexagonTileCompatibilitySide, bool[]>>();
-        //     for (int i = 0; i < table.GetLength(0); i++)
-        //     {
-        //         for (int j = 0; j < table.GetLength(1); j++)
-        //         {
-        //             list.Add(table[i, j]);
-        //         }
-        //     }
-
-        //     // Serialize the list to a JSON string
-        //     string json = JsonUtility.ToJson(list);
-
-        //     // Write the JSON string to the file
-        //     System.IO.File.WriteAllText(filePath, json);
-        // }
-
-        // [SerializeField] private string directory = "C:/temp";
-
-
-
     }
 
 }
