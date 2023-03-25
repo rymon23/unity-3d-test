@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using ProceduralBase;
 
 namespace WFCSystem
 {
@@ -10,16 +11,35 @@ namespace WFCSystem
     {
         public void ExecuteWFC();
         public void SetRadius(int value);
-        public void SetCells(List<HexagonCell> _allCells);
+        public void SetCells(Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells);
+        // public void SetCells(List<HexagonCell> _allCells);
         public void InstantiateAllTiles();
-
     }
 
-    public enum WFCCollapseOrder
+    public enum WFCCollapseOrder_General
     {
         Default = 0, // Edges -> Center => th rest
         Contract, // Start at the edges
-        Expand // Start at the center
+        Expand, // Start at the center
+    }
+    public enum WFCCollapseOrder_CellGrid
+    {
+        Edges_First = 0,
+        Inners_First,
+        Random
+    }
+    public enum WFCCollapseOrder_Cells
+    {
+        Neighbor_Propogation = 0,
+        Sequential,
+    }
+    public enum WFC_CellNeighborPropagation
+    {
+        Edges_Only_Include_Layers = 0,
+        Edges_Only_No_Layers,
+        Edges_Inners_No_Layers,
+        Edges_Inners_Include_Layers,
+        NO_Neighbor_Propogation
     }
 
     static class WFCUtilities
@@ -79,29 +99,137 @@ namespace WFCSystem
             }
         }
 
-        public static void InstantiateTile(HexagonTileCore prefab, HexagonCell cell, Transform folder, List<GameObject> activeTilesList)
+        public static List<HexagonCell> SelectRandomCells(List<HexagonCell> allCells, int min = 2, int max = 7)
+        {
+            List<HexagonCell> availableCells = new List<HexagonCell>();
+            availableCells.AddRange(allCells);
+
+            int numCells = UnityEngine.Random.Range(min, max + 1);
+            List<HexagonCell> selectedCells = new List<HexagonCell>();
+
+            for (int i = 0; i < numCells; i++)
+            {
+                if (availableCells.Count == 0) break;
+                int index = UnityEngine.Random.Range(0, availableCells.Count);
+                HexagonCell cell = availableCells[index];
+                selectedCells.Add(cell);
+                availableCells.RemoveAt(index);
+            }
+
+            return selectedCells;
+        }
+
+        public static bool SelectAndAssignNext(HexagonCell cell, List<HexagonTileCore> prefabsList, TileContext tileContext, HexagonSocketDirectory socketDirectory, bool isWalledEdge, bool logIncompatibilities = false, bool ignoreFailures = true, bool allowInvertedTiles = true)
+        {
+            (HexagonTileCore nextTile, List<int[]> rotations) = WFCUtilities.SelectNextTile(cell, prefabsList, allowInvertedTiles, isWalledEdge, TileContext.Micro, socketDirectory, logIncompatibilities);
+            bool assigned = WFCUtilities.AssignTileToCell(cell, nextTile, rotations, ignoreFailures);
+            return assigned;
+        }
+
+        public static void CollapseCellAndPropagate(HexagonCell currentCell, List<HexagonTileCore> tilePrefabs, List<HexagonTileCore> tilePrefabs_Edgable, WFC_CellNeighborPropagation neighborPropagation, TileContext tileContext, HexagonSocketDirectory socketDirectory, bool isWalledEdge, bool logIncompatibilities = false, bool ignoreFailures = true, bool allowInvertedTiles = true)
+        {
+            bool assigned = currentCell.IsAssigned() ? true : SelectAndAssignNext(currentCell, (currentCell.isEdgeCell ? tilePrefabs_Edgable : tilePrefabs), tileContext, socketDirectory, isWalledEdge, logIncompatibilities, ignoreFailures, allowInvertedTiles);
+            if (assigned)
+            {
+                int currentCellLayer = currentCell.GetGridLayer();
+
+                bool includeLayerNwighbors = (neighborPropagation == WFC_CellNeighborPropagation.Edges_Only_Include_Layers || neighborPropagation == WFC_CellNeighborPropagation.Edges_Inners_Include_Layers);
+
+                // Get Unassigned Neighbors
+                List<HexagonCell> unassignedNeighbors = currentCell._neighbors.FindAll(n => n.IsAssigned() == false
+                        && ((includeLayerNwighbors == false && n.GetGridLayer() == currentCellLayer)
+                        || (includeLayerNwighbors && n.GetGridLayer() >= currentCellLayer)
+                        ));
+
+                if (unassignedNeighbors.Count > 0)
+                {
+                    bool includeInners = (currentCell.isEdgeCell == false || neighborPropagation == WFC_CellNeighborPropagation.Edges_Inners_Include_Layers || neighborPropagation == WFC_CellNeighborPropagation.Edges_Inners_No_Layers);
+
+                    List<HexagonCell> edgeNeighbors = unassignedNeighbors.FindAll(n => n.isEdgeCell).OrderBy(n => n.GetEdgeCellType()).ToList();
+                    if (edgeNeighbors.Count > 0)
+                    {
+                        foreach (HexagonCell neighbor in edgeNeighbors)
+                        {
+                            if (neighbor.IsAssigned()) continue;
+                            SelectAndAssignNext(neighbor, tilePrefabs_Edgable, tileContext, socketDirectory, isWalledEdge, logIncompatibilities, ignoreFailures, allowInvertedTiles);
+                        }
+                    }
+
+                    if (includeInners)
+                    {
+                        List<HexagonCell> innerNeighbors = unassignedNeighbors.FindAll(n => n.isEdgeCell == false).OrderByDescending(n => n._neighbors.Count).ToList();
+
+                        foreach (HexagonCell neighbor in innerNeighbors)
+                        {
+                            if (neighbor.IsAssigned()) continue;
+                            SelectAndAssignNext(neighbor, tilePrefabs, tileContext, socketDirectory, isWalledEdge, logIncompatibilities, ignoreFailures, allowInvertedTiles);
+                        }
+                    }
+
+                }
+            }
+        }
+
+
+        public static void InstantiateTile(HexagonTileCore prefab, HexagonCell cell, Transform folder, List<GameObject> activeTilesList, bool disableEditor = true)
         {
             int rotation = cell.GetTileRotation();
             bool isInverted = cell.IsTileInverted();
+            bool isTopLayer = cell.HasTopNeighbor() == false;
 
             Vector3 position = cell.transform.position;
             position.y += 0.2f;
 
-            GameObject activeTile = GameObject.Instantiate(prefab.gameObject, position, Quaternion.identity);
-            HexagonTileCore tileCore = activeTile.GetComponent<HexagonTileCore>();
+            GameObject tileGO = GameObject.Instantiate(prefab.gameObject, position, Quaternion.identity);
+            HexagonTileCore tileCore = tileGO.GetComponent<HexagonTileCore>();
 
             if (isInverted)
             {
                 tileCore.InvertModel();
-                activeTile.name = "INVERTED__" + activeTile.name;
+                tileGO.name = "INVERTED__" + tileGO.name;
             }
-            HexagonTileCore.RotateTile(activeTile.gameObject, rotation);
 
-            activeTilesList.Add(activeTile);
-            activeTile.transform.SetParent(folder);
+            if (isTopLayer && prefab.IsRoofable())
+            {
+                tileCore.SetModelRoofActive(true);
+            }
 
-            tileCore.ShowSocketLabels(false);
-            tileCore.SetIgnoreSocketLabelUpdates(true);
+            HexagonTileCore.RotateTile(tileGO.gameObject, rotation);
+
+            activeTilesList.Add(tileGO);
+            tileGO.transform.SetParent(folder);
+
+            if (disableEditor) tileCore.SetEditorTools(false);
+        }
+
+        public static (HexagonCellManager, List<HexagonCell>) SetupMicroCellClusterFromHosts(List<HexagonCell> cellsToAssign, HexagonTileCore tilePrefabs_MicroClusterParent, int cellLayers, int cellLayerElevation, Transform parentFolder, bool useV2 = false)
+        {
+            if (cellsToAssign.Count < 1)
+            {
+                Debug.LogError("Not enough cells found");
+                return (null, null);
+            }
+            HexagonCell parentCell = cellsToAssign[0];
+
+            parentCell.SetTile(tilePrefabs_MicroClusterParent, 0);
+            GameObject parentTileGO = GameObject.Instantiate(tilePrefabs_MicroClusterParent.gameObject, parentCell.transform.position, Quaternion.identity);
+
+            HexagonCellManager parentCellManager = parentTileGO.GetComponent<HexagonCellManager>();
+            parentCellManager.SetClusterParent();
+
+            HexagonTileCore parentTile = parentTileGO.GetComponent<HexagonTileCore>();
+            parentTile.ShowSocketLabels(false);
+            parentTile.SetIgnoreSocketLabelUpdates(true);
+
+
+            List<HexagonCell> children = new List<HexagonCell>();
+            children.AddRange(cellsToAssign.FindAll(c => c != parentCell));
+
+            parentCellManager.CreateMicroCellClusterPrototypesFromHosts(parentCell, children, cellLayers);
+
+            if (parentFolder != null) parentTileGO.transform.SetParent(parentFolder);
+
+            return (parentCellManager, children);
         }
 
         public static void InvertTile(HexagonTileCore tile)
@@ -115,6 +243,26 @@ namespace WFCSystem
             Vector3 scale = tile.transform.localScale;
             scale.z = -scale.z;
             tile.transform.localScale = scale;
+        }
+        public static void InvertTile(GameObject tile, float positionZ)
+        {
+            Vector3 scale = tile.transform.localScale;
+            scale.z = -scale.z;
+            tile.transform.localScale = scale;
+            tile.transform.localPosition = new Vector3(tile.transform.localPosition.x, tile.transform.localPosition.y, positionZ);
+        }
+
+        public static bool PassesLayerGroupingCompatibilityCheck(HexagonTileCore tileA, HexagonTileCore tileB, bool logIncompatibilities)
+        {
+
+            bool passed = (tileA.GetLayeredGrouping() == tileB.GetLayeredGrouping());
+            if (passed == false && logIncompatibilities)
+            {
+                string tileName = tileA.gameObject.name;
+                string neighborTileName = tileB.gameObject.name;
+                Debug.LogError("Tile: [" + tileName + "] failed LayerGroupingCompatibilityCheck with bottom neighbor [" + neighborTileName + "]. \nMismatched groups: " + tileA.GetLayeredGrouping() + " / " + tileB.GetLayeredGrouping());
+            }
+            return passed;
         }
 
         public static bool PassesVariantIncompatibilityCheck(HexagonTileCore tileA, HexagonTileCore tileB)
@@ -148,7 +296,7 @@ namespace WFCSystem
             }
         }
 
-        public static (HexagonTileCore, List<int[]>) SelectNextTile(HexagonCell cell, List<HexagonTileCore> prefabsList, bool allowInvertedTiles, bool isWalledEdge, HexagonSocketDirectory socketDirectory, bool logIncompatibilities)
+        public static (HexagonTileCore, List<int[]>) SelectNextTile(HexagonCell cell, List<HexagonTileCore> prefabsList, bool allowInvertedTiles, bool isWalledEdge, TileContext tileContext, HexagonSocketDirectory socketDirectory, bool logIncompatibilities)
         {
             // Create a list of compatible tiles and their rotations
             List<(HexagonTileCore, List<int[]>)> compatibleTilesAndRotations = new List<(HexagonTileCore, List<int[]>)>();
@@ -156,22 +304,42 @@ namespace WFCSystem
             // Iterate through all tiles
             for (int i = 0; i < prefabsList.Count; i++)
             {
-                if (cell.isEntryCell && !prefabsList[i].isEntrance) continue;
-
-                if (prefabsList[i].isLeveledTile && !cell.isLeveledCell) continue;
-
-                if (cell.isLeveledRampCell && !prefabsList[i].isLeveledRamp) continue;
-
-                if (prefabsList[i].baseLayerOnly && cell.GetGridLayer() > 0) continue;
-
-                if (prefabsList[i].noBaseLayer && cell.GetGridLayer() == 0) continue;
-
-                // if (prefabsList[i].noGroundLayer && (cell.GetGridLayer() == 0 || cell.isLeveledGroundCell)) continue;
-                // if (IsClusterCell && prefabsList[i].GetInnerClusterSocketCount() != cell.GetNumberofNeighborsInCluster()) continue;
-
                 HexagonTileCore currentTile = prefabsList[i];
 
-                List<int[]> compatibleTileRotations = WFCUtilities.GetCompatibleTileRotations(cell, currentTile, allowInvertedTiles, isWalledEdge, socketDirectory, logIncompatibilities);
+                if (cell.GetEdgeCellType() == EdgeCellType.Grid && currentTile.IsGridEdgeCompatible() == false) continue;
+
+                if (cell.isPathCell && !currentTile.allowPathPlacement) continue;
+
+                if (cell.isEntryCell && !currentTile.isEntrance) continue;
+
+                if (currentTile.isLeveledTile && !cell.isLeveledCell) continue;
+
+                if (cell.isLeveledRampCell && !currentTile.isLeveledRamp) continue;
+
+                if (currentTile.baseLayerOnly && cell.IsGroundCell() == false) continue;
+
+                if (currentTile.noBaseLayer && cell.IsGroundCell()) continue;
+
+                if (currentTile.GetExcludeLayerState() != HexagonTileCore.ExcludeLayerState.Unset)
+                {
+                    if (currentTile.GetExcludeLayerState() == HexagonTileCore.ExcludeLayerState.BaseLayerOnly)
+                    {
+                        if (cell.IsGroundCell() == false) continue;
+                    }
+                    else if (currentTile.GetExcludeLayerState() == HexagonTileCore.ExcludeLayerState.TopLayerOnly)
+                    {
+                        if (cell.HasTopNeighbor()) continue;
+                    }
+                    else if (currentTile.GetExcludeLayerState() == HexagonTileCore.ExcludeLayerState.NoBaseLayer)
+                    {
+                        if (cell.IsGroundCell()) continue;
+                    }
+                }
+
+                // if (currentTile.noGroundLayer && (cell.GetGridLayer() == 0 || cell.isLeveledGroundCell)) continue;
+                // if (IsClusterCell && currentTile.GetInnerClusterSocketCount() != cell.GetNumberofNeighborsInCluster()) continue;
+
+                List<int[]> compatibleTileRotations = WFCUtilities.GetCompatibleTileRotations(cell, currentTile, allowInvertedTiles, isWalledEdge, tileContext, socketDirectory, logIncompatibilities);
 
                 if (compatibleTileRotations.Count > 0) compatibleTilesAndRotations.Add((currentTile, compatibleTileRotations));
 
@@ -206,7 +374,7 @@ namespace WFCSystem
             return compatibleTilesAndRotations[randomIndex];
         }
 
-        static public List<int[]> GetCompatibleTileRotations(HexagonCell currentCell, HexagonTileCore currentTile, bool allowInvertedTiles, bool isWalledEdge, HexagonSocketDirectory socketDirectory, bool logIncompatibilities)
+        static public List<int[]> GetCompatibleTileRotations(HexagonCell currentCell, HexagonTileCore currentTile, bool allowInvertedTiles, bool isWalledEdge, TileContext tileContext, HexagonSocketDirectory socketDirectory, bool logIncompatibilities)
         {
             List<int[]> compatibleRotations = new List<int[]>();
             string tileName = currentTile.gameObject.name;
@@ -230,11 +398,11 @@ namespace WFCSystem
 
             if (allowInvertedTiles && currentTile.IsInvertable())
             {
-                List<int[]> compatibleRotations_Inverted = CheckTileSocketCompatibility(currentCell, currentTile, true, isWalledEdge, socketDirectory, logIncompatibilities);
+                List<int[]> compatibleRotations_Inverted = CheckTileSocketCompatibility(currentCell, currentTile, true, isWalledEdge, tileContext, socketDirectory, logIncompatibilities);
                 if (compatibleRotations_Inverted.Count > 0) compatibleRotations.AddRange(compatibleRotations_Inverted);
             }
 
-            List<int[]> compatibleRotations_Uninverted = CheckTileSocketCompatibility(currentCell, currentTile, false, isWalledEdge, socketDirectory, logIncompatibilities);
+            List<int[]> compatibleRotations_Uninverted = CheckTileSocketCompatibility(currentCell, currentTile, false, isWalledEdge, tileContext, socketDirectory, logIncompatibilities);
             if (compatibleRotations_Uninverted.Count > 0) compatibleRotations.AddRange(compatibleRotations_Uninverted);
 
             // Debug.Log("GetCompatibleTileRotations - Cell: " + currentCell.id + ", compatibleRotations: " + compatibleRotations.Count);
@@ -242,14 +410,14 @@ namespace WFCSystem
         }
 
 
-        static public List<int[]> CheckTileSocketCompatibility(HexagonCell currentCell, HexagonTileCore currentTile, bool inverted, bool isWalledEdge, HexagonSocketDirectory socketDirectory, bool logIncompatibilities)
+        static public List<int[]> CheckTileSocketCompatibility(HexagonCell currentCell, HexagonTileCore currentTile, bool inverted, bool isWalledEdge, TileContext tileContext, HexagonSocketDirectory socketDirectory, bool logIncompatibilities)
         {
             List<int[]> compatibleRotations = new List<int[]>();
 
-            HexagonCell.NeighborSideCornerSockets[] neighborTileCornerSocketsBySide = currentCell.GetSideNeighborTileSockets(isWalledEdge);
-            HexagonCell.NeighborLayerCornerSockets[] layeredNeighborTileCornerSockets = currentCell.GetLayeredNeighborTileSockets(TileContext.Default);
+            HexagonCell.NeighborSideCornerSockets[] neighborTileCornerSocketsBySide = tileContext == TileContext.Default ? currentCell.GetSideNeighborTileSockets(isWalledEdge) : currentCell.GetSideNeighborTileSockets(isWalledEdge, true);
+            HexagonCell.NeighborLayerCornerSockets[] layeredNeighborTileCornerSockets = currentCell.GetLayeredNeighborTileSockets(tileContext);
 
-            bool checkLayerNeighbors = (currentCell.GetGridLayer() > 0 && !currentCell.isLeveledGroundCell);
+            bool checkLayerNeighbors = currentCell.IsGroundCell() == false;
             bool[,] compatibilityMatrix = socketDirectory.GetCompatibilityMatrix();
 
             // Check every rotation
@@ -260,13 +428,33 @@ namespace WFCSystem
                 // Check Layered Neighbors First
                 if (checkLayerNeighbors)
                 {
+                    HexagonTileCore neighborTile = currentCell.GetBottomNeighbor()?.GetCurrentTile();
+
+                    if (neighborTile != null)
+                    {
+                        // Check for Variant Incompatibility
+                        compatibile = PassesLayerGroupingCompatibilityCheck(currentTile, neighborTile, logIncompatibilities);
+                        if (compatibile == false) break;
+                    }
+
                     // For now just check bottom neighbor's top against current tile's bottom
                     int[] currentTileBottomSockets = currentTile.GetRotatedLayerCornerSockets(false, rotation, inverted);
                     for (int i = 0; i < layeredNeighborTileCornerSockets[0].corners.Length; i++)
                     {
                         if (!compatibilityMatrix[currentTileBottomSockets[i], layeredNeighborTileCornerSockets[0].corners[i]])
                         {
-                            // Debug.LogError(tileName + " Not compatibile with bottom layer. currentTileBottomSocket: " + currentTileBottomSockets[i] + ", corner: " + (HexagonCorner)i);
+                            if (logIncompatibilities)
+                            {
+                                string tileName = currentTile.gameObject.name;
+                                string neighborTileName = neighborTile?.gameObject.name;
+                                string[] sockets = socketDirectory.sockets;
+
+                                string currentTileLog = "Incoming Tile: [" + tileName + "], CornerSocket: " + sockets[currentTileBottomSockets[i]] + ", Rotation: " + rotation;
+                                string neighborTileLog = "Bottom Tile: [" + neighborTileName + "], CornerSocket: " + sockets[layeredNeighborTileCornerSockets[0].corners[i]];
+
+                                Debug.LogError("Cell: " + currentCell.id + ", Tile: [" + tileName + "] is INCOMPATIBLE with bottom neighbor [" + neighborTileName + "] \n" + currentTileLog + "\n" + neighborTileLog);
+                                // Debug.LogError(tileName + " Not compatibile with bottom layer. currentTileBottomSocket: " + currentTileBottomSockets[i] + ", corner: " + (HexagonCorner)i);
+                            }
                             compatibile = false;
                             break;
                         }
@@ -279,7 +467,7 @@ namespace WFCSystem
                     for (int side = 0; side < neighborTileCornerSocketsBySide.Length; side++)
                     {
                         HexagonTileCore neighborTile = currentCell.neighborsBySide[side]?.GetCurrentTile();
-                        compatibile = WFCUtilities.IsTileCompatibleOnSideAndRotation(neighborTileCornerSocketsBySide, currentTile, side, rotation, neighborTile, inverted, socketDirectory, logIncompatibilities);
+                        compatibile = WFCUtilities.IsTileCompatibleOnSideAndRotation(neighborTileCornerSocketsBySide, currentTile, currentCell, side, rotation, neighborTile, inverted, socketDirectory, logIncompatibilities);
                         if (!compatibile) break;
                     }
                 }
@@ -295,7 +483,7 @@ namespace WFCSystem
         }
 
 
-        public static bool IsTileCompatibleOnSideAndRotation(HexagonCell.NeighborSideCornerSockets[] neighborTileCornerSocketsBySide, HexagonTileCore currentTile, int side, int rotation, HexagonTileCore neighborTile, bool inverted, HexagonSocketDirectory socketDirectory, bool logIncompatibilities)
+        public static bool IsTileCompatibleOnSideAndRotation(HexagonCell.NeighborSideCornerSockets[] neighborTileCornerSocketsBySide, HexagonTileCore currentTile, HexagonCell currentCell, int side, int rotation, HexagonTileCore neighborTile, bool inverted, HexagonSocketDirectory socketDirectory, bool logIncompatibilities)
         {
             string tileName = currentTile.gameObject.name;
             string neighborTileName = neighborTile?.gameObject.name;
@@ -326,10 +514,10 @@ namespace WFCSystem
                     {
                         if (logIncompatibilities)
                         {
-                            string currentTileLog = "Incoming Tile: [" + tileName + "], " + level + " CornerSocket: " + sockets[currentTileCornerSocket];
+                            string currentTileLog = "Incoming Tile: [" + tileName + "], " + level + " CornerSocket: " + sockets[currentTileCornerSocket] + ", rotation: " + rotation;
                             string neighborTileLog = "Neighbor Tile: [" + neighborTileName + "], " + level + " CornerSocket: " + sockets[neighborTileCornerSocket];
 
-                            Debug.LogError("Tile: [" + tileName + "] is INCOMPATIBLE with [" + neighborTileName + "] on side: " + (HexagonSide)side + ". \n" + currentTileLog + "\n" + neighborTileLog);
+                            Debug.LogError("Cell: " + currentCell.id + ", Tile: [" + tileName + "] is INCOMPATIBLE with [" + neighborTileName + "] on side: " + (HexagonSide)side + ". \n" + currentTileLog + "\n" + neighborTileLog);
                         }
 
                         compatibile = false;
@@ -454,6 +642,9 @@ namespace WFCSystem
             }
             return compatibile;
         }
+
+
+
 
     }
 }

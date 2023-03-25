@@ -10,97 +10,62 @@ using System.Linq;
 namespace WFCSystem
 {
 
-    // public enum SmallBuidings
-    // {
-    //     Unset = 0,
-    //     Brazier,
-    //     StreetLamp,
-    //     Pipe,
-    //     Statue,
-    //     Fountain,
-    //     GuardStation,
-    //     Barricade,
-    // }
-
-    public enum TileCategory
+    public enum TileSocketPrimitive
     {
-        Unset = 0,
-        Building,
-        Road,
-        Bridge,
-        Wall,
-        Gate,
-        Interior,
-        Misc,
-    }
+        Any = 0,
+        Edge = 1,
+        InnerCell = 2, //Generic for any nonEdge cell
 
-    public enum TileType
-    {
-        Unset = 0,
-        ExteriorWallSmall,
-        ExteriorWallLarge,
-        TowerSmall,
-        TowerLarge,
-        InteriorWall,
-        BuildingSmall,
-        BuildingMedium,
-        BuildingLarge,
-        RoadSmall,
-        RoadLarge,
-    }
+        EntranceOuter = 3,
+        EntrancePart = 4,
+        EntranceSide = 5,
+        EntranceInner = 6,
 
-    public enum HexagonSide
-    {
-        Front = 0,
-        FrontRight,
-        BackRight,
-        Back,
-        BackLeft,
-        FrontLeft,
-    }
+        WallBegin,
+        WallPart,
+        OuterWall,
+        InnerWall,
+        WallEnd,
 
-    public enum MirroredSideState
-    {
-        Unset = 0,
-        SymmetricalRightAndLeft = 1,
-        Mirror_FrontAndBack,
-        Mirror_AllSides,
-    }
-    public enum SymmetricalHexagonSide
-    {
-        Front = 0,
-        FrontRight = HexagonSide.FrontLeft,
-        BackRight = HexagonSide.BackLeft,
-        Back = HexagonSide.Back,
-        BackLeft = BackRight,
-        FrontLeft = FrontRight
-    }
 
-    public enum HexagonCorner
-    {
-        FrontA = 0,
-        FrontB,
-        FrontRightA,
-        FrontRightB,
-        BackRightA,
-        BackRightB,
+        Cluster,
+        ClusterPart,
 
-        BackA,
-        BackB,
-        BackLeftA,
-        BackLeftB,
-        FrontLeftA,
-        FrontLeftB,
+        PathGeneric = 14,
+        PathBegin,
+        PathFinish,
+        PathPart,
+        PathSide,
+
+        LeveledInner,
+        LeveledOuter,
+        LeveledEdgePart,
+        LeveledRampTop,
+        LeveledRampSide,
+        LeveledRampBottom,
+
+        EmptySpace,
+
+        BuildingFront,
+        BuildingSide,
+        BuildingBack,
+        BuildingEntry,
+        BuildingPart,
+        BuildingLevelOutlet,
+        BuildingLevelConnector,
+
+        VerticalPart,
+        VerticalPartFront,
+        VerticalPartSide,
+        VerticalPartBack,
+
+        FloorPart,
+        FloorCorner,
+        FloorEnd,
+
+        WallCorner_1,
+        WallCorner_2,
     }
-
-    public enum HexagonSideEdge
-    {
-        Bottom = 0,
-        Right,
-        Top,
-        Left,
-    }
-
 
 
 
@@ -143,7 +108,7 @@ namespace WFCSystem
         public MirroredSideState GetMirroredSideState() => mirroredSideState;
 
         [Header("Tile Socket Configuration")]
-        [SerializeField] private TileSocketDirectory tileSocketDirectory;
+        // [SerializeField] private TileSocketDirectory tileSocketDirectory;
         [SerializeField] private TileLabelGroup tileLabelGroup;
         [Range(-10f, 0f)][SerializeField] private float sideBottomLabelYOffset = -4f;
         [Range(0f, 10f)][SerializeField] private float sideTopLabelYOffset = 4f;
@@ -840,144 +805,144 @@ namespace WFCSystem
 
             if (socketTextDisplay == null || socketTextDisplay.Length == 0) return;
 
-            int rotationAmount = 180;
-            for (int i = 0; i < _sides.Length; i++)
-            {
-                HexagonSide side = (HexagonSide)i;
-                // Top
-                UpdateSocketLabelPlacement(side, true, false);
-                UpdateSocketLabelPlacement(side, true, true);
-                UpdateSocketLabel(side, true, false, rotationAmount);
-                UpdateSocketLabel(side, true, true, rotationAmount);
-                // Bottom
-                UpdateSocketLabelPlacement(side, false, false);
-                UpdateSocketLabelPlacement(side, false, true);
-                UpdateSocketLabel(side, false, false, rotationAmount);
-                UpdateSocketLabel(side, false, true, rotationAmount);
-                rotationAmount += 60;
-            }
+            // int rotationAmount = 180;
+            // for (int i = 0; i < _sides.Length; i++)
+            // {
+            //     HexagonSide side = (HexagonSide)i;
+            //     // Top
+            //     UpdateSocketLabelPlacement(side, true, false);
+            //     UpdateSocketLabelPlacement(side, true, true);
+            //     UpdateSocketLabel(side, true, false, rotationAmount);
+            //     UpdateSocketLabel(side, true, true, rotationAmount);
+            //     // Bottom
+            //     UpdateSocketLabelPlacement(side, false, false);
+            //     UpdateSocketLabelPlacement(side, false, true);
+            //     UpdateSocketLabel(side, false, false, rotationAmount);
+            //     UpdateSocketLabel(side, false, true, rotationAmount);
+            //     rotationAmount += 60;
+            // }
         }
 
-        private void UpdateSocketLabelPlacement(HexagonSide _side, bool top, bool layered)
-        {
-            (HexagonCorner _cornerA, HexagonCorner _cornerB) = HexagonCell.GetCornersFromSide(_side);
+        // private void UpdateSocketLabelPlacement(HexagonSide _side, bool top, bool layered)
+        // {
+        //     (HexagonCorner _cornerA, HexagonCorner _cornerB) = HexagonCell.GetCornersFromSide(_side);
 
-            int cornerA = (int)_cornerA;
-            int cornerB = (int)_cornerB;
+        //     int cornerA = (int)_cornerA;
+        //     int cornerB = (int)_cornerB;
 
-            int side = (int)_side;
-            int labelAIX;
-            int labelBIX;
-            if (layered)
-            {
-                labelAIX = top ? (36 + cornerA) : (24 + cornerA);
-                labelBIX = top ? (36 + cornerB) : (24 + cornerB);
-            }
-            else
-            {
-                labelAIX = top ? (12 + cornerA) : cornerA;
-                labelBIX = top ? (12 + cornerB) : cornerB;
-            }
+        //     int side = (int)_side;
+        //     int labelAIX;
+        //     int labelBIX;
+        //     if (layered)
+        //     {
+        //         labelAIX = top ? (36 + cornerA) : (24 + cornerA);
+        //         labelBIX = top ? (36 + cornerB) : (24 + cornerB);
+        //     }
+        //     else
+        //     {
+        //         labelAIX = top ? (12 + cornerA) : cornerA;
+        //         labelBIX = top ? (12 + cornerB) : cornerB;
+        //     }
 
-            Vector3 pos = (_sides[side] - center.position) * labelForwardOffset;
-            Quaternion rot = Quaternion.LookRotation(center.position - _sides[side]);
-            int[] cornerSocketIds;
-            if (layered)
-            {
-                pos.y += top ? topLabelYOffset : bottomLabelYOffset;
-                cornerSocketIds = top ? topCornerSocketIds : bottomCornerSocketIds;
-            }
-            else
-            {
-                pos.y += top ? sideTopLabelYOffset : sideBottomLabelYOffset;
-                cornerSocketIds = top ? sideTopCornerSocketIds : sideBtmCornerSocketIds;
-            }
+        //     Vector3 pos = (_sides[side] - center.position) * labelForwardOffset;
+        //     Quaternion rot = Quaternion.LookRotation(center.position - _sides[side]);
+        //     int[] cornerSocketIds;
+        //     if (layered)
+        //     {
+        //         pos.y += top ? topLabelYOffset : bottomLabelYOffset;
+        //         cornerSocketIds = top ? topCornerSocketIds : bottomCornerSocketIds;
+        //     }
+        //     else
+        //     {
+        //         pos.y += top ? sideTopLabelYOffset : sideBottomLabelYOffset;
+        //         cornerSocketIds = top ? sideTopCornerSocketIds : sideBtmCornerSocketIds;
+        //     }
 
-            // Corner A
-            pos.x += labelXZOffset;
-            Gizmos.color = tileSocketDirectory ? tileSocketDirectory.compatibilityTable[cornerSocketIds[cornerA]].color : Color.white;
-            Gizmos.DrawSphere(pos, 0.1f * transform.lossyScale.z);
-            socketTextDisplay[labelAIX].GetComponent<RectTransform>().position = pos;
-            socketTextDisplay[labelAIX].GetComponent<RectTransform>().rotation = rot;
+        //     // Corner A
+        //     pos.x += labelXZOffset;
+        //     Gizmos.color = tileSocketDirectory ? tileSocketDirectory.compatibilityTable[cornerSocketIds[cornerA]].color : Color.white;
+        //     Gizmos.DrawSphere(pos, 0.1f * transform.lossyScale.z);
+        //     socketTextDisplay[labelAIX].GetComponent<RectTransform>().position = pos;
+        //     socketTextDisplay[labelAIX].GetComponent<RectTransform>().rotation = rot;
 
-            // Corner B
-            pos.x -= labelXZOffset * 2;
-            Gizmos.color = tileSocketDirectory ? tileSocketDirectory.compatibilityTable[cornerSocketIds[cornerB]].color : Color.white;
-            Gizmos.DrawSphere(pos, 0.1f * transform.lossyScale.z);
-            socketTextDisplay[labelBIX].GetComponent<RectTransform>().position = pos;
-            socketTextDisplay[labelBIX].GetComponent<RectTransform>().rotation = rot;
-        }
+        //     // Corner B
+        //     pos.x -= labelXZOffset * 2;
+        //     Gizmos.color = tileSocketDirectory ? tileSocketDirectory.compatibilityTable[cornerSocketIds[cornerB]].color : Color.white;
+        //     Gizmos.DrawSphere(pos, 0.1f * transform.lossyScale.z);
+        //     socketTextDisplay[labelBIX].GetComponent<RectTransform>().position = pos;
+        //     socketTextDisplay[labelBIX].GetComponent<RectTransform>().rotation = rot;
+        // }
 
-        private void UpdateSocketLabel(HexagonSide _side, bool top, bool layered, int rotationAmount)
-        {
-            (HexagonCorner _cornerA, HexagonCorner _cornerB) = HexagonCell.GetCornersFromSide(_side);
-            int cornerA = (int)_cornerA;
-            int cornerB = (int)_cornerB;
+        // private void UpdateSocketLabel(HexagonSide _side, bool top, bool layered, int rotationAmount)
+        // {
+        //     (HexagonCorner _cornerA, HexagonCorner _cornerB) = HexagonCell.GetCornersFromSide(_side);
+        //     int cornerA = (int)_cornerA;
+        //     int cornerB = (int)_cornerB;
 
-            int side = (int)_side;
+        //     int side = (int)_side;
 
-            int labelAIX;
-            int labelBIX;
-            if (layered)
-            {
-                labelAIX = top ? (36 + cornerA) : (24 + cornerA);
-                labelBIX = top ? (36 + cornerB) : (24 + cornerB);
-            }
-            else
-            {
-                labelAIX = top ? (12 + cornerA) : cornerA;
-                labelBIX = top ? (12 + cornerB) : cornerB;
-            }
-            // int labelAIX = top ? (12 + cornerA) : cornerA;
-            // int labelBIX = top ? (12 + cornerB) : cornerB;
+        //     int labelAIX;
+        //     int labelBIX;
+        //     if (layered)
+        //     {
+        //         labelAIX = top ? (36 + cornerA) : (24 + cornerA);
+        //         labelBIX = top ? (36 + cornerB) : (24 + cornerB);
+        //     }
+        //     else
+        //     {
+        //         labelAIX = top ? (12 + cornerA) : cornerA;
+        //         labelBIX = top ? (12 + cornerB) : cornerB;
+        //     }
+        //     // int labelAIX = top ? (12 + cornerA) : cornerA;
+        //     // int labelBIX = top ? (12 + cornerB) : cornerB;
 
-            TextMesh textMeshA = socketTextDisplay[labelAIX].GetComponent<TextMesh>();
-            TextMesh textMeshB = socketTextDisplay[labelBIX].GetComponent<TextMesh>();
-            string strA;
-            string strB;
+        //     TextMesh textMeshA = socketTextDisplay[labelAIX].GetComponent<TextMesh>();
+        //     TextMesh textMeshB = socketTextDisplay[labelBIX].GetComponent<TextMesh>();
+        //     string strA;
+        //     string strB;
 
-            if (top)
-            {
-                if (layered)
-                {
-                    textMeshA.color = tileSocketDirectory.compatibilityTable[topCornerSocketIds[cornerA]].color;
-                    strA = "id_" + topCornerSocketIds[cornerA] + " - " + tileSocketDirectory.compatibilityTable[topCornerSocketIds[cornerA]].name + "\n" + "Top " + _cornerA;
-                    textMeshB.color = tileSocketDirectory.compatibilityTable[topCornerSocketIds[cornerB]].color;
-                    strB = "id_" + topCornerSocketIds[cornerB] + " - " + tileSocketDirectory.compatibilityTable[topCornerSocketIds[cornerB]].name + "\n" + "Top " + _cornerB;
-                }
-                else
-                {
-                    textMeshA.color = tileSocketDirectory.compatibilityTable[sideTopCornerSocketIds[cornerA]].color;
-                    strA = "id_" + sideTopCornerSocketIds[cornerA] + " - " + tileSocketDirectory.compatibilityTable[sideTopCornerSocketIds[cornerA]].name + "\n" + "SideTop " + _cornerA;
-                    textMeshB.color = tileSocketDirectory.compatibilityTable[sideTopCornerSocketIds[cornerB]].color;
-                    strB = "id_" + sideTopCornerSocketIds[cornerB] + " - " + tileSocketDirectory.compatibilityTable[sideTopCornerSocketIds[cornerB]].name + "\n" + "SideTop " + _cornerB;
-                }
-            }
-            else
-            {
+        //     if (top)
+        //     {
+        //         if (layered)
+        //         {
+        //             textMeshA.color = tileSocketDirectory.compatibilityTable[topCornerSocketIds[cornerA]].color;
+        //             strA = "id_" + topCornerSocketIds[cornerA] + " - " + tileSocketDirectory.compatibilityTable[topCornerSocketIds[cornerA]].name + "\n" + "Top " + _cornerA;
+        //             textMeshB.color = tileSocketDirectory.compatibilityTable[topCornerSocketIds[cornerB]].color;
+        //             strB = "id_" + topCornerSocketIds[cornerB] + " - " + tileSocketDirectory.compatibilityTable[topCornerSocketIds[cornerB]].name + "\n" + "Top " + _cornerB;
+        //         }
+        //         else
+        //         {
+        //             textMeshA.color = tileSocketDirectory.compatibilityTable[sideTopCornerSocketIds[cornerA]].color;
+        //             strA = "id_" + sideTopCornerSocketIds[cornerA] + " - " + tileSocketDirectory.compatibilityTable[sideTopCornerSocketIds[cornerA]].name + "\n" + "SideTop " + _cornerA;
+        //             textMeshB.color = tileSocketDirectory.compatibilityTable[sideTopCornerSocketIds[cornerB]].color;
+        //             strB = "id_" + sideTopCornerSocketIds[cornerB] + " - " + tileSocketDirectory.compatibilityTable[sideTopCornerSocketIds[cornerB]].name + "\n" + "SideTop " + _cornerB;
+        //         }
+        //     }
+        //     else
+        //     {
 
-                if (layered)
-                {
-                    textMeshA.color = tileSocketDirectory.compatibilityTable[bottomCornerSocketIds[cornerA]].color;
-                    strA = "id_" + bottomCornerSocketIds[cornerA] + " - " + tileSocketDirectory.compatibilityTable[bottomCornerSocketIds[cornerA]].name + "\n" + "BTM " + _cornerA;
-                    textMeshB.color = tileSocketDirectory.compatibilityTable[bottomCornerSocketIds[cornerB]].color;
-                    strB = "id_" + bottomCornerSocketIds[cornerB] + " - " + tileSocketDirectory.compatibilityTable[bottomCornerSocketIds[cornerB]].name + "\n" + "BTM " + _cornerB;
-                }
-                else
-                {
-                    textMeshA.color = tileSocketDirectory.compatibilityTable[sideBtmCornerSocketIds[cornerA]].color;
-                    strA = "id_" + sideBtmCornerSocketIds[cornerA] + " - " + tileSocketDirectory.compatibilityTable[sideBtmCornerSocketIds[cornerA]].name + "\n" + "SideBTM " + _cornerA;
-                    textMeshB.color = tileSocketDirectory.compatibilityTable[sideBtmCornerSocketIds[cornerB]].color;
-                    strB = "id_" + sideBtmCornerSocketIds[cornerB] + " - " + tileSocketDirectory.compatibilityTable[sideBtmCornerSocketIds[cornerB]].name + "\n" + "SideBTM " + _cornerB;
-                }
-            }
+        //         if (layered)
+        //         {
+        //             textMeshA.color = tileSocketDirectory.compatibilityTable[bottomCornerSocketIds[cornerA]].color;
+        //             strA = "id_" + bottomCornerSocketIds[cornerA] + " - " + tileSocketDirectory.compatibilityTable[bottomCornerSocketIds[cornerA]].name + "\n" + "BTM " + _cornerA;
+        //             textMeshB.color = tileSocketDirectory.compatibilityTable[bottomCornerSocketIds[cornerB]].color;
+        //             strB = "id_" + bottomCornerSocketIds[cornerB] + " - " + tileSocketDirectory.compatibilityTable[bottomCornerSocketIds[cornerB]].name + "\n" + "BTM " + _cornerB;
+        //         }
+        //         else
+        //         {
+        //             textMeshA.color = tileSocketDirectory.compatibilityTable[sideBtmCornerSocketIds[cornerA]].color;
+        //             strA = "id_" + sideBtmCornerSocketIds[cornerA] + " - " + tileSocketDirectory.compatibilityTable[sideBtmCornerSocketIds[cornerA]].name + "\n" + "SideBTM " + _cornerA;
+        //             textMeshB.color = tileSocketDirectory.compatibilityTable[sideBtmCornerSocketIds[cornerB]].color;
+        //             strB = "id_" + sideBtmCornerSocketIds[cornerB] + " - " + tileSocketDirectory.compatibilityTable[sideBtmCornerSocketIds[cornerB]].name + "\n" + "SideBTM " + _cornerB;
+        //         }
+        //     }
 
-            textMeshA.text = strA;
-            textMeshA.fontSize = 11;
+        //     textMeshA.text = strA;
+        //     textMeshA.fontSize = 11;
 
-            textMeshB.text = strB;
-            textMeshB.fontSize = 11;
-        }
+        //     textMeshB.text = strB;
+        //     textMeshB.fontSize = 11;
+        // }
 
         #endregion
 
@@ -1048,6 +1013,8 @@ namespace WFCSystem
         public string id;
         public string topNeighborId;
         public string bottomNeighborId;
+        public string parentId;
+        public string name;
         public int size;
         public int layer;
         public Vector3 center;

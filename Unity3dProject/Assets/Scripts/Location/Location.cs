@@ -45,6 +45,9 @@ namespace ProceduralBase
         //Districts
 
         //Roads
+        #region TO DO
+        public void PopulateLocation() { }
+        #endregion
 
         //tiles
 
@@ -86,10 +89,13 @@ namespace ProceduralBase
 
                 for (int i = 0; i < _subZones.Count; i++)
                 {
-                    _subZones[i].Debug_ShowTiles(showZoneBounds);
-                    _subZones[i].Debug_ShowBounds(showTileGrid);
-                    _subZones[i].Debug_ResetHexagonellPrototypes(resetHexagonTilePrototypes);
-                    _subZones[i].Debug_GenerateHexagonCells(generateHexagonTileCells);
+                    if (_subZones[i] != null)
+                    {
+                        _subZones[i].Debug_ShowTiles(showZoneBounds);
+                        _subZones[i].Debug_ShowBounds(showTileGrid);
+                        _subZones[i].Debug_ResetHexagonellPrototypes(resetHexagonTilePrototypes);
+                        _subZones[i].Debug_GenerateHexagonCells(generateHexagonTileCells);
+                    }
                 }
 
                 if (_resetHexagonTilePrototypes != resetHexagonTilePrototypes ||

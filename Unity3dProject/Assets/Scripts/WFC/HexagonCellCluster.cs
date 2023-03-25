@@ -208,7 +208,7 @@ namespace WFCSystem
             return false;
         }
 
-        public static List<HexagonCellCluster> GetHexagonCellClusters(List<HexagonCell> cells, Vector3 positionCenter, WFCCollapseOrder collapseOrder = 0, bool ignoreEdges = false)
+        public static List<HexagonCellCluster> GetHexagonCellClusters(List<HexagonCell> cells, Vector3 positionCenter, WFCCollapseOrder_General collapseOrder = 0, bool ignoreEdges = false)
         {
             List<HexagonCell> edgeCells = HexagonCell.GetEdgeCells(cells); // get the edge cells first
             HexagonCell centerCell = HexagonCell.GetClosestCellByCenterPoint(cells, positionCenter);

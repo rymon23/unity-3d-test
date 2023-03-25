@@ -4,6 +4,11 @@ using System.Collections.Generic;
 
 namespace WFCSystem
 {
+    public interface IHexagonTileSocketSystem
+    {
+        // bool[,] GetCompatibilityMatrix();
+    }
+
     public interface ITileSocketDirectory
     {
         public enum ResetCompatibilityState { Unset = 0, None, All }

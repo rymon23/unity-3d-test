@@ -57,6 +57,45 @@ public class HexagonGenerator
         return hexagonSides;
     }
 
+    public static Vector3[] GenerateHexagonPoints(Vector3 center, float size)
+    {
+        Vector3[] points = new Vector3[6];
+
+        for (int i = 0; i < 6; i++)
+        {
+            float angle = 60f * i;
+            float x = center.x + size * Mathf.Cos(Mathf.Deg2Rad * angle);
+            float z = center.z + size * Mathf.Sin(Mathf.Deg2Rad * angle);
+            points[i] = new Vector3(x, center.y, z);
+        }
+        return points;
+    }
+
+    // public static List<Vector3[]> GenerateHexagons(Vector3 center, float radius, int rows)
+    // {
+    //     List<Vector3[]> hexagons = new List<Vector3[]>();
+
+    //     // Generate center hexagon
+    //     hexagons.Add(GenerateHexagonPoints(center, radius));
+
+    //     // Generate rows of hexagons on the sides of the center hexagon
+    //     for (int i = 1; i <= rows; i++)
+    //     {
+    //         // Calculate the center position of the row
+    //         Vector3 rowCenter = center + new Vector3(0f, 0f, 2f * radius * i);
+
+    //         // Calculate the positions of the hexagons in the row
+    //         for (int j = 0; j < 3; j++)
+    //         {
+    //             Vector3 offset = new Vector3(1.5f * radius * (j - 1), 0f, 0f);
+    //             Vector3[] hexagon = GenerateHexagonPoints(rowCenter + offset, radius);
+    //             hexagons.Add(hexagon);
+    //         }
+    //     }
+
+    //     return hexagons;
+    // }
+
 
     public static Mesh CreateHexagonMesh(Vector3[] hexagonCorners)
     {
@@ -113,7 +152,7 @@ public class HexagonGenerator
     }
 
 
-    public static List<HexagonTilePrototype> DetermineHexagonTilePrototypeGrideSize(Vector3 position, float radius, int hexagonSize, float adjusterMult = 1.734f)
+    public static List<HexagonTilePrototype> DetermineHexagonTilePrototypeGrideSize(Vector3 position, float radius, int hexagonSize, float adjusterMult = 1.734f, string appendToId = "")
     {
         float bottomCornerX = position.x - (radius * 0.9f);
         float bottomCornerZ = position.z - (radius * 0.9f);
@@ -122,16 +161,58 @@ public class HexagonGenerator
         int numHexagons = (int)((radius * 2.2f) / (hexagonSize * 1.5f));
         float numRowsf = ((radius * 2f) / (hexagonSize * adjusterMult));
         int numRows = Mathf.CeilToInt(numRowsf);
-        List<HexagonTilePrototype> hexagons = GenerateHexagonTilePrototypeGrid(hexagonSize, numHexagons, numRows, bottomCorner, adjusterMult);
+        List<HexagonTilePrototype> hexagons = GenerateHexagonTilePrototypeGrid(hexagonSize, numHexagons, numRows, bottomCorner, adjusterMult, appendToId);
         return hexagons;
     }
-    public static List<HexagonTilePrototype> GenerateHexagonTilePrototypeGrid(int hexagonSize, int numHexagons, int numRows, Vector3 startPos, float adjusterMult = 1.734f)
+    public static List<HexagonTilePrototype> DetermineHexagonTilePrototypeGrideSize(Vector3 position, float radius, int hexagonSize, HexagonCell parentCell, float adjusterMult = 1.734f, string appendToId = "")
     {
+        float bottomCornerX = position.x - (radius * 0.9f);
+        float bottomCornerZ = position.z - (radius * 0.9f);
+        Vector3 bottomCorner = new Vector3(bottomCornerX, position.y, bottomCornerZ);
+
+        int numHexagons = (int)((radius * 2.2f) / (hexagonSize * 1.5f));
+        float numRowsf = ((radius * 2f) / (hexagonSize * adjusterMult));
+        int numRows = Mathf.CeilToInt(numRowsf);
+        List<HexagonTilePrototype> hexagons = GenerateHexagonTilePrototypeGrid(hexagonSize, numHexagons, numRows, bottomCorner, adjusterMult, appendToId, parentCell);
+        return hexagons;
+    }
+    public static List<HexagonTilePrototype> GenerateHexagonTilePrototypeGrid(int hexagonSize, int numHexagons, int numRows, Vector3 startPos, float adjusterMult = 1.734f, string appendToId = "", HexagonCell parentCell = null)
+    {
+        // //
+        // List<Vector3[]> hexpoints = GenerateHexagons(startPos, hexagonSize, numHexagons);
+        // List<HexagonTilePrototype> hexagonTilePrototypes = new List<HexagonTilePrototype>();
+        // int idFragment = Mathf.Abs((int)(startPos.z + startPos.x));
+
+        // for (var i = 0; i < hexpoints.Count; i++)
+        // {
+        //     Vector3[] hexagonPoints = hexpoints[i];
+
+        //     HexagonTilePrototype prototype = new HexagonTilePrototype();
+        //     if (parentCell != null)
+        //     {
+        //         prototype.parentId = parentCell.id;
+        //         prototype.id = "p_" + parentCell.id + "-";
+        //     }
+        //     prototype.id += "X" + hexagonSize + "-" + idFragment + "-" + i;
+        //     prototype.name = "Cell_Prototype-" + appendToId + prototype.id;
+        //     prototype.size = hexagonSize;
+        //     prototype.cornerPoints = hexagonPoints;
+        //     prototype.center = HexagonGenerator.GetPolygonCenter(hexagonPoints);
+        //     hexagonTilePrototypes.Add(prototype);
+        // }
+        // return hexagonTilePrototypes;
+        // //
+
+
+
+
         List<HexagonTilePrototype> hexagonTilePrototypes = new List<HexagonTilePrototype>();
         float angle = 60 * Mathf.Deg2Rad;
         float currentX = startPos.x;
         float currentZ = startPos.z;
         float lastZ = startPos.z;
+
+        int idFragment = Mathf.Abs((int)(startPos.z + startPos.x));
 
         for (int k = 0; k < numRows; k++)
         {
@@ -161,7 +242,13 @@ public class HexagonGenerator
                 }
 
                 HexagonTilePrototype prototype = new HexagonTilePrototype();
-                prototype.id = k + "-" + i;
+                if (parentCell != null)
+                {
+                    prototype.parentId = parentCell.id;
+                    prototype.id = "p_" + parentCell.id + "-";
+                }
+                prototype.id += "X" + hexagonSize + "-" + idFragment + "-" + k + i;
+                prototype.name = "Cell_Prototype-" + appendToId + prototype.id;
                 prototype.size = hexagonSize;
                 prototype.cornerPoints = hexagonPoints;
                 prototype.center = HexagonGenerator.GetPolygonCenter(hexagonPoints);

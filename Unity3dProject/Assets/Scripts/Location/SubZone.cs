@@ -98,9 +98,7 @@ namespace ProceduralBase
         [SerializeField] private GameObject HexagonTilePlatformModel_prefab;
 
         [Header("WFC")]
-        [SerializeField] private HexagonWaveFunctionCollapse_1 waveFunctionCollapse;
-
-
+        [SerializeField] private IWFCSystem wfc;
 
         Dictionary<int, List<HexagonTilePrototype>> hexagonCellPrototypesByLayer;
         public void PreprocessCellGrid()
@@ -168,20 +166,31 @@ namespace ProceduralBase
         }
 
 
+        private void InitialSetup()
+        {
+            meshFilter = GetComponent<MeshFilter>();
+
+            // wfc = GetComponent<IWFCSystem>();
+            // if (wfc == null)
+            // {
+
+            //     Debug.LogError("Missing WFC system component!");
+            // }
+            // else
+            // {
+            //     if (hexagonCells != null && hexagonCells.Count > 0) wfc.SetCells(hexagonCells);
+            //     wfc.SetRadius(radius);
+            // }
+        }
+
         private void Awake()
         {
-            waveFunctionCollapse = GetComponent<HexagonWaveFunctionCollapse_1>();
-
-            waveFunctionCollapse.SetCells(hexagonCells);
-            waveFunctionCollapse.SetRadius(radius);
+            InitialSetup();
         }
 
         private void OnValidate()
         {
-            if (waveFunctionCollapse == null)
-            {
-                waveFunctionCollapse = GetComponent<HexagonWaveFunctionCollapse_1>();
-            }
+            InitialSetup();
 
             bool hasTilePrototypes = hexagonCellPrototypes != null && hexagonCellPrototypes.Count > 0;
 
@@ -208,8 +217,8 @@ namespace ProceduralBase
                         HexagonCell.PopulateNeighborsFromCornerPoints(hexagonCells, 0.33f * (hexagonSize / 12f));
                     }
 
-                    waveFunctionCollapse.SetCells(hexagonCells);
-                    waveFunctionCollapse.SetRadius(radius);
+                    // wfc.SetCells(hexagonCells);
+                    // wfc.SetRadius(radius);
 
                     edgeCells = null;
                     entryCells = null;
@@ -223,7 +232,7 @@ namespace ProceduralBase
 
                     cellClusters = HexagonCellCluster.GetHexagonCellClusters(hexagonCells,
                                                                         transform.position,
-                                                                        WFCCollapseOrder.Default,
+                                                                        WFCCollapseOrder_General.Default,
                                                                         true);
                 }
 
@@ -251,7 +260,7 @@ namespace ProceduralBase
                     // HexagonCell.SlopeYPositionAlongPath(hexagonCells.FindAll(c => c.isPathCell), verticeGrid);
                     HexagonCell.SmoothElevationAlongPath(hexagonCells.FindAll(c => c.isPathCell || c.isEntryCell), verticeGrid);
 
-                    HexagonCell.CreateMeshFromVertices(verticeGrid, meshFilter);
+                    WorldArea.CreateMeshFromVertices(verticeGrid, meshFilter);
                     mesh = meshFilter.mesh;
                     // List<Vector3> vertices = HexagonCell.GetOrderedVertices(
                     //                             hexagonCells.FindAll(c => c.isLeveledGroundCell || (c.GetGridLayer() == 0 && c.isLeveledCell == false)));

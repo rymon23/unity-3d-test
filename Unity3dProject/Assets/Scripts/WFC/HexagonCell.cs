@@ -8,19 +8,37 @@ using UnityEditor;
 
 namespace WFCSystem
 {
+
+    public enum EdgeCellType { None = 0, Default = 1, Connector = 2, Grid, Inner }
+
     [System.Serializable]
-    public class HexagonCell : MonoBehaviour
+    public class HexagonCell : MonoBehaviour, IHexCell
     {
         #region Static Vars
         static float neighborSearchCenterDistMult = 2.4f;
         public static float GetCornerNeighborSearchDist(int cellSize) => 1.2f * ((float)cellSize / 12f);
         #endregion
 
+        #region Interface Methods
+        public string GetId() => id;
+        public string Get_Uid() => null;
+        public int GetSize() => size;
+        public int GetLayer() => _gridLayer;
+        public bool IsEdge() => isEdgeCell;
+        public bool IsEntry() => isEntryCell;
+        public bool IsPath() => isPathCell;
+        public bool IsGround() => cellStatus == CellStatus.Ground;
+        public CellStatus GetCellStatus() => cellStatus;
+        public EdgeCellType GetEdgeCellType() => _edgeCellType;
+        public Vector3 GetPosition() => transform.position;
+        public Vector3[] GetCorners() => _cornerPoints;
+        public Vector3[] GetSides() => _sides;
+        #endregion
+
         public string id = "-1";
 
         [Header("Base Settings")]
         [SerializeField] private int size = 12;
-        public int GetSize() => size;
         public void SetSize(int value)
         {
             size = value;
@@ -40,18 +58,36 @@ namespace WFCSystem
         public HexagonCell[] layeredNeighbor = new HexagonCell[2]; // 0= bottom , 1= top
         public HexagonCell[] neighborsBySide = new HexagonCell[6];
 
-        public int GetSideNeighborCount()
+        public void SetTopNeighbor(HexagonCell cell)
+        {
+            layeredNeighbor[1] = cell;
+        }
+        public void SetBottomNeighbor(HexagonCell cell)
+        {
+            layeredNeighbor[0] = cell;
+        }
+        public HexagonCell GetTopNeighbor() => layeredNeighbor[1];
+        public HexagonCell GetBottomNeighbor() => layeredNeighbor[0];
+        public bool HasTopNeighbor() => layeredNeighbor[1] != null;
+        public bool HasBottomNeighbor() => layeredNeighbor[0] != null;
+
+        public int GetSideNeighborCount(bool scopeToParentCell)
         {
             int count = 0;
             foreach (HexagonCell item in neighborsBySide)
             {
-                if (item != null) count++;
+                if (item != null && (scopeToParentCell == false || item.GetParenCellId() == _parentId))
+                {
+                    count++;
+                }
             }
             return count;
         }
 
         public List<HexagonCell> GetLayerNeighbors() => _neighbors.FindAll(n => n.GetGridLayer() == GetGridLayer());
         public bool HasEntryNeighbor() => _neighbors.Find(n => n.isEntryCell);
+        public int GetUnassignedNeighborCount(bool includeLayers) => _neighbors.FindAll(n => n.IsAssigned() == false && n.GetGridLayer() == GetGridLayer()).Count;
+
         public List<HexagonCell> GetPathNeighbors()
         {
             List<HexagonCell> found = new List<HexagonCell>();
@@ -146,6 +182,7 @@ namespace WFCSystem
         public NeighborLayerCornerSockets EvaluateLayeredNeighborTileSockets(HexagonCell layerNeighbor, bool top, TileContext tileContext)
         {
             NeighborLayerCornerSockets layeredNeighborCornerSockets = new NeighborLayerCornerSockets();
+
             // If no neighbor, socket is Edge socket value
             if (layerNeighbor == null)
             {
@@ -153,14 +190,27 @@ namespace WFCSystem
             }
             else
             {
-                if (layerNeighbor.currentTile == null)
-                {
 
-                    layeredNeighborCornerSockets.corners = GetDefaultLayeredSocketSet(GlobalSockets.Edge);
+                if (layerNeighbor.currentTile != null)
+                {
+                    layeredNeighborCornerSockets = GetLayeredNeighborRelativeTileSockets(layerNeighbor, top);
                 }
                 else
                 {
-                    layeredNeighborCornerSockets = GetLayeredNeighborRelativeTileSockets(layerNeighbor, top);
+                    // Debug.Log("layerNeighbor id: " + layerNeighbor.id);
+                    if (layerNeighbor.GetCurrentTile() == null)
+                    {
+                        // Debug.Log("layerNeighbor id: " + layerNeighbor.id + ", NO Tile");
+                        if (layerNeighbor.isEdgeCell)
+                        {
+                            layeredNeighborCornerSockets.corners = GetDefaultLayeredSocketSet(GlobalSockets.Unassigned_EdgeCell);
+                        }
+                        else
+                        {
+                            layeredNeighborCornerSockets.corners = GetDefaultLayeredSocketSet(GlobalSockets.Unassigned_InnerCell);
+                        }
+                    }
+
                 }
             }
             return layeredNeighborCornerSockets;
@@ -170,7 +220,10 @@ namespace WFCSystem
         {
             NeighborLayerCornerSockets neighborCornerSockets = new NeighborLayerCornerSockets();
             neighborCornerSockets.corners = new int[6];
-            neighborCornerSockets.corners = layerNeighbor.currentTile.GetRotatedLayerCornerSockets(top, layerNeighbor.currentTileRotation);
+
+            bool isNeighborInverted = (layerNeighbor.isCurrentTileInverted);
+
+            neighborCornerSockets.corners = layerNeighbor.currentTile.GetRotatedLayerCornerSockets(top, layerNeighbor.currentTileRotation, isNeighborInverted);
             return neighborCornerSockets;
         }
 
@@ -209,8 +262,16 @@ namespace WFCSystem
                 // If no neighbor, socket is Edge socket value
                 if (sideNeighbor == null)
                 {
-                    neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(GlobalSockets.Edge);
-                    neighborCornerSockets.topCorners = GetDefaultSideSocketSet(GlobalSockets.Edge);
+                    if (IsInnerEdgeCell())
+                    {
+                        neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(GlobalSockets.InnerCell_Generic);
+                        neighborCornerSockets.topCorners = GetDefaultSideSocketSet(GlobalSockets.InnerCell_Generic);
+                    }
+                    else
+                    {
+                        neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(GlobalSockets.Edge);
+                        neighborCornerSockets.topCorners = GetDefaultSideSocketSet(GlobalSockets.Edge);
+                    }
                 }
                 else
                 {
@@ -218,43 +279,33 @@ namespace WFCSystem
                     if (sideNeighbor.currentTile != null)
                     {
                         neighborCornerSockets = GetSideNeighborRelativeTileSockets(side);
-
                     }
+
                     else
                     {
 
                         // EDGED
-                        if (useWalledEdgePreference && isEdgeCell && !IsInCluster())
+                        if (useWalledEdgePreference && IsGridEdgeCell() && !IsInCluster())
                         {
+                            GlobalSockets defaultSocketId;
+
                             if (!sideNeighbor.isEdgeCell && !sideNeighbor.isEntryCell)
                             {
-                                neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(GlobalSockets.Unassigned_Inner);
-                                neighborCornerSockets.topCorners = GetDefaultSideSocketSet(GlobalSockets.Unassigned_Inner);
+                                defaultSocketId = GlobalSockets.Unassigned_InnerCell;
                             }
-
                             else
                             {
                                 if (sideNeighbor.isEntryCell || (isEntryCell && sideNeighbor.isEntryCell == false))
                                 {
-                                    neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(GlobalSockets.Entrance_Generic);
-                                    neighborCornerSockets.topCorners = GetDefaultSideSocketSet(GlobalSockets.Entrance_Generic);
+                                    defaultSocketId = GlobalSockets.Entrance_Generic;
                                 }
                                 else
                                 {
-                                    if (IsGroundCell())
-                                    {
-                                        neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(GlobalSockets.Unassigned_Edge);
-                                        neighborCornerSockets.topCorners = GetDefaultSideSocketSet(GlobalSockets.Unassigned_Edge);
-                                        // neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(GlobalSockets.WallPart);
-                                        // neighborCornerSockets.topCorners = GetDefaultSideSocketSet(GlobalSockets.WallPart);
-                                    }
-                                    else
-                                    {
-                                        neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(GlobalSockets.Empty_Space);
-                                        neighborCornerSockets.topCorners = GetDefaultSideSocketSet(GlobalSockets.Empty_Space);
-                                    }
+                                    defaultSocketId = IsGroundCell() ? GlobalSockets.Unassigned_EdgeCell : defaultSocketId = GlobalSockets.Empty_Space;
                                 }
                             }
+                            neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(defaultSocketId);
+                            neighborCornerSockets.topCorners = GetDefaultSideSocketSet(defaultSocketId);
                         }
                         else
                         {
@@ -265,41 +316,56 @@ namespace WFCSystem
                             }
                             else if (isLeveledCell)
                             {
+                                GlobalSockets defaultSocketId;
+
                                 if (isLeveledEdge)
                                 {
                                     if (!sideNeighbor.isLeveledCell)
                                     {
-                                        neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(GlobalSockets.Unassigned_Inner);
-                                        neighborCornerSockets.topCorners = GetDefaultSideSocketSet(GlobalSockets.Unassigned_Inner);
+                                        defaultSocketId = GlobalSockets.Unassigned_InnerCell;
                                     }
                                     else
                                     {
-
-                                        if (sideNeighbor.isLeveledEdge)
-                                        {
-                                            neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(GlobalSockets.Leveled_Edge_Part);
-                                            neighborCornerSockets.topCorners = GetDefaultSideSocketSet(GlobalSockets.Leveled_Edge_Part);
-                                        }
-                                        else
-                                        {
-                                            neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(GlobalSockets.Leveled_Inner);
-                                            neighborCornerSockets.topCorners = GetDefaultSideSocketSet(GlobalSockets.Leveled_Inner);
-                                        }
+                                        defaultSocketId = sideNeighbor.isLeveledEdge ? GlobalSockets.Leveled_Edge_Part : defaultSocketId = GlobalSockets.Leveled_Inner;
                                     }
                                 }
                                 else
                                 {
-
-                                    neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(GlobalSockets.Leveled_Inner);
-                                    neighborCornerSockets.topCorners = GetDefaultSideSocketSet(GlobalSockets.Leveled_Inner);
-
-
+                                    defaultSocketId = GlobalSockets.Leveled_Inner;
                                 }
+                                neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(defaultSocketId);
+                                neighborCornerSockets.topCorners = GetDefaultSideSocketSet(defaultSocketId);
+
                             }
                             else
                             {
-                                neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(GlobalSockets.Unassigned_Inner);
-                                neighborCornerSockets.topCorners = GetDefaultSideSocketSet(GlobalSockets.Unassigned_Inner);
+                                GlobalSockets defaultSocketId;
+
+                                if (IsGridEdgeCell())
+                                {
+                                    // Edge Connectors
+                                    if (GetEdgeCellType() == EdgeCellType.Connector && (sideNeighbor.GetParenCellId() != GetParenCellId()))
+                                    {
+                                        defaultSocketId = GlobalSockets.Unset_Edge_Connector;
+                                    }
+                                    else
+                                    {
+                                        defaultSocketId = (useWalledEdgePreference && sideNeighbor.isEdgeCell) ? GlobalSockets.Unassigned_EdgeCell : GlobalSockets.Unassigned_InnerCell;
+                                    }
+                                }
+                                else
+                                {
+                                    if (useWalledEdgePreference && (sideNeighbor.isEntryCell || (isEntryCell && sideNeighbor.isEntryCell == false)))
+                                    {
+                                        defaultSocketId = GlobalSockets.Entrance_Generic;
+                                    }
+                                    else
+                                    {
+                                        defaultSocketId = GlobalSockets.Unassigned_InnerCell;
+                                    }
+                                }
+                                neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(defaultSocketId);
+                                neighborCornerSockets.topCorners = GetDefaultSideSocketSet(defaultSocketId);
                             }
                         }
 
@@ -334,19 +400,30 @@ namespace WFCSystem
                     {
                         neighborCornerSockets = GetSideNeighborRelativeTileSockets(side);
                     }
-                    else
+                    else // Neighbor Has No Tile
                     {
-                        // Neighbor Has No Tile
-                        // if (useWalledEdgePreference && isEdgeCell && !IsInCluster() && (sideNeighbor.isEdgeCell || sideNeighbor.isEntryCell))
-                        // {
-                        //     neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(GlobalSockets.UnassignedEdge);
-                        //     neighborCornerSockets.topCorners = GetDefaultSideSocketSet(GlobalSockets.UnassignedEdge);
-                        // }
-                        // else
-                        // {
-                        neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(GlobalSockets.Unassigned_Inner);
-                        neighborCornerSockets.topCorners = GetDefaultSideSocketSet(GlobalSockets.Unassigned_Inner);
-                        // }
+                        GlobalSockets defaultSocketId;
+
+                        if (isEdgeCell)
+                        {
+                            // Edge Connectors
+                            // if (GetEdgeCellType() == EdgeCellType.Connector && (sideNeighbor.GetParenCellId() != GetParenCellId()))
+                            // {
+                            //     defaultSocketId = GlobalSockets.Unset_Edge_Connector;
+                            // }
+                            // else
+                            // {
+                            // defaultSocketId = sideNeighbor.isEdgeCell ? GlobalSockets.Unassigned_EdgeCell : GlobalSockets.Unassigned_InnerCell;
+                            defaultSocketId = (useWalledEdgePreference && sideNeighbor.isEdgeCell) ? GlobalSockets.Unassigned_EdgeCell : GlobalSockets.Unassigned_InnerCell;
+                            // }
+                        }
+                        else
+                        {
+                            defaultSocketId = GlobalSockets.Unassigned_InnerCell;
+                        }
+
+                        neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(defaultSocketId);
+                        neighborCornerSockets.topCorners = GetDefaultSideSocketSet(defaultSocketId);
                     }
                 }
                 neighborCornerSocketsBySide[side] = neighborCornerSockets;
@@ -354,8 +431,9 @@ namespace WFCSystem
             return neighborCornerSocketsBySide;
         }
 
-
         private Transform center;
+        public CellStatus cellStatus;
+        public bool isGroundRamp;
 
         [Header("WFC Params")]
         public float highestProbability;
@@ -365,10 +443,20 @@ namespace WFCSystem
             isEntryCell = enable;
         }
         public bool isEdgeCell;//{ private set; get; }
-        public void SetEdgeCell(bool enable)
+        public bool IsInnerEdgeCell() => isEdgeCell && _edgeCellType == EdgeCellType.Inner;
+        public bool IsGridEdgeCell() => isEdgeCell && _edgeCellType == EdgeCellType.Grid;
+        public void SetEdgeCell(bool enable, EdgeCellType type)
         {
             isEdgeCell = enable;
+            SetEdgeCellType(enable ? type : EdgeCellType.None);
         }
+
+        [SerializeField] private EdgeCellType _edgeCellType;
+        public void SetEdgeCellType(EdgeCellType type)
+        {
+            _edgeCellType = type;
+        }
+
         public bool isPathCell;//{ private set; get; }
         public void SetPathCell(bool enable)
         {
@@ -387,7 +475,7 @@ namespace WFCSystem
         // }
         public bool IsGroundCell()
         {
-            return isLeveledGroundCell || (_gridLayer == 0 && !isLeveledCell);
+            return cellStatus == CellStatus.Ground || isLeveledGroundCell || (_gridLayer == 0 && !isLeveledCell);
         }
         public bool isLeveledGroundCell;//{ private set; get; }
         public void SetLeveledGroundCell(bool enable)
@@ -416,6 +504,14 @@ namespace WFCSystem
         public void SetGridLayer(int gridlayer)
         {
             _gridLayer = gridlayer;
+        }
+
+        [Header("Host Parent Cell")]
+        [SerializeField] private string _parentId = null;
+        public string GetParenCellId() => _parentId;
+        public void SetParentCellId(string _id)
+        {
+            _parentId = _id;
         }
 
         [Header("Micro Cluster System")]
@@ -475,23 +571,25 @@ namespace WFCSystem
             isCurrentTileInverted = inverted;
         }
 
-        public void SetTile(HexagonTile newTile, int rotation)
-        {
-            if (IsInCluster())
-            {
-                Debug.LogError("Trying to set a Tile on a cell with a clusterId assigned");
-                return;
-            }
-            currentTile = (IHexagonTile)newTile;
-            currentTileRotation = rotation;
-            isLeveledRampCell = newTile.isLeveledRamp;
-        }
+        // public void SetTile(HexagonTile newTile, int rotation)
+        // {
+        //     if (IsInCluster())
+        //     {
+        //         Debug.LogError("Trying to set a Tile on a cell with a clusterId assigned");
+        //         return;
+        //     }
+        //     currentTile = (IHexagonTile)newTile;
+        //     currentTileRotation = rotation;
+        //     isLeveledRampCell = newTile.isLeveledRamp;
+        // }
+
         public bool isIgnored;
         public void SetIgnored(bool ignore)
         {
             isIgnored = ignore;
         }
-        public bool IsAssigned() => currentTile != null || isIgnored || IsInClusterSystem() || (isLeveledCell && !isLeveledGroundCell);
+        public bool IsDisposable() => cellStatus == CellStatus.Remove || cellStatus == CellStatus.UnderGround;
+        public bool IsAssigned() => currentTile != null || isIgnored || IsInClusterSystem() || IsDisposable() || (isLeveledCell && !isLeveledGroundCell);
         public IHexagonTile GetTile() => currentTile;
 
         public void ClearTile()
@@ -521,8 +619,6 @@ namespace WFCSystem
         void OnValidate()
         {
             center = transform;
-
-
 
             if (resetPoints || _currentCenterPosition != center.position || _currentSize != size || _cornerPoints == null || _cornerPoints.Length == 0)
             {
@@ -572,17 +668,52 @@ namespace WFCSystem
 
             if (showCenter)
             {
-                float radius = 0.34f;
+                float radius = 0.36f;
                 if (size < 12)
                 {
-                    Gizmos.color = Color.blue;
                     radius = 0.24f;
+
+
+                    if (isEntryCell)
+                    {
+                        Gizmos.color = Color.green;
+                        radius = 0.4f;
+                    }
+                    else
+                    {
+
+                        switch (_edgeCellType)
+                        {
+                            case EdgeCellType.Connector:
+                                Gizmos.color = Color.yellow;
+                                break;
+
+                            case EdgeCellType.Default:
+                                Gizmos.color = Color.red;
+                                break;
+                            default:
+                                Gizmos.color = Color.blue;
+                                break;
+                        }
+                    }
                 }
                 else
                 {
+
                     Gizmos.color = Color.black;
+                    if (isEntryCell)
+                    {
+                        Gizmos.color = Color.green;
+                        radius = 0.5f;
+                    }
+                    else if (_edgeCellType == EdgeCellType.Grid)
+                    {
+                        Gizmos.color = Color.red;
+                        radius = 0.9f;
+                    }
                 }
                 Gizmos.DrawSphere(center.position, radius);
+                if (_edgeCellType == EdgeCellType.Connector) Gizmos.DrawWireSphere(center.position, radius * 2f);
             }
 
             // float radius = 4f;
@@ -735,28 +866,6 @@ namespace WFCSystem
             return HexagonSide.Front;
         }
 
-        // public static HexagonSide GetInvertedSide(HexagonSide side)
-        // {
-        //     switch (side)
-        //     {
-        //         // case HexagonSide.Front:
-        //         //     return HexagonSide.Back;
-        //         case HexagonSide.FrontRight:
-        //             return HexagonSide.FrontLeft;
-        //         case HexagonSide.BackLeft:
-        //             return HexagonSide.BackRight;
-        //         case HexagonSide.Back:
-        //             return HexagonSide.Back;
-        //         case HexagonSide.BackRight:
-        //             return HexagonSide.BackLeft;
-        //         case HexagonSide.FrontLeft:
-        //             return HexagonSide.FrontRight;
-        //         // Front
-        //         default:
-        //             return HexagonSide.Front;
-        //     }
-        // }
-
         public static HexagonCell EvaluateLevelGroundPath(HexagonCell pathCell)
         {
             if (pathCell.layeredNeighbor[1] == null) return pathCell;
@@ -779,48 +888,81 @@ namespace WFCSystem
             return pathCell;
         }
 
-        public static bool IsEdgeCell(HexagonCell cell, bool isMultilayerCellGrid, bool assignToName)
+        public static bool IsEdgeCell(HexagonCell cell, bool isMultilayerCellGrid, bool assignToName, bool scopeToParentCell)
         {
             if (cell == null) return false;
 
-            int sideNeighborCount = cell.GetSideNeighborCount();
+            if (cell._edgeCellType > EdgeCellType.Default)
+            {
+                if (assignToName && !cell.gameObject.name.Contains("_EDGE")) cell.gameObject.name += "_EDGE";
+                return true;
+            }
+
+            List<HexagonCell> allSideNeighbors = cell._neighbors.FindAll(c => c.GetGridLayer() == cell.GetGridLayer());
+            bool isConnectorCell = allSideNeighbors.Find(n => n.GetParenCellId() != cell.GetParenCellId());
+
+            if (scopeToParentCell) allSideNeighbors = allSideNeighbors.FindAll(n => n.GetParenCellId() == cell.GetParenCellId());
+
+            int sideNeighborCount = allSideNeighbors.Count; //cell.GetSideNeighborCount(scopeToParentCell);
             int totalNeighborCount = cell._neighbors.Count;
             bool isEdge = false;
 
             if (sideNeighborCount < 6 || (isMultilayerCellGrid && totalNeighborCount < 7) || (cell.GetGridLayer() > 0 && cell.layeredNeighbor[0] != null && cell.layeredNeighbor[0]._neighbors.Count < 7))
             {
-                cell.SetEdgeCell(true);
+                cell.SetEdgeCell(true, isConnectorCell ? EdgeCellType.Connector : EdgeCellType.Default);
                 isEdge = true;
 
-                if (assignToName && !cell.gameObject.name.Contains("_EDGE")) cell.gameObject.name += "_EDGE";
+                if (assignToName && !cell.gameObject.name.Contains("_EDGE")) cell.gameObject.name += isConnectorCell ? "_EDGE_CONNECTOR" : "_EDGE";
             }
             return isEdge;
         }
 
-        public static List<HexagonCell> GetEdgeCells(List<HexagonCell> cells, bool assignToName = true)
+        public static List<HexagonCell> GetEdgeCells(List<HexagonCell> cells, bool assignToName = true, bool scopeToParentCell = false)
         {
             List<HexagonCell> edgeCells = new List<HexagonCell>();
             bool hasMultilayerCells = cells.Any(c => c.GetGridLayer() > 0);
 
             foreach (HexagonCell cell in cells)
             {
-                if (IsEdgeCell(cell, hasMultilayerCells, assignToName))
+                if (IsEdgeCell(cell, hasMultilayerCells, assignToName, scopeToParentCell))
                 {
                     edgeCells.Add(cell);
-                    cell.SetEdgeCell(true);
+                    // cell.SetEdgeCell(true);
                 }
-                // int sideNeighborCount = cell.GetSideNeighborCount();
-                // int neighborCount = cell._neighbors.Count;
-                // if (neighborCount < 6 || (hasMultilayerCells && neighborCount < 7) || (cell.GetGridLayer() > 0 && cell.layeredNeighbor[0]._neighbors.Count < 7))
-                // {
-                //     edgeCells.Add(cell);
-                //     cell.SetEdgeCell(true);
-                // }
             }
-
             // Order edge cells by the fewest neighbors first
             return edgeCells.OrderByDescending(x => x._neighbors.Count).ToList();
         }
+
+
+        public static List<HexagonCell> GetInnerEdges(List<HexagonCell> cells, EdgeCellType edgeCellType, bool assignToName = true, bool scopeToParentCell = false)
+        {
+            List<HexagonCell> edgeCells = new List<HexagonCell>();
+            foreach (HexagonCell prototype in cells)
+            {
+                if (IsEdge(prototype, edgeCellType, assignToName, scopeToParentCell)) edgeCells.Add(prototype);
+            }
+            return edgeCells;
+        }
+
+        private static bool IsEdge(HexagonCell cell, EdgeCellType edgeCellType, bool assignToName, bool scopeToParentCell = false)
+        {
+            if (cell == null) return false;
+
+            List<HexagonCell> allSideNeighbors = cell._neighbors.FindAll(c => c.GetGridLayer() == cell.GetGridLayer());
+            // bool isConnectorCell = allSideNeighbors.Find(n => n.GetParenCellId() != cell.GetParenCellId());
+            // if (scopeToParentCell) allSideNeighbors = allSideNeighbors.FindAll(n => n.GetParenCellId() == cell.GetParenCellId());
+            int sideNeighborCount = allSideNeighbors.Count; //cell.GetSideNeighborCount(scopeToParentCell);
+
+            if (sideNeighborCount < 6)
+            {
+                cell.SetEdgeCell(true, edgeCellType);
+                if (assignToName && !cell.gameObject.name.Contains("_EDGE")) cell.gameObject.name += "_EDGE";
+                return true;
+            }
+            return false;
+        }
+
 
         public static List<HexagonCell> GetLeveledEdgeCells(List<HexagonCell> layerCells, bool assign)
         {
@@ -871,7 +1013,22 @@ namespace WFCSystem
             return entrances.OrderByDescending(x => x._neighbors.Count).ToList();
         }
 
+        public static List<HexagonCell> PickRandomEntryCellsFromEdgeCells(List<HexagonCell> allEdgeCells, int num, bool assign, bool excludeAdjacentNeighbors = true)
+        {
+            // sort the layers by edge cell count;
+            // sort edge cells by neighbor count
+            // select random cells from beginning of lists
+            List<HexagonCell> possibleCells = new List<HexagonCell>();
+            foreach (HexagonCell edgeCell in allEdgeCells)
+            {
+                if (edgeCell.cellStatus != CellStatus.Ground) continue;
+                int groundNeighborCount = edgeCell._neighbors.FindAll(
+                        n => n.cellStatus == CellStatus.Ground && n.GetGridLayer() == edgeCell.GetGridLayer()).Count;
+                if (groundNeighborCount >= 3) possibleCells.Add(edgeCell);
+            }
 
+            return GetRandomEntryCells(possibleCells, num, assign, -1, excludeAdjacentNeighbors);
+        }
 
         public static void PopulateNeighborsFromCornerPoints(List<HexagonCell> cells, float offset = 0.33f)
         {
@@ -950,6 +1107,43 @@ namespace WFCSystem
             return finalPath;
         }
 
+        public static List<HexagonCell> ClearPathCellClumps(List<HexagonCell> pathCells)
+        {
+            List<HexagonCell> result = new List<HexagonCell>();
+            List<HexagonCell> cleared = new List<HexagonCell>();
+
+            foreach (HexagonCell cell in pathCells)
+            {
+                List<HexagonCell> pathNeighbors = cell._neighbors.FindAll(n => pathCells.Contains(n) && cleared.Contains(n) == false && n.GetGridLayer() == cell.GetGridLayer());
+
+                if (pathNeighbors.Count >= 4)
+                {
+                    // bool neighborHasMultipleConnections = pathNeighbors.Find(n => n._neighbors.FindAll(n => pathNeighbors.Contains(n)).Count > 1);
+                    // if (neighborHasMultipleConnections)
+                    // {
+                    cell.SetPathCell(false);
+                    cleared.Add(cell);
+                    // }
+                    // else
+                    // {
+                    //     result.Add(cell);
+                    // }
+                }
+                else
+                {
+                    result.Add(cell);
+                }
+            }
+
+            return result;
+        }
+
+        public static List<HexagonCell> GenerateNewCellPath(HexagonCell startCell, HexagonCell endCell, bool ignoreEdgeCells, bool startCellIgnoresLayeredNeighbors = true, bool clearPathCellClumps = true)
+        {
+            List<HexagonCell> newCellPath = FindPath(startCell, endCell, ignoreEdgeCells, startCellIgnoresLayeredNeighbors);
+            return clearPathCellClumps ? ClearPathCellClumps(newCellPath) : newCellPath;
+        }
+
         public static List<HexagonCell> FindPath(HexagonCell startCell, HexagonCell endCell, bool ignoreEdgeCells, bool startCellIgnoresLayeredNeighbors = true)
         {
             // Create a queue to store the cells to be visited
@@ -1018,14 +1212,29 @@ namespace WFCSystem
             return null;
         }
 
-        public static List<HexagonCell> ClearSoloPathCells(List<HexagonCell> pathCells)
+
+
+        public static List<HexagonCell> GenerateRandomCellPath(List<HexagonCell> entryCells, HexagonCell topEdgeCell, Dictionary<int, List<HexagonCell>> allCellsByLayer, Vector3 position)
         {
-            foreach (HexagonCell cell in pathCells)
+            HexagonCell centerCell = HexagonCell.GetClosestCellByCenterPoint(allCellsByLayer[0], position);
+
+            List<HexagonCell> result = FindPath(entryCells[0], topEdgeCell ? topEdgeCell : centerCell, true);
+
+            int paths = 0;
+            for (int i = 1; i < entryCells.Count; i++)
             {
-                bool hasPathNeighbor = cell._neighbors.Any(c => c.isPathCell == true);
-                if (hasPathNeighbor == false) cell.SetPathCell(false);
+                paths++;
+                result.AddRange(HexagonCell.FindPath(entryCells[i], centerCell, true));
+                paths++;
+                result.AddRange(HexagonCell.FindPath(entryCells[i], entryCells[i - 1], true));
             }
-            return pathCells.FindAll(c => c.isPathCell);
+            return ClearPathCellClumps(result);
+        }
+
+        public static List<HexagonCell> GenerateRandomCellPath(List<HexagonCell> entryCells, Dictionary<int, List<HexagonCell>> allCellsByLayer, Vector3 position)
+        {
+            HexagonCell topEdgeCell = allCellsByLayer[allCellsByLayer.Count - 1].Find(c => c.isLeveledEdge);
+            return GenerateRandomCellPath(entryCells, topEdgeCell, allCellsByLayer, position);
         }
 
         public static Dictionary<int, List<HexagonCell>> GenerateRandomCellPaths(List<HexagonCell> entryCells, HexagonCell topEdgeCell, Dictionary<int, List<HexagonCell>> allCellsByLayer, Vector3 position)
@@ -1034,15 +1243,15 @@ namespace WFCSystem
 
             HexagonCell centerCell = HexagonCell.GetClosestCellByCenterPoint(allCellsByLayer[0], position);
 
-            newCellPaths.Add(0, HexagonCell.FindPath(entryCells[0], topEdgeCell ? topEdgeCell : centerCell, true));
+            newCellPaths.Add(0, HexagonCell.GenerateNewCellPath(entryCells[0], topEdgeCell ? topEdgeCell : centerCell, true));
 
             int paths = 0;
             for (int i = 1; i < entryCells.Count; i++)
             {
                 paths++;
-                newCellPaths.Add(paths, HexagonCell.FindPath(entryCells[i], centerCell, true));
+                newCellPaths.Add(paths, HexagonCell.GenerateNewCellPath(entryCells[i], centerCell, true));
                 paths++;
-                newCellPaths.Add(paths, HexagonCell.FindPath(entryCells[i], entryCells[i - 1], true));
+                newCellPaths.Add(paths, HexagonCell.GenerateNewCellPath(entryCells[i], entryCells[i - 1], true));
             }
 
             return newCellPaths;
@@ -1261,8 +1470,11 @@ namespace WFCSystem
 
             foreach (HexagonCell currentCell in allLayerCells)
             {
+                if (currentCell.IsAssigned() || currentCell.isGroundRamp) continue;
+
                 // if (!currentCell.isLeveledCell && currentCell.layeredNeighbor[0] != null && !currentCell.layeredNeighbor[0].isLeveledRampCell && currentCell.layeredNeighbor[0].isLeveledCell  )
-                if (!currentCell.isLeveledCell && currentCell.layeredNeighbor[0] != null && !currentCell.layeredNeighbor[0].isLeveledRampCell)
+                // if (currentCell.HasBottomNeighbor() && !currentCell.isLeveledCell && !currentCell.layeredNeighbor[0].isLeveledRampCell)
+                if (!currentCell.isLeveledCell && (currentCell.HasBottomNeighbor() == false || currentCell.GetBottomNeighbor().isLeveledRampCell == false))
                 {
                     if (available.Contains(currentCell) == false) available.Add(currentCell);
                 }
@@ -1712,7 +1924,6 @@ namespace WFCSystem
             SmoothVertexList(vertexList, vertices);
         }
 
-
         // public static void SmoothElevationAlongPath(List<HexagonCell> pathCells, TerrainVertex[,] vertices)
         // {
         //     List<int> vertexIndices = new List<int>();
@@ -2054,54 +2265,6 @@ namespace WFCSystem
             return vertices;
         }
 
-        public static void CreateMeshFromVertices(TerrainVertex[,] vertices, MeshFilter meshFilter)
-        {
-            List<int> triangles = new List<int>();
-            List<Vector3> verticePositions = new List<Vector3>();
-
-            int rowCount = vertices.GetLength(0);
-            int columnCount = vertices.GetLength(1);
-
-            for (int row = 0; row < rowCount - 1; row++)
-            {
-                for (int col = 0; col < columnCount - 1; col++)
-                {
-                    int bottomLeft = row * columnCount + col;
-                    int bottomRight = bottomLeft + 1;
-                    int topLeft = bottomLeft + columnCount;
-                    int topRight = topLeft + 1;
-
-                    triangles.Add(topLeft);
-                    triangles.Add(bottomLeft);
-                    triangles.Add(bottomRight);
-
-                    triangles.Add(topLeft);
-                    triangles.Add(bottomRight);
-                    triangles.Add(topRight);
-                }
-            }
-
-            for (int row = 0; row < rowCount; row++)
-            {
-                for (int col = 0; col < columnCount; col++)
-                {
-                    Vector3 worldPosition = meshFilter.gameObject.transform.InverseTransformPoint(vertices[row, col].position);
-                    // Vector3 worldPosition = meshFilter.transform.TransformPoint(vertices[row, col].position);
-                    verticePositions.Add(worldPosition);
-                }
-            }
-
-            // Set the mesh data
-            Mesh mesh = new Mesh();
-            mesh.Clear();
-            mesh.SetVertices(verticePositions);
-            mesh.SetTriangles(triangles, 0);
-            mesh.RecalculateNormals();
-
-            meshFilter.mesh = mesh;
-        }
-
-
         public static void CreateGridMesh(List<Vector3> vertices, MeshFilter meshFilter)
         {
             Dictionary<int, List<int>> pointConnections = new Dictionary<int, List<int>>();
@@ -2290,26 +2453,28 @@ namespace WFCSystem
 
 
         // TEMP
-        public static void SetUpMicroClusterGrid(List<HexagonCell> allUnassisngedCells, int cellLayers, int cellLayerElevation = 4)
-        {
-            // Get random parentCell
-            HexagonCell parentCell = allUnassisngedCells[UnityEngine.Random.Range(0, allUnassisngedCells.Count)];
 
-            // Get child cells
-            List<HexagonCell> childCells = GetChildrenForMicroClusterParent(parentCell);
-            if (childCells == null || childCells.Count == 0)
-            {
-                Debug.LogError("No child Cells found");
-                return;
-            }
+        // public static void SetUpMicroClusterGrid(List<HexagonCell> allUnassisngedCells, int cellLayers, int cellLayerElevation = 4)
+        // {
+        //     // Get random parentCell
+        //     HexagonCell parentCell = allUnassisngedCells[UnityEngine.Random.Range(0, allUnassisngedCells.Count)];
 
-            Dictionary<int, List<HexagonTilePrototype>> prototypeGridByLayer = GenerateMicroClusterGridProtoypes(parentCell, childCells, cellLayers, cellLayerElevation);
-        }
+        //     // Get child cells
+        //     List<HexagonCell> childCells = GetChildrenForMicroClusterParent(parentCell);
+        //     if (childCells == null || childCells.Count == 0)
+        //     {
+        //         Debug.LogError("No child Cells found");
+        //         return;
+        //     }
 
-        public static List<HexagonCell> GetChildrenForMicroClusterParent(HexagonCell parentCell, int howMNanyDegreesFromDirectNeighbors = 1)
+        //     Dictionary<int, List<HexagonTilePrototype>> prototypeGridByLayer = GenerateMicroClusterGridProtoypes(parentCell, childCells, cellLayers, cellLayerElevation);
+        // }
+
+        public static List<HexagonCell> GetChildrenForMicroClusterParent(HexagonCell parentCell, int howMNanyDegreesFromDirectNeighbors = 1, int maxMembers = 6)
         {
             List<HexagonCell> children = new List<HexagonCell>();
             string parentCellId = parentCell.id;
+            int found = 0;
 
             for (var side = 0; side < parentCell.neighborsBySide.Length; side++)
             {
@@ -2322,86 +2487,71 @@ namespace WFCSystem
                 {
                     neighbor.SetClusterCellParentId(parentCellId);
                     children.Add(neighbor);
+                    found++;
                 }
-                else
+                else if (howMNanyDegreesFromDirectNeighbors > 0)
                 {
                     // Check if neighbor above is available
-                    HexagonCell offNeighborTop = neighbor.layeredNeighbor[1];
+                    HexagonCell offNeighborTop = neighbor.GetTopNeighbor();
                     if (offNeighborTop != null && offNeighborTop.IsAssigned() == false)
                     {
                         offNeighborTop.SetClusterCellParentId(parentCellId);
                         children.Add(offNeighborTop);
+                        found++;
+                    }
+
+                    if (found >= maxMembers) break;
+
+                    // Check if 2nd degree neighbor is available
+                    HexagonCell offNeighbor = neighbor.neighborsBySide[side];
+                    if (offNeighbor != null && offNeighbor.IsAssigned() == false && offNeighbor.layeredNeighbor[1] != null && offNeighbor.layeredNeighbor[1].IsAssigned() == false)
+                    {
+                        offNeighbor.SetClusterCellParentId(parentCellId);
+                        children.Add(offNeighbor);
+                        found++;
+                        // // Check if neighbor above is available
+                        // if (offNeighbor.layeredNeighbor[1] != null) {
+                        //     children.Add(offNeighbor.layeredNeighbor[1]);
+                        // }
                     }
                 }
 
-                // Check if 2nd degree neighbor is available
-                HexagonCell offNeighbor = neighbor.neighborsBySide[side];
-                if (offNeighbor != null && offNeighbor.IsAssigned() == false && offNeighbor.layeredNeighbor[1] != null && offNeighbor.layeredNeighbor[1].IsAssigned() == false)
-                {
-                    offNeighbor.SetClusterCellParentId(parentCellId);
-                    children.Add(offNeighbor);
-                    // // Check if neighbor above is available
-                    // if (offNeighbor.layeredNeighbor[1] != null) {
-                    //     children.Add(offNeighbor.layeredNeighbor[1]);
-                    // }
-                }
+                if (found >= maxMembers) break;
             }
 
             return children;
         }
 
-        public static Dictionary<int, List<HexagonTilePrototype>> GenerateMicroClusterGridProtoypes(HexagonCell parentCell, List<HexagonCell> childCells, int cellLayers, int cellLayerElevation = 4)
+        public static Vector3 CalulateCenterPositionOfHexagonCells(HexagonCell[] cells)
         {
-            Dictionary<int, List<HexagonTilePrototype>> newPrototypesByLayer = null;
-            Vector2 gridGenerationCenterPosXZOffeset = new Vector2(-1.18f, 0.35f);
+            // Calculate the center point
+            Vector3 center = Vector3.zero;
+            for (int i = 0; i < cells.Length; i++)
+                center += cells[i].transform.position;
+            center /= cells.Length;
 
-            List<HexagonCell> allHostCells = new List<HexagonCell>();
-            allHostCells.Add(parentCell);
-            allHostCells.AddRange(childCells);
+            return center;
+        }
+        public static Vector3 CalulateCenterPositionFromPoints(Vector3[] points)
+        {
+            // Calculate the center point
+            Vector3 center = Vector3.zero;
+            for (int i = 0; i < points.Length; i++)
+                center += points[i];
+            center /= points.Length;
 
-            foreach (HexagonCell hostCell in allHostCells)
-            {
-                Vector3 center = hostCell.transform.position;
-                int layerBaseOffset = 0;
-
-                if (hostCell.GetGridLayer() != parentCell.GetGridLayer())
-                {
-                    int layerDifference = hostCell.GetGridLayer() - parentCell.GetGridLayer();
-                    layerBaseOffset = 1 * layerDifference;
-
-                    center.y = parentCell.transform.position.y + (cellLayerElevation * layerDifference);
-                }
-
-                // Generate grid of protottyes 
-                Dictionary<int, List<HexagonTilePrototype>> prototypesByLayer = HexagonCellManager.Generate_HexagonCellPrototypes(center, 12, 4, cellLayers, cellLayerElevation, gridGenerationCenterPosXZOffeset, layerBaseOffset);
-
-                if (newPrototypesByLayer == null)
-                {
-                    newPrototypesByLayer = prototypesByLayer;
-                }
-                else
-                {
-                    foreach (var kvp in prototypesByLayer)
-                    {
-                        int key = kvp.Key;
-                        List<HexagonTilePrototype> prototypes = kvp.Value;
-
-                        if (newPrototypesByLayer.ContainsKey(key) == false)
-                        {
-                            newPrototypesByLayer.Add(key, prototypes);
-                        }
-                        else
-                        {
-                            newPrototypesByLayer[key].AddRange(prototypes);
-                        }
-                    }
-                }
-            }
-
-            return newPrototypesByLayer;
+            return center;
         }
 
-
+        public static List<Vector3> GetCenterPositionsFromCells(List<HexagonCell> cells)
+        {
+            List<Vector3> positions = new List<Vector3>();
+            foreach (var item in cells)
+            {
+                positions.Add(item.transform.position);
+            }
+            return positions;
+        }
 
         [System.Serializable]
         public struct NeighborSideCornerSockets
@@ -2415,5 +2565,50 @@ namespace WFCSystem
         {
             public int[] corners;
         }
+
+        // public static Dictionary<int, List<HexagonTilePrototype>> GenerateMicroClusterGridProtoypes_V2(HexagonCell parentCell, List<HexagonCell> childCells, int areaSize, int cellLayers, int cellLayerElevation = 4)
+        // {
+        //     Dictionary<int, List<HexagonTilePrototype>> newPrototypesByLayer = null;
+        //     Vector2 gridGenerationCenterPosXZOffeset = new Vector2(-1.18f, 0.35f);
+
+        //     List<HexagonCell> allHostCells = new List<HexagonCell>();
+        //     allHostCells.Add(parentCell);
+        //     allHostCells.AddRange(childCells);
+
+        //     List<Vector3> centerPositions = GetCenterPositionsFromCells(allHostCells);
+
+        //     Vector3 centerPos = HexagonCellCluster.FindClosestPoint(centerPositions.ToArray());
+
+        //     // Vector3 centerPos = CalulateCenterPositionFromPoints(centerPositions.ToArray());
+        //     // Vector3 centerPos = CalulateCenterPositionOfHexagonCells(allHostCells.ToArray());
+
+        //     // Generate grid of protottyes 
+        //     Dictionary<int, List<HexagonTilePrototype>> prototypesByLayer = HexagonCellManager.Generate_HexagonCellPrototypes(centerPos, areaSize, centerPositions, 14, 4, cellLayers, cellLayerElevation, gridGenerationCenterPosXZOffeset, 0);
+
+        //     if (newPrototypesByLayer == null)
+        //     {
+        //         newPrototypesByLayer = prototypesByLayer;
+        //     }
+        //     else
+        //     {
+        //         foreach (var kvp in prototypesByLayer)
+        //         {
+        //             int key = kvp.Key;
+        //             List<HexagonTilePrototype> prototypes = kvp.Value;
+
+        //             if (newPrototypesByLayer.ContainsKey(key) == false)
+        //             {
+        //                 newPrototypesByLayer.Add(key, prototypes);
+        //             }
+        //             else
+        //             {
+        //                 newPrototypesByLayer[key].AddRange(prototypes);
+        //             }
+        //         }
+        //     }
+
+        //     return newPrototypesByLayer;
+        // }
+
     }
 }

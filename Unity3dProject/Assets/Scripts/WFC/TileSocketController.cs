@@ -1,10 +1,8 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using System;
-using System.Linq;
 using System.IO;
 using Newtonsoft.Json;
+using UnityEditor;
 
 namespace WFCSystem
 {
@@ -15,7 +13,30 @@ namespace WFCSystem
         [Header("Tile")]
         [SerializeField] private HexagonTileCore tile;
         [SerializeField] private HexagonSocketDirectory tileSocketDirectory;
+        [SerializeField] private HexagonSocketDataManager tileSocketDataManager;
         public HexagonSocketDirectory GetTileSocketDirectory() => tileSocketDirectory;
+
+        [Header("Inherit Sockets From Another Tile")]
+        [SerializeField] private HexagonTileCore tileSocketParent;
+        [SerializeField] private bool inheritOnSides;
+        [SerializeField] private bool inheritOnLayers;
+
+        public int swappableSideSocketA { get; set; }
+        public int swappableSideSocketB { get; set; }
+        private int _swappableSideSocketA;
+        private int _swappableSideSocketB;
+        public void UpdateSwappableSocketIDs()
+        {
+            if (_swappableSideSocketA != swappableSideSocketA)
+            {
+                _swappableSideSocketA = swappableSideSocketA;
+            }
+            if (_swappableSideSocketB != swappableSideSocketB)
+            {
+                _swappableSideSocketB = swappableSideSocketB;
+            }
+        }
+
 
         #region Tile Sockets
         [Header("Tile Sockets")]
@@ -23,7 +44,6 @@ namespace WFCSystem
         [SerializeField] private SocketMirrorState useSocketMirroring = SocketMirrorState.Unset;
         [SerializeField] public int resetToSocket { get; set; }
         [SerializeField] private bool reevaluate;
-
 
         // [Header("Side Bottom Sockets")]
         [SerializeField] public int sideBtmFrontA { get; set; }
@@ -85,6 +105,8 @@ namespace WFCSystem
         public void EvaluateAllSocketIDs()
         {
             // Debug.Log("EvaluateAllSocketIDs");
+            swappableSideSocketA = _swappableSideSocketA;
+            swappableSideSocketB = _swappableSideSocketB;
 
             // Top & BTM
             int[] _bottomCornerSocketIds = tile.bottomCornerSocketIds;
@@ -272,6 +294,8 @@ namespace WFCSystem
             Update_TopCornerSocketIds();
             Update_SideBottomCornerSocketIds();
             Update_SideTopCornerSocketIds();
+
+            UpdateSwappableSocketIDs();
         }
 
         private void Update_BottomCornerSocketIds()
@@ -292,6 +316,8 @@ namespace WFCSystem
 
             tile.SetCornerSocketSetIds(CornerSocketSetType.Bottom, _bottomCornerSocketIds);
         }
+
+
         private void Update_TopCornerSocketIds()
         {
             int[] _topCornerSocketIds = new int[12];
@@ -421,9 +447,73 @@ namespace WFCSystem
             }
         }
 
+
+        private void CopyTileSockets_Sides(HexagonTileCore tileToCopyFrom)
+        {
+            sideBtmFrontA = tileToCopyFrom.sideBtmCornerSocketIds[0];
+            sideBtmFrontB = tileToCopyFrom.sideBtmCornerSocketIds[1];
+            sideBtmFrontRightA = tileToCopyFrom.sideBtmCornerSocketIds[2];
+            sideBtmFrontRightB = tileToCopyFrom.sideBtmCornerSocketIds[3];
+            sideBtmBackRightA = tileToCopyFrom.sideBtmCornerSocketIds[4];
+            sideBtmBackRightB = tileToCopyFrom.sideBtmCornerSocketIds[5];
+            sideBtmBackA = tileToCopyFrom.sideBtmCornerSocketIds[6];
+            sideBtmBackB = tileToCopyFrom.sideBtmCornerSocketIds[7];
+            sideBtmBackLeftA = tileToCopyFrom.sideBtmCornerSocketIds[8];
+            sideBtmBackLeftB = tileToCopyFrom.sideBtmCornerSocketIds[9];
+            sideBtmFrontLeftA = tileToCopyFrom.sideBtmCornerSocketIds[10];
+            sideBtmFrontLeftB = tileToCopyFrom.sideBtmCornerSocketIds[11];
+            Update_SideBottomCornerSocketIds();
+
+            sideTopFrontA = tileToCopyFrom.sideTopCornerSocketIds[0];
+            sideTopFrontB = tileToCopyFrom.sideTopCornerSocketIds[1];
+            sideTopFrontRightA = tileToCopyFrom.sideTopCornerSocketIds[2];
+            sideTopFrontRightB = tileToCopyFrom.sideTopCornerSocketIds[3];
+            sideTopBackRightA = tileToCopyFrom.sideTopCornerSocketIds[4];
+            sideTopBackRightB = tileToCopyFrom.sideTopCornerSocketIds[5];
+            sideTopBackA = tileToCopyFrom.sideTopCornerSocketIds[6];
+            sideTopBackB = tileToCopyFrom.sideTopCornerSocketIds[7];
+            sideTopBackLeftA = tileToCopyFrom.sideTopCornerSocketIds[8];
+            sideTopBackLeftB = tileToCopyFrom.sideTopCornerSocketIds[9];
+            sideTopFrontLeftA = tileToCopyFrom.sideTopCornerSocketIds[10];
+            sideTopFrontLeftB = tileToCopyFrom.sideTopCornerSocketIds[11];
+            Update_SideTopCornerSocketIds();
+        }
+
+        private void CopyTileSockets_Layers(HexagonTileCore tileToCopyFrom)
+        {
+            bottomFrontA = tileToCopyFrom.bottomCornerSocketIds[0];
+            bottomFrontB = tileToCopyFrom.bottomCornerSocketIds[1];
+            bottomFrontRightA = tileToCopyFrom.bottomCornerSocketIds[2];
+            bottomFrontRightB = tileToCopyFrom.bottomCornerSocketIds[3];
+            bottomBackRightA = tileToCopyFrom.bottomCornerSocketIds[4];
+            bottomBackRightB = tileToCopyFrom.bottomCornerSocketIds[5];
+            bottomBackA = tileToCopyFrom.bottomCornerSocketIds[6];
+            bottomBackB = tileToCopyFrom.bottomCornerSocketIds[7];
+            bottomBackLeftA = tileToCopyFrom.bottomCornerSocketIds[8];
+            bottomBackLeftB = tileToCopyFrom.bottomCornerSocketIds[9];
+            bottomFrontLeftA = tileToCopyFrom.bottomCornerSocketIds[10];
+            bottomFrontLeftB = tileToCopyFrom.bottomCornerSocketIds[11];
+            Update_BottomCornerSocketIds();
+
+            topFrontA = tileToCopyFrom.topCornerSocketIds[0];
+            topFrontB = tileToCopyFrom.topCornerSocketIds[1];
+            topFrontRightA = tileToCopyFrom.topCornerSocketIds[2];
+            topFrontRightB = tileToCopyFrom.topCornerSocketIds[3];
+            topBackRightA = tileToCopyFrom.topCornerSocketIds[4];
+            topBackRightB = tileToCopyFrom.topCornerSocketIds[5];
+            topBackA = tileToCopyFrom.topCornerSocketIds[6];
+            topBackB = tileToCopyFrom.topCornerSocketIds[7];
+            topBackLeftA = tileToCopyFrom.topCornerSocketIds[8];
+            topBackLeftB = tileToCopyFrom.topCornerSocketIds[9];
+            topFrontLeftA = tileToCopyFrom.topCornerSocketIds[10];
+            topFrontLeftB = tileToCopyFrom.topCornerSocketIds[11];
+            Update_TopCornerSocketIds();
+        }
+
         public void OnValidate()
         {
             if (tile == null) tile = GetComponent<HexagonTileCore>();
+            if (tileSocketDataManager == null) TryAutoFillDataManager();
 
             tileSocketDirectory = tile.GetSocketDirectory();
 
@@ -440,6 +530,22 @@ namespace WFCSystem
                 reevaluate = true;
             }
 
+            if (tileSocketParent == null)
+            {
+                if (inheritOnSides || inheritOnLayers)
+                {
+                    inheritOnSides = false;
+                    inheritOnLayers = false;
+                    Debug.LogError("tileSocketParent is missing");
+                }
+            }
+            else
+            {
+                if (tileSocketParent == tile || tileSocketParent.GetUid() == tile.GetUid()) tileSocketParent = null;
+
+                if (inheritOnSides) CopyTileSockets_Sides(tileSocketParent);
+                if (inheritOnLayers) CopyTileSockets_Layers(tileSocketParent);
+            }
 
             if (reevaluate)
             {
@@ -473,10 +579,10 @@ namespace WFCSystem
 
         public void Save()
         {
-            if (tile._uid != "" && tile._uid != null)
+            if (tile.HasUid())
             {
                 UpdateAllSocketIDs();
-                Debug.Log("Save Tile Socket data for uid: " + tile._uid);
+                Debug.Log("Save Tile Socket data for uid: " + tile.GetUid());
                 bool saved = SaveData(tile.BundleSocketIdData(), savedfilePath, savefileName);
                 if (!_hasSaved) _hasSaved = saved;
             }
@@ -546,7 +652,31 @@ namespace WFCSystem
                 return false;
             }
         }
+        public static Dictionary<string, List<int[]>> LoadData(string directoryPath, string fileName)
+        {
+            try
+            {
+                string filePath = Path.Combine(directoryPath, fileName + ".json");
+                if (File.Exists(filePath))
+                {
+                    string json = File.ReadAllText(filePath);
+                    Dictionary<string, List<int[]>> data = JsonConvert.DeserializeObject<Dictionary<string, List<int[]>>>(json);
 
+                    // Debug.Log("Loaded Socket Data!");
+                    return data;
+                }
+                else
+                {
+                    Debug.LogError("Error while loading data: file not found");
+                    return null;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError("Error while loading data: " + ex.Message);
+                return null;
+            }
+        }
         // public static bool SaveData(Dictionary<string, List<int[]>> data, string directoryPath, string fileName)
         // {
         //     string json = JsonConvert.SerializeObject(data, Formatting.Indented);
@@ -572,32 +702,23 @@ namespace WFCSystem
         //     return suceess;
         // }
 
-        public static Dictionary<string, List<int[]>> LoadData(string directoryPath, string fileName)
-        {
-            try
-            {
-                string filePath = Path.Combine(directoryPath, fileName + ".json");
-                if (File.Exists(filePath))
-                {
-                    string json = File.ReadAllText(filePath);
-                    Dictionary<string, List<int[]>> data = JsonConvert.DeserializeObject<Dictionary<string, List<int[]>>>(json);
 
-                    Debug.Log("Loaded Socket Data!");
-                    return data;
-                }
-                else
-                {
-                    Debug.LogError("Error while loading data: file not found");
-                    return null;
-                }
-            }
-            catch (System.Exception ex)
+
+        private void TryAutoFillDataManager()
+        {
+            string[] items = AssetDatabase.FindAssets("t:HexagonSocketDataManager", new string[1] { savedfilePath });
+            foreach (string item in items)
             {
-                Debug.LogError("Error while loading data: " + ex.Message);
-                return null;
+                string path = AssetDatabase.GUIDToAssetPath(item);
+                HexagonSocketDataManager dataManager = AssetDatabase.LoadAssetAtPath<HexagonSocketDataManager>(path);
+                if (dataManager != null)
+                {
+                    tileSocketDataManager = dataManager;
+                    Debug.Log("Suceeded in auto-filling the missing tile socket data manager: " + gameObject.name);
+                    break;
+                }
             }
         }
-
 
     }
 }

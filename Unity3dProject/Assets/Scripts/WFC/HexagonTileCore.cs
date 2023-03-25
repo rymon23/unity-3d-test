@@ -14,11 +14,10 @@ namespace WFCSystem
         public int[] GetRotatedLayerCornerSockets(bool top, int rotation, bool inverted = false);
         public int GetRotatedSideCornerSocketId(HexagonCorner corner, int rotation, bool top, bool inverted = false);
         public void SetCornerSocketSetIds(CornerSocketSetType socketSetType, int[] _newCornerSocketIds);
-        public MirroredSideState GetMirroredSideState();
-
     }
-    public enum CornerSocketSetType { SideBottom, SideTop, Bottom, Top }
 
+    public enum CornerSocketSetType { SideBottom, SideTop, Bottom, Top }
+    public enum GridExclusionRule { Unset = 0, EdgeOnly, InnerCellOnly, GridEdgesOnly, InnerGrid_NoEdges, InnerGrid_Any }
     public enum TileContext
     {
         Default = 0,
@@ -26,6 +25,13 @@ namespace WFCSystem
         Meta,
     }
 
+    public enum TileSeries
+    {
+        Unset = 0,
+        TestBuilding_A,
+        TestBuilding_B,
+        TestBuilding_C,
+    }
 
     public enum TileVariant
     {
@@ -34,15 +40,25 @@ namespace WFCSystem
         InnerCityBuilding_A = 2,
     }
 
-
+    public enum TileLayeredGroup
+    {
+        Unset = 0,
+        Group_A,
+        Group_B,
+        Group_C,
+        Group_D,
+    }
 
     [System.Serializable]
     public class HexagonTileCore : MonoBehaviour, IHexagonTile
     {
-        [SerializeField] public string _uid;
+        [SerializeField] private string _uid;
+        public string GetUid() => _uid;
+        public bool HasUid() => (_uid != null && _uid != "");
+
         private void OnEnable()
         {
-            if (_uid == null || _uid == "") _uid = UtilityHelpers.GenerateUniqueID(this.gameObject);
+            if (HasUid() == false) _uid = UtilityHelpers.GenerateUniqueID(this.gameObject);
         }
 
         [SerializeField] private int id = -1;
@@ -56,16 +72,43 @@ namespace WFCSystem
 
 
         [Header("Settings")]
+
+        #region Model Manipulation
         [SerializeField] private GameObject model;
+        [SerializeField] private GameObject modelRoof;
+        [SerializeField] private Vector3 modelPosition;
+        public void SetModel(GameObject _model)
+        {
+            model = _model;
+        }
+
+        [Header("Inversion Settings")]
         [SerializeField] private bool isInvertable;
+        [SerializeField] private float invertedPosition = 0.01f;
         public bool IsInvertable() => isInvertable;
         [SerializeField] private bool isModelInverted;
         public void InvertModel()
         {
-            WFCUtilities.InvertTile(model);
+            if (invertedPosition != 0.01f)
+            {
+                WFCUtilities.InvertTile(model, invertedPosition);
+            }
+            else
+            {
+                WFCUtilities.InvertTile(model);
+            }
             isModelInverted = true;
         }
 
+        [SerializeField] private bool isRoofable;
+        public bool IsRoofable() => isRoofable;
+        [SerializeField] private bool isModelRoofed;
+        public void SetModelRoofActive(bool enable)
+        {
+            modelRoof.SetActive(enable);
+            isModelRoofed = enable;
+        }
+        #endregion
 
         [Header("Tile Context")]
         [SerializeField] private TileContext _tileContext;
@@ -82,8 +125,11 @@ namespace WFCSystem
 
 
         [Header("Layer Settings")]
-        [SerializeField] private ExcludeLayerState excludeLayerState;
-        public enum ExcludeLayerState { Unset = 0, BaseLayerOnly, TopLayerOnly, NoBaseLayer }
+        [SerializeField] private TileLayeredGroup _layeredGroup;
+        public TileLayeredGroup GetLayeredGrouping() => _layeredGroup;
+        [SerializeField] private ExcludeLayerState _excludeLayerState;
+        public ExcludeLayerState GetExcludeLayerState() => _excludeLayerState;
+        public enum ExcludeLayerState { Unset = 0, BaseLayerOnly, TopLayerOnly, NoBaseLayer, NoTopLayer }
         public bool baseLayerOnly;
         public bool noBaseLayer;
         public bool noGroundLayer;
@@ -91,30 +137,28 @@ namespace WFCSystem
 
 
         [Header("Tile Compatibility / Probability")]
-        public bool isInClusterSet; // Is part of a set of tiles that make a cluster
-        public bool isClusterCenterTile; // Is the center part of a set of tiles that make a cluster
-        public bool isEdgeable; // can be placed on the edge / border or the grid
-        public bool isEntrance;
+        [SerializeField] private GridExclusionRule _gridExclusionRule;
+        public GridExclusionRule GetGridExclusionRule() => _gridExclusionRule;
+        public bool IsGridEdgeCompatible() => isEdgeable && (_gridExclusionRule == GridExclusionRule.GridEdgesOnly || _gridExclusionRule == GridExclusionRule.EdgeOnly || _gridExclusionRule == GridExclusionRule.Unset);
+        public bool isEdgeable = true; // can be placed on the edge / border or the grid
+        public bool allowPathPlacement;
         public bool isPath;
         public enum PathType { Unset = 0, Road, Stairway, Elevator }
-
+        public bool isEntrance;
+        public bool isFragment; // Is incomplete by itself, needs neighbor tiles like itself
+        public bool isInClusterSet; // Is part of a set of tiles that make a cluster
+        public bool isClusterCenterTile; // Is the center part of a set of tiles that make a cluster
         public bool isLeveledTile;
         public bool isLeveledRamp;
-        public bool isVerticalWFC;
-        public bool isFragment; // Is incomplete by itself, needs neighbor tiles like itself
+        // public bool isVerticalWFC;
         [Range(0.05f, 1f)] public float probabilityWeight = 0.3f;
-
-        [Header("Tile Sides / Mirroring")]
-
-
-
-        [SerializeField] private MirroredSideState mirroredSideState = 0;
-        public MirroredSideState GetMirroredSideState() => mirroredSideState;
 
         [Header("Tile Socket Configuration")]
         [SerializeField] private HexagonSocketDirectory socketDirectory;
         public HexagonSocketDirectory GetSocketDirectory() => socketDirectory;
         [SerializeField] private TileLabelGroup tileLabelGroup;
+        [SerializeField] private bool useSwappableSockets;
+        public int[] _swappableSideSocketPair = new int[2];
 
         [Header("Side Label Offsets")]
         [Range(-10f, 0f)][SerializeField] private float sideBottomLabelYOffset = -1.5f;
@@ -134,137 +178,11 @@ namespace WFCSystem
         public int[] sideTopCornerSocketIds = new int[12];
         public int[] bottomCornerSocketIds = new int[12];
         public int[] topCornerSocketIds = new int[12];
+        public int[] layerCenterSocketIds = new int[2];
         // public int[] sideBtmCornerSocketIds { get; private set; } = new int[12];
         // public int[] sideTopCornerSocketIds { get; private set; } = new int[12];
         // public int[] bottomCornerSocketIds { get; private set; } = new int[12];
         // public int[] topCornerSocketIds { get; private set; } = new int[12];
-
-
-        public int[] GetInvertedSocketIds(int[] cornerSocketIds)
-        {
-            int[] flippedIds = new int[12];
-            flippedIds[(int)HexagonCorner.FrontA] = cornerSocketIds[(int)HexagonCorner.BackA];
-            flippedIds[(int)HexagonCorner.FrontB] = cornerSocketIds[(int)HexagonCorner.BackB];
-
-            flippedIds[(int)HexagonCorner.BackRightA] = cornerSocketIds[(int)HexagonCorner.FrontRightA];
-            flippedIds[(int)HexagonCorner.BackRightB] = cornerSocketIds[(int)HexagonCorner.FrontRightB];
-
-            flippedIds[(int)HexagonCorner.FrontLeftA] = cornerSocketIds[(int)HexagonCorner.BackLeftA];
-            flippedIds[(int)HexagonCorner.FrontLeftB] = cornerSocketIds[(int)HexagonCorner.BackLeftB];
-
-            flippedIds[(int)HexagonCorner.BackA] = cornerSocketIds[(int)HexagonCorner.FrontA];
-            flippedIds[(int)HexagonCorner.BackB] = cornerSocketIds[(int)HexagonCorner.FrontB];
-
-            flippedIds[(int)HexagonCorner.BackLeftA] = cornerSocketIds[(int)HexagonCorner.FrontLeftA];
-            flippedIds[(int)HexagonCorner.BackLeftB] = cornerSocketIds[(int)HexagonCorner.FrontLeftB];
-
-            flippedIds[(int)HexagonCorner.FrontRightA] = cornerSocketIds[(int)HexagonCorner.BackRightA];
-            flippedIds[(int)HexagonCorner.FrontRightB] = cornerSocketIds[(int)HexagonCorner.BackRightB];
-            return flippedIds;
-        }
-
-        private void EvaluateInvertedRotatedCornerSockets()
-        {
-            int rotations = 6;
-            int corners = 12;
-            int[][] newRotatedInvertedCornerSockets_sideTop = new int[rotations][];
-            int[][] newRotatedInvertedCornerSockets_sideBottom = new int[rotations][];
-
-            int[][] newRotatedInvertedCornerSockets_top = new int[rotations][];
-            int[][] newRotatedInvertedCornerSockets_bottom = new int[rotations][];
-
-
-            int[] invertedCornerSockets_sideTop = GetInvertedSocketIds(sideTopCornerSocketIds);
-            int[] invertedCornerSockets_sideBottom = GetInvertedSocketIds(sideBtmCornerSocketIds);
-
-            int[] invertedCornerSockets_top = GetInvertedSocketIds(topCornerSocketIds);
-            int[] invertedCornerSockets_bottom = GetInvertedSocketIds(bottomCornerSocketIds);
-
-
-            for (int rot = 0; rot < rotations; rot++)
-            {
-                newRotatedInvertedCornerSockets_sideTop[rot] = new int[corners];
-                newRotatedInvertedCornerSockets_sideBottom[rot] = new int[corners];
-
-                newRotatedInvertedCornerSockets_top[rot] = new int[corners];
-                newRotatedInvertedCornerSockets_bottom[rot] = new int[corners];
-            }
-            // Initialize rotatedSideSocketIds with the sideSocketIds of the unrotated tile
-            for (int corner = 0; corner < corners; corner++)
-            {
-                newRotatedInvertedCornerSockets_sideTop[0][corner] = invertedCornerSockets_sideTop[corner];
-                newRotatedInvertedCornerSockets_sideBottom[0][corner] = invertedCornerSockets_sideBottom[corner];
-
-                newRotatedInvertedCornerSockets_top[0][corner] = invertedCornerSockets_top[corner];
-                newRotatedInvertedCornerSockets_bottom[0][corner] = invertedCornerSockets_bottom[corner];
-            }
-
-            // Update rotatedSideSocketIds with the sideSocketIds of the rotated tiles
-            for (int rot = 1; rot < rotations; rot++)
-            {
-                int offset = (rot == 0) ? 0 : rot - 1;
-                // Side TOP
-                newRotatedInvertedCornerSockets_sideTop[rot][(int)HexagonCorner.FrontA] = newRotatedInvertedCornerSockets_sideTop[offset][(int)HexagonCorner.FrontRightA];
-                newRotatedInvertedCornerSockets_sideTop[rot][(int)HexagonCorner.FrontB] = newRotatedInvertedCornerSockets_sideTop[offset][(int)HexagonCorner.FrontRightB];
-                newRotatedInvertedCornerSockets_sideTop[rot][(int)HexagonCorner.FrontRightA] = newRotatedInvertedCornerSockets_sideTop[offset][(int)HexagonCorner.BackRightA];
-                newRotatedInvertedCornerSockets_sideTop[rot][(int)HexagonCorner.FrontRightB] = newRotatedInvertedCornerSockets_sideTop[offset][(int)HexagonCorner.BackRightB];
-                newRotatedInvertedCornerSockets_sideTop[rot][(int)HexagonCorner.BackRightA] = newRotatedInvertedCornerSockets_sideTop[offset][(int)HexagonCorner.BackA];
-                newRotatedInvertedCornerSockets_sideTop[rot][(int)HexagonCorner.BackRightB] = newRotatedInvertedCornerSockets_sideTop[offset][(int)HexagonCorner.BackB];
-                newRotatedInvertedCornerSockets_sideTop[rot][(int)HexagonCorner.BackA] = newRotatedInvertedCornerSockets_sideTop[offset][(int)HexagonCorner.BackLeftA];
-                newRotatedInvertedCornerSockets_sideTop[rot][(int)HexagonCorner.BackB] = newRotatedInvertedCornerSockets_sideTop[offset][(int)HexagonCorner.BackLeftB];
-                newRotatedInvertedCornerSockets_sideTop[rot][(int)HexagonCorner.BackLeftA] = newRotatedInvertedCornerSockets_sideTop[offset][(int)HexagonCorner.FrontLeftA];
-                newRotatedInvertedCornerSockets_sideTop[rot][(int)HexagonCorner.BackLeftB] = newRotatedInvertedCornerSockets_sideTop[offset][(int)HexagonCorner.FrontLeftB];
-                newRotatedInvertedCornerSockets_sideTop[rot][(int)HexagonCorner.FrontLeftA] = newRotatedInvertedCornerSockets_sideTop[offset][(int)HexagonCorner.FrontA];
-                newRotatedInvertedCornerSockets_sideTop[rot][(int)HexagonCorner.FrontLeftB] = newRotatedInvertedCornerSockets_sideTop[offset][(int)HexagonCorner.FrontB];
-
-                // Side BTM
-                newRotatedInvertedCornerSockets_sideBottom[rot][(int)HexagonCorner.FrontA] = newRotatedInvertedCornerSockets_sideBottom[offset][(int)HexagonCorner.FrontRightA];
-                newRotatedInvertedCornerSockets_sideBottom[rot][(int)HexagonCorner.FrontB] = newRotatedInvertedCornerSockets_sideBottom[offset][(int)HexagonCorner.FrontRightB];
-                newRotatedInvertedCornerSockets_sideBottom[rot][(int)HexagonCorner.FrontRightA] = newRotatedInvertedCornerSockets_sideBottom[offset][(int)HexagonCorner.BackRightA];
-                newRotatedInvertedCornerSockets_sideBottom[rot][(int)HexagonCorner.FrontRightB] = newRotatedInvertedCornerSockets_sideBottom[offset][(int)HexagonCorner.BackRightB];
-                newRotatedInvertedCornerSockets_sideBottom[rot][(int)HexagonCorner.BackRightA] = newRotatedInvertedCornerSockets_sideBottom[offset][(int)HexagonCorner.BackA];
-                newRotatedInvertedCornerSockets_sideBottom[rot][(int)HexagonCorner.BackRightB] = newRotatedInvertedCornerSockets_sideBottom[offset][(int)HexagonCorner.BackB];
-                newRotatedInvertedCornerSockets_sideBottom[rot][(int)HexagonCorner.BackA] = newRotatedInvertedCornerSockets_sideBottom[offset][(int)HexagonCorner.BackLeftA];
-                newRotatedInvertedCornerSockets_sideBottom[rot][(int)HexagonCorner.BackB] = newRotatedInvertedCornerSockets_sideBottom[offset][(int)HexagonCorner.BackLeftB];
-                newRotatedInvertedCornerSockets_sideBottom[rot][(int)HexagonCorner.BackLeftA] = newRotatedInvertedCornerSockets_sideBottom[offset][(int)HexagonCorner.FrontLeftA];
-                newRotatedInvertedCornerSockets_sideBottom[rot][(int)HexagonCorner.BackLeftB] = newRotatedInvertedCornerSockets_sideBottom[offset][(int)HexagonCorner.FrontLeftB];
-                newRotatedInvertedCornerSockets_sideBottom[rot][(int)HexagonCorner.FrontLeftA] = newRotatedInvertedCornerSockets_sideBottom[offset][(int)HexagonCorner.FrontA];
-                newRotatedInvertedCornerSockets_sideBottom[rot][(int)HexagonCorner.FrontLeftB] = newRotatedInvertedCornerSockets_sideBottom[offset][(int)HexagonCorner.FrontB];
-
-                // TOP
-                newRotatedInvertedCornerSockets_top[rot][(int)HexagonCorner.FrontA] = newRotatedInvertedCornerSockets_top[offset][(int)HexagonCorner.FrontRightA];
-                newRotatedInvertedCornerSockets_top[rot][(int)HexagonCorner.FrontB] = newRotatedInvertedCornerSockets_top[offset][(int)HexagonCorner.FrontRightB];
-                newRotatedInvertedCornerSockets_top[rot][(int)HexagonCorner.FrontRightA] = newRotatedInvertedCornerSockets_top[offset][(int)HexagonCorner.BackRightA];
-                newRotatedInvertedCornerSockets_top[rot][(int)HexagonCorner.FrontRightB] = newRotatedInvertedCornerSockets_top[offset][(int)HexagonCorner.BackRightB];
-                newRotatedInvertedCornerSockets_top[rot][(int)HexagonCorner.BackRightA] = newRotatedInvertedCornerSockets_top[offset][(int)HexagonCorner.BackA];
-                newRotatedInvertedCornerSockets_top[rot][(int)HexagonCorner.BackRightB] = newRotatedInvertedCornerSockets_top[offset][(int)HexagonCorner.BackB];
-                newRotatedInvertedCornerSockets_top[rot][(int)HexagonCorner.BackA] = newRotatedInvertedCornerSockets_top[offset][(int)HexagonCorner.BackLeftA];
-                newRotatedInvertedCornerSockets_top[rot][(int)HexagonCorner.BackB] = newRotatedInvertedCornerSockets_top[offset][(int)HexagonCorner.BackLeftB];
-                newRotatedInvertedCornerSockets_top[rot][(int)HexagonCorner.BackLeftA] = newRotatedInvertedCornerSockets_top[offset][(int)HexagonCorner.FrontLeftA];
-                newRotatedInvertedCornerSockets_top[rot][(int)HexagonCorner.BackLeftB] = newRotatedInvertedCornerSockets_top[offset][(int)HexagonCorner.FrontLeftB];
-                newRotatedInvertedCornerSockets_top[rot][(int)HexagonCorner.FrontLeftA] = newRotatedInvertedCornerSockets_top[offset][(int)HexagonCorner.FrontA];
-                newRotatedInvertedCornerSockets_top[rot][(int)HexagonCorner.FrontLeftB] = newRotatedInvertedCornerSockets_top[offset][(int)HexagonCorner.FrontB];
-
-                // BTM
-                newRotatedInvertedCornerSockets_bottom[rot][(int)HexagonCorner.FrontA] = newRotatedInvertedCornerSockets_bottom[offset][(int)HexagonCorner.FrontRightA];
-                newRotatedInvertedCornerSockets_bottom[rot][(int)HexagonCorner.FrontB] = newRotatedInvertedCornerSockets_bottom[offset][(int)HexagonCorner.FrontRightB];
-                newRotatedInvertedCornerSockets_bottom[rot][(int)HexagonCorner.FrontRightA] = newRotatedInvertedCornerSockets_bottom[offset][(int)HexagonCorner.BackRightA];
-                newRotatedInvertedCornerSockets_bottom[rot][(int)HexagonCorner.FrontRightB] = newRotatedInvertedCornerSockets_bottom[offset][(int)HexagonCorner.BackRightB];
-                newRotatedInvertedCornerSockets_bottom[rot][(int)HexagonCorner.BackRightA] = newRotatedInvertedCornerSockets_bottom[offset][(int)HexagonCorner.BackA];
-                newRotatedInvertedCornerSockets_bottom[rot][(int)HexagonCorner.BackRightB] = newRotatedInvertedCornerSockets_bottom[offset][(int)HexagonCorner.BackB];
-                newRotatedInvertedCornerSockets_bottom[rot][(int)HexagonCorner.BackA] = newRotatedInvertedCornerSockets_bottom[offset][(int)HexagonCorner.BackLeftA];
-                newRotatedInvertedCornerSockets_bottom[rot][(int)HexagonCorner.BackB] = newRotatedInvertedCornerSockets_bottom[offset][(int)HexagonCorner.BackLeftB];
-                newRotatedInvertedCornerSockets_bottom[rot][(int)HexagonCorner.BackLeftA] = newRotatedInvertedCornerSockets_bottom[offset][(int)HexagonCorner.FrontLeftA];
-                newRotatedInvertedCornerSockets_bottom[rot][(int)HexagonCorner.BackLeftB] = newRotatedInvertedCornerSockets_bottom[offset][(int)HexagonCorner.FrontLeftB];
-                newRotatedInvertedCornerSockets_bottom[rot][(int)HexagonCorner.FrontLeftA] = newRotatedInvertedCornerSockets_bottom[offset][(int)HexagonCorner.FrontA];
-                newRotatedInvertedCornerSockets_bottom[rot][(int)HexagonCorner.FrontLeftB] = newRotatedInvertedCornerSockets_bottom[offset][(int)HexagonCorner.FrontB];
-            }
-
-            invertedRotatedSideTopCornerSockets = newRotatedInvertedCornerSockets_sideTop;
-            invertedRotatedSideBtmCornerSockets = newRotatedInvertedCornerSockets_sideBottom;
-            invertedRotatedTopCornerSockets = newRotatedInvertedCornerSockets_top;
-            invertedRotatedBottomCornerSockets = newRotatedInvertedCornerSockets_bottom;
-        }
 
         public Dictionary<string, List<int[]>> BundleSocketIdData()
         {
@@ -296,7 +214,7 @@ namespace WFCSystem
             }
             else
             {
-                Debug.LogError("Socket id data not found for uid: " + _uid);
+                Debug.LogError("Socket id data not found for uid: " + _uid + ", Tile: " + gameObject.name);
             }
         }
 
@@ -354,7 +272,7 @@ namespace WFCSystem
 
 
         #region Saved Values
-        private Vector3 _currentCenterPosition;
+        Vector3 _position;
         private int _changeRotation;
         #endregion
 
@@ -369,10 +287,19 @@ namespace WFCSystem
         public int[][] invertedRotatedBottomCornerSockets { get; private set; }
         public int[][] invertedRotatedSideTopCornerSockets { get; private set; }
         public int[][] invertedRotatedSideBtmCornerSockets { get; private set; }
+
+        //SWAPPED
+        public int[][] swapped_rotatedSideBtmCornerSockets { get; private set; }
+        public int[][] swapped_rotatedSideTopCornerSockets { get; private set; }
+        public int[][] swapped_rotatedBtmCornerSockets { get; private set; }
+        public int[][] swapped_rotatedTopCornerSockets { get; private set; }
+
+        public int[][] swapped_rotatedSideBtmCornerSockets_inverted { get; private set; }
+        public int[][] swapped_rotatedSideTopCornerSockets_inverted { get; private set; }
+        public int[][] swapped_rotatedBtmCornerSockets_inverted { get; private set; }
+        public int[][] swapped_rotatedTopCornerSockets_inverted { get; private set; }
+
         #endregion
-
-
-
 
         public int GetRotatedSideCornerSocketId(HexagonCorner corner, int rotation, bool top, bool inverted)
         {
@@ -404,25 +331,8 @@ namespace WFCSystem
             }
         }
 
-        public int[] GetRotatedSideCornerSockets(bool top, int rotation, bool inverted = false)
-        {
-            EvaluateRotatedCornerSockets();
-            if (inverted)
-            {
-                int[] invertedRotatedsockets = GetInvertedSocketIds(top ? rotatedSideTopCornerSockets[rotation] : rotatedSideBtmCornerSockets[rotation]);
-                return invertedRotatedsockets;
-            }
-            else
-            {
-                return top ? rotatedSideTopCornerSockets[rotation] : rotatedSideBtmCornerSockets[rotation];
-            }
-        }
-
         public (int[], int[]) GetRotatedCornerSocketsBySide(HexagonSide side, int rotation, bool inverted)
         {
-            EvaluateRotatedCornerSockets();
-
-            // if (inverted) side = HexagonCell.GetInvertedSide(side);
             (HexagonCorner cornerA, HexagonCorner cornerB) = HexagonCell.GetCornersFromSide(side);
 
             int[] top = new int[2];
@@ -437,94 +347,111 @@ namespace WFCSystem
             return (bottom, top);
         }
 
+        private void EvaluateInvertedRotatedCornerSockets()
+        {
+            int[] invertedCornerSockets_sideBottom = GetInvertedSocketIds(sideBtmCornerSocketIds);
+            int[] invertedCornerSockets_sideTop = GetInvertedSocketIds(sideTopCornerSocketIds);
+
+            int[] invertedCornerSockets_bottom = GetInvertedSocketIds(bottomCornerSocketIds);
+            int[] invertedCornerSockets_top = GetInvertedSocketIds(topCornerSocketIds);
+
+            (
+            int[][] newRotatedInvertedCornerSockets_sideBottom,
+             int[][] newRotatedInvertedCornerSockets_sideTop,
+
+             int[][] newRotatedInvertedCornerSockets_bottom,
+             int[][] newRotatedInvertedCornerSockets_top
+
+            ) = GetRotatedCornerSockets(
+                invertedCornerSockets_sideBottom,
+                invertedCornerSockets_sideTop,
+
+                invertedCornerSockets_bottom,
+                invertedCornerSockets_top
+            );
+
+            invertedRotatedSideTopCornerSockets = newRotatedInvertedCornerSockets_sideTop;
+            invertedRotatedSideBtmCornerSockets = newRotatedInvertedCornerSockets_sideBottom;
+            invertedRotatedTopCornerSockets = newRotatedInvertedCornerSockets_top;
+            invertedRotatedBottomCornerSockets = newRotatedInvertedCornerSockets_bottom;
+        }
+
         private void EvaluateRotatedCornerSockets()
         {
-            int rotations = 6;
-            int corners = 12;
-            int[][] newRotatedSideTopCornerSocketIds = new int[rotations][];
-            int[][] newRotatedSideBtmCornerSocketIds = new int[rotations][];
-            int[][] newRotatedTopCornerSocketIds = new int[rotations][];
-            int[][] newRotatedBottomCornerSocketIds = new int[rotations][];
+            (
+             int[][] newRotatedSideBtmCornerSocketIds,
+             int[][] newRotatedSideTopCornerSocketIds,
 
-            for (int rot = 0; rot < rotations; rot++)
-            {
-                newRotatedSideTopCornerSocketIds[rot] = new int[corners];
-                newRotatedSideBtmCornerSocketIds[rot] = new int[corners];
-                newRotatedTopCornerSocketIds[rot] = new int[corners];
-                newRotatedBottomCornerSocketIds[rot] = new int[corners];
-            }
-            // Initialize rotatedSideSocketIds with the sideSocketIds of the unrotated tile
-            for (int corner = 0; corner < corners; corner++)
-            {
-                newRotatedSideTopCornerSocketIds[0][corner] = sideTopCornerSocketIds[corner];
-                newRotatedSideBtmCornerSocketIds[0][corner] = sideBtmCornerSocketIds[corner];
+             int[][] newRotatedBottomCornerSocketIds,
+             int[][] newRotatedTopCornerSocketIds
 
-                newRotatedTopCornerSocketIds[0][corner] = topCornerSocketIds[corner];
-                newRotatedBottomCornerSocketIds[0][corner] = bottomCornerSocketIds[corner];
-            }
+            ) = GetRotatedCornerSockets(
+                sideBtmCornerSocketIds,
+                sideTopCornerSocketIds,
 
-            // Update rotatedSideSocketIds with the sideSocketIds of the rotated tiles
-            for (int rot = 1; rot < rotations; rot++)
-            {
-                int offset = (rot == 0) ? 0 : rot - 1;
-                // Side Top
-                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.FrontA] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.FrontRightA];
-                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.FrontB] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.FrontRightB];
-                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.FrontRightA] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.BackRightA];
-                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.FrontRightB] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.BackRightB];
-                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.BackRightA] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.BackA];
-                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.BackRightB] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.BackB];
-                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.BackA] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.BackLeftA];
-                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.BackB] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.BackLeftB];
-                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.BackLeftA] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.FrontLeftA];
-                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.BackLeftB] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.FrontLeftB];
-                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.FrontLeftA] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.FrontA];
-                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.FrontLeftB] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.FrontB];
-                // Side Bottom
-                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.FrontA] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.FrontRightA];
-                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.FrontB] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.FrontRightB];
-                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.FrontRightA] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.BackRightA];
-                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.FrontRightB] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.BackRightB];
-                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.BackRightA] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.BackA];
-                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.BackRightB] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.BackB];
-                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.BackA] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.BackLeftA];
-                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.BackB] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.BackLeftB];
-                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.BackLeftA] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.FrontLeftA];
-                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.BackLeftB] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.FrontLeftB];
-                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.FrontLeftA] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.FrontA];
-                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.FrontLeftB] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.FrontB];
-                // Top
-                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.FrontA] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.FrontRightA];
-                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.FrontB] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.FrontRightB];
-                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.FrontRightA] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.BackRightA];
-                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.FrontRightB] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.BackRightB];
-                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.BackRightA] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.BackA];
-                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.BackRightB] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.BackB];
-                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.BackA] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.BackLeftA];
-                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.BackB] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.BackLeftB];
-                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.BackLeftA] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.FrontLeftA];
-                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.BackLeftB] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.FrontLeftB];
-                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.FrontLeftA] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.FrontA];
-                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.FrontLeftB] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.FrontB];
-                // Bottom
-                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.FrontA] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.FrontRightA];
-                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.FrontB] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.FrontRightB];
-                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.FrontRightA] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.BackRightA];
-                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.FrontRightB] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.BackRightB];
-                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.BackRightA] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.BackA];
-                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.BackRightB] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.BackB];
-                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.BackA] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.BackLeftA];
-                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.BackB] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.BackLeftB];
-                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.BackLeftA] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.FrontLeftA];
-                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.BackLeftB] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.FrontLeftB];
-                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.FrontLeftA] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.FrontA];
-                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.FrontLeftB] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.FrontB];
-            }
+                bottomCornerSocketIds,
+                topCornerSocketIds
+            );
 
             rotatedSideTopCornerSockets = newRotatedSideTopCornerSocketIds;
             rotatedSideBtmCornerSockets = newRotatedSideBtmCornerSocketIds;
             rotatedTopCornerSockets = newRotatedTopCornerSocketIds;
             rotatedBottomCornerSockets = newRotatedBottomCornerSocketIds;
+        }
+
+
+        private void EvaluateRotatedCornerSockets_Swapped()
+        {
+            int[] swappedSockets_sideBottom = GetSwappedSocketIds(sideBtmCornerSocketIds, _swappableSideSocketPair);
+            int[] swappedSockets_sideTop = GetSwappedSocketIds(sideTopCornerSocketIds, _swappableSideSocketPair);
+            (
+            int[][] newRotatedSwappedSockets_sideBottom,
+             int[][] newRotatedSwappedSockets_sideTop,
+
+             int[][] newRotatedSwappedSockets_bottom,
+             int[][] newRotatedSwappedSockets_top
+
+            ) = GetRotatedCornerSockets(
+                swappedSockets_sideBottom,
+                swappedSockets_sideTop,
+
+                bottomCornerSocketIds,
+                topCornerSocketIds
+            );
+
+            swapped_rotatedSideTopCornerSockets = newRotatedSwappedSockets_sideTop;
+            swapped_rotatedSideBtmCornerSockets = newRotatedSwappedSockets_sideBottom;
+            swapped_rotatedTopCornerSockets = newRotatedSwappedSockets_top;
+            swapped_rotatedBtmCornerSockets = newRotatedSwappedSockets_bottom;
+        }
+
+        private void EvaluateInvertedRotatedCornerSockets_Swapped()
+        {
+            int[] invertedSockets_sideBottom_swapped = GetInvertedSocketIds(GetSwappedSocketIds(sideBtmCornerSocketIds, _swappableSideSocketPair));
+            int[] invertedSockets_sideTop_swapped = GetInvertedSocketIds(GetSwappedSocketIds(sideTopCornerSocketIds, _swappableSideSocketPair));
+
+            int[] invertedSockets_bottom_swapped = GetInvertedSocketIds(bottomCornerSocketIds);
+            int[] invertedSockets_top_swapped = GetInvertedSocketIds(topCornerSocketIds);
+
+            (
+            int[][] newRotatedInvertedCornerSockets_sideBottom,
+             int[][] newRotatedInvertedCornerSockets_sideTop,
+
+             int[][] newRotatedInvertedCornerSockets_bottom,
+             int[][] newRotatedInvertedCornerSockets_top
+
+            ) = GetRotatedCornerSockets(
+                invertedSockets_sideBottom_swapped,
+                invertedSockets_sideTop_swapped,
+
+                invertedSockets_bottom_swapped,
+                invertedSockets_top_swapped
+            );
+
+            swapped_rotatedSideTopCornerSockets = newRotatedInvertedCornerSockets_sideTop;
+            swapped_rotatedSideBtmCornerSockets = newRotatedInvertedCornerSockets_sideBottom;
+            swapped_rotatedTopCornerSockets = newRotatedInvertedCornerSockets_top;
+            swapped_rotatedBtmCornerSockets = newRotatedInvertedCornerSockets_bottom;
         }
 
         private void RecalculateEdgePoints()
@@ -534,10 +461,6 @@ namespace WFCSystem
             EvaluateRotatedCornerSockets();
         }
 
-        public static List<HexagonTile> ExtractClusterSetTiles(List<HexagonTile> tiles)
-        {
-            return tiles.FindAll(t => t.isInClusterSet);
-        }
         public static List<HexagonTileCore> ExtractClusterSetTiles(List<HexagonTileCore> tiles)
         {
             return tiles.FindAll(t => t.isInClusterSet);
@@ -557,35 +480,50 @@ namespace WFCSystem
             RecalculateEdgePoints();
         }
 
-
         void OnValidate()
         {
-            if (isInvertable && model == null)
+            if (model == null)
             {
-                Debug.LogError("Invertable tile: " + gameObject.name + " has no model set!");
+                if (isInvertable)
+                {
+                    Debug.LogError("Invertable tile: " + gameObject.name + " has no model set!");
+                }
+                else if (isRoofable)
+                {
+
+                    Debug.LogError("Roofable tile: " + gameObject.name + " has no model set!");
+                }
+            }
+            else
+            {
+                if (isModelInverted == false && model.transform.localScale.z > -1)
+                {
+                    modelPosition = model.transform.position;
+                }
             }
 
-            if (_uid == null || _uid == "") _uid = UtilityHelpers.GenerateUniqueID(this.gameObject);
+            if (isRoofable && modelRoof == null)
+            {
+                Debug.LogError("Roofable tile: " + gameObject.name + " has no roof model set!");
+            }
 
-            center = transform;
-            // TransferAllSocketIDValues();
 
             if (changeRotation != _changeRotation)
             {
                 _changeRotation = changeRotation;
-
                 RotateTile(gameObject, changeRotation);
-                // gameObject.transform.rotation = Quaternion.Euler(0f, rotationValues[changeRotation], 0f);
             }
 
-            // if (tileSocketDirectory == null) tileSocketDirectory = (ITileSocketDirectory)_socketDirectory;
-
+            if (baseLayerOnly) _excludeLayerState = ExcludeLayerState.BaseLayerOnly;
+            if (noBaseLayer) _excludeLayerState = ExcludeLayerState.NoBaseLayer;
             if (noBaseLayer) baseLayerOnly = false;
 
-            if (resetPoints || _currentCenterPosition != center.position || _corners == null || _corners.Length == 0 || _sides == null || _sides.Length == 0)
+            if (resetPoints || _position != transform.position || _corners == null || _corners.Length == 0 || _sides == null || _sides.Length == 0)
             {
                 resetPoints = false;
-                _currentCenterPosition = center.position;
+                _position = transform.position;
+                center = transform;
+
                 RecalculateEdgePoints();
                 EvaluateRotatedCornerSockets();
             }
@@ -601,6 +539,8 @@ namespace WFCSystem
 
 
             if (!enableEditMode) return;
+
+            if (HasUid() == false) _uid = UtilityHelpers.GenerateUniqueID(this.gameObject);
 
             if (!tileLabelGroup) tileLabelGroup = GetComponentInChildren<TileLabelGroup>();
 
@@ -636,7 +576,8 @@ namespace WFCSystem
 
         [Range(0, 5)][SerializeField] private int changeRotation = 0;
 
-        float[] rotationValues = { 0f, 60f, 120f, 180f, 240f, 300f };
+
+        #region Editor Tools
         [SerializeField] private bool enableEditMode;
         [SerializeField] private SocketDisplayState showSocketLabelState;
         private SocketDisplayState _showSocketLabelState;
@@ -646,15 +587,34 @@ namespace WFCSystem
         [SerializeField] private bool resetPoints;
         [SerializeField] private bool ignoreSocketLabelUpdates;
 
+        public void SetEditorTools(bool enable)
+        {
+            if (enable == false) ClearEditorVisuals();
+
+            SetIgnoreSocketLabelUpdates(enable);
+            ShowSocketLabels(enable);
+
+            enableEditMode = enable;
+        }
+
+        public void ClearEditorVisuals()
+        {
+            showCorners = false;
+            showSides = false;
+            showEdges = false;
+        }
+
         public void SetIgnoreSocketLabelUpdates(bool enable)
         {
             ignoreSocketLabelUpdates = enable;
         }
+
         public void ShowSocketLabels(bool enable)
         {
             showSocketLabelState = enable ? SocketDisplayState.ShowAll : SocketDisplayState.ShowNone;
             EvaluateSocketLabels(true);
         }
+        #endregion
 
         private void EvaluateTextDisplay()
         {
@@ -718,11 +678,19 @@ namespace WFCSystem
         {
             center = gameObject.transform;
 
+            if (!enableEditMode) return;
+
             Gizmos.color = Color.black;
             Gizmos.DrawSphere(center.position, 0.3f);
 
 
-            if (!enableEditMode) return;
+            if (_position != transform.position)
+            {
+                RecalculateEdgePoints();
+                _position = transform.position;
+                center = transform;
+            }
+
 
             if (showCorners)
             {
@@ -781,14 +749,6 @@ namespace WFCSystem
 
         private void UpdateSocketLabelPlacement(HexagonSide _side, bool top, bool layered)
         {
-
-            // bool inverted = false;
-            // if (gameObject.transform.localScale.z < 0f)
-            // {
-            //     inverted = true;
-            //     _side = HexagonCell.GetInvertedSide(_side);
-            // }
-
             (HexagonCorner _cornerA, HexagonCorner _cornerB) = HexagonCell.GetCornersFromSide(_side);
 
             int cornerA = (int)_cornerA;
@@ -892,13 +852,6 @@ namespace WFCSystem
             bool inverted = false;
             HexagonSide _displaySide = _side;
             HexagonCorner[] _displayCorners = new HexagonCorner[2];
-
-            // if (gameObject.transform.localScale.z < 0f)
-            // {
-            //     inverted = true;
-            //     _displaySide = HexagonCell.GetInvertedSide(_side);
-            //     // Debug.Log("TRUE SIDE: " + _side + ", Inverted: " + _displaySide);
-            // }
 
             (HexagonCorner _cornerA, HexagonCorner _cornerB) = HexagonCell.GetCornersFromSide(_side);
             int cornerA = (int)_cornerA;
@@ -1027,14 +980,138 @@ namespace WFCSystem
             tile.transform.rotation = Quaternion.Euler(0f, rotationValues[rotation], 0f);
         }
 
-
-        public enum SocketDisplayState
+        public static int[] GetSwappedSocketIds(int[] cornerSocketIds, int[] swappablePair)
         {
-            ShowAll = 0,
-            ShowNone = 1,
-            ShowSides = 2,
-            ShowLayered = 3,
+            int[] swappedIds = new int[12];
+            for (var i = 0; i < cornerSocketIds.Length; i++)
+            {
+                if (cornerSocketIds[i] == swappablePair[0])
+                {
+                    swappedIds[i] = swappablePair[1];
+                }
+                else
+                {
+                    swappedIds[i] = cornerSocketIds[i];
+                }
+            }
+            return swappedIds;
         }
+
+        public static int[] GetInvertedSocketIds(int[] cornerSocketIds)
+        {
+            int[] invertedIds = new int[12];
+            invertedIds[(int)HexagonCorner.FrontA] = cornerSocketIds[(int)HexagonCorner.BackA];
+            invertedIds[(int)HexagonCorner.FrontB] = cornerSocketIds[(int)HexagonCorner.BackB];
+
+            invertedIds[(int)HexagonCorner.BackRightA] = cornerSocketIds[(int)HexagonCorner.FrontRightA];
+            invertedIds[(int)HexagonCorner.BackRightB] = cornerSocketIds[(int)HexagonCorner.FrontRightB];
+
+            invertedIds[(int)HexagonCorner.FrontLeftA] = cornerSocketIds[(int)HexagonCorner.BackLeftA];
+            invertedIds[(int)HexagonCorner.FrontLeftB] = cornerSocketIds[(int)HexagonCorner.BackLeftB];
+
+            invertedIds[(int)HexagonCorner.BackA] = cornerSocketIds[(int)HexagonCorner.FrontA];
+            invertedIds[(int)HexagonCorner.BackB] = cornerSocketIds[(int)HexagonCorner.FrontB];
+
+            invertedIds[(int)HexagonCorner.BackLeftA] = cornerSocketIds[(int)HexagonCorner.FrontLeftA];
+            invertedIds[(int)HexagonCorner.BackLeftB] = cornerSocketIds[(int)HexagonCorner.FrontLeftB];
+
+            invertedIds[(int)HexagonCorner.FrontRightA] = cornerSocketIds[(int)HexagonCorner.BackRightA];
+            invertedIds[(int)HexagonCorner.FrontRightB] = cornerSocketIds[(int)HexagonCorner.BackRightB];
+            return invertedIds;
+        }
+
+        private static (int[][], int[][], int[][], int[][]) GetRotatedCornerSockets(int[] sideBtmCornerSockets, int[] sideTopCornerSockets, int[] bottomCornerSockets, int[] topCornerSockets)
+        {
+            int rotations = 6;
+            int corners = 12;
+            int[][] newRotatedSideBtmCornerSocketIds = new int[rotations][];
+            int[][] newRotatedSideTopCornerSocketIds = new int[rotations][];
+            int[][] newRotatedBottomCornerSocketIds = new int[rotations][];
+            int[][] newRotatedTopCornerSocketIds = new int[rotations][];
+
+            for (int rot = 0; rot < rotations; rot++)
+            {
+                newRotatedSideBtmCornerSocketIds[rot] = new int[corners];
+                newRotatedSideTopCornerSocketIds[rot] = new int[corners];
+                newRotatedBottomCornerSocketIds[rot] = new int[corners];
+                newRotatedTopCornerSocketIds[rot] = new int[corners];
+            }
+            // Initialize rotatedSideSocketIds with the sideSocketIds of the unrotated tile
+            for (int corner = 0; corner < corners; corner++)
+            {
+                newRotatedSideBtmCornerSocketIds[0][corner] = sideBtmCornerSockets[corner];
+                newRotatedSideTopCornerSocketIds[0][corner] = sideTopCornerSockets[corner];
+                newRotatedBottomCornerSocketIds[0][corner] = bottomCornerSockets[corner];
+                newRotatedTopCornerSocketIds[0][corner] = topCornerSockets[corner];
+            }
+            // Update rotatedSideSocketIds with the sideSocketIds of the rotated tiles
+            for (int rot = 1; rot < rotations; rot++)
+            {
+                int offset = (rot == 0) ? 0 : rot - 1;
+                // Side Bottom
+                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.FrontA] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.FrontRightA];
+                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.FrontB] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.FrontRightB];
+                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.FrontRightA] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.BackRightA];
+                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.FrontRightB] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.BackRightB];
+                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.BackRightA] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.BackA];
+                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.BackRightB] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.BackB];
+                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.BackA] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.BackLeftA];
+                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.BackB] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.BackLeftB];
+                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.BackLeftA] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.FrontLeftA];
+                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.BackLeftB] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.FrontLeftB];
+                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.FrontLeftA] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.FrontA];
+                newRotatedSideBtmCornerSocketIds[rot][(int)HexagonCorner.FrontLeftB] = newRotatedSideBtmCornerSocketIds[offset][(int)HexagonCorner.FrontB];
+                // Side Top
+                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.FrontA] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.FrontRightA];
+                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.FrontB] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.FrontRightB];
+                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.FrontRightA] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.BackRightA];
+                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.FrontRightB] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.BackRightB];
+                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.BackRightA] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.BackA];
+                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.BackRightB] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.BackB];
+                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.BackA] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.BackLeftA];
+                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.BackB] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.BackLeftB];
+                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.BackLeftA] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.FrontLeftA];
+                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.BackLeftB] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.FrontLeftB];
+                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.FrontLeftA] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.FrontA];
+                newRotatedSideTopCornerSocketIds[rot][(int)HexagonCorner.FrontLeftB] = newRotatedSideTopCornerSocketIds[offset][(int)HexagonCorner.FrontB];
+                // Bottom
+                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.FrontA] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.FrontRightA];
+                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.FrontB] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.FrontRightB];
+                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.FrontRightA] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.BackRightA];
+                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.FrontRightB] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.BackRightB];
+                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.BackRightA] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.BackA];
+                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.BackRightB] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.BackB];
+                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.BackA] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.BackLeftA];
+                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.BackB] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.BackLeftB];
+                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.BackLeftA] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.FrontLeftA];
+                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.BackLeftB] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.FrontLeftB];
+                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.FrontLeftA] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.FrontA];
+                newRotatedBottomCornerSocketIds[rot][(int)HexagonCorner.FrontLeftB] = newRotatedBottomCornerSocketIds[offset][(int)HexagonCorner.FrontB];
+                // Top
+                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.FrontA] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.FrontRightA];
+                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.FrontB] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.FrontRightB];
+                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.FrontRightA] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.BackRightA];
+                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.FrontRightB] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.BackRightB];
+                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.BackRightA] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.BackA];
+                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.BackRightB] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.BackB];
+                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.BackA] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.BackLeftA];
+                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.BackB] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.BackLeftB];
+                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.BackLeftA] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.FrontLeftA];
+                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.BackLeftB] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.FrontLeftB];
+                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.FrontLeftA] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.FrontA];
+                newRotatedTopCornerSocketIds[rot][(int)HexagonCorner.FrontLeftB] = newRotatedTopCornerSocketIds[offset][(int)HexagonCorner.FrontB];
+            }
+
+            return (
+             newRotatedSideBtmCornerSocketIds,
+             newRotatedSideTopCornerSocketIds,
+
+             newRotatedBottomCornerSocketIds,
+             newRotatedTopCornerSocketIds
+            );
+        }
+
+        public enum SocketDisplayState { ShowAll = 0, ShowNone = 1, ShowSides = 2, ShowLayered = 3 }
 
         [Header("Mesh Generation")]
         [SerializeField] private bool generateMesh;
@@ -1042,7 +1119,6 @@ namespace WFCSystem
         private Mesh lastGeneratedMesh;
         [SerializeField] private MeshFilter meshFilter;
         [SerializeField] private MeshRenderer meshRenderer;
-
 
         private void SaveMeshAsset(Mesh mesh, string assetName)
         {

@@ -13,10 +13,22 @@ namespace WFCSystem
         [SerializeField] private bool runOnStart = true;
         [SerializeField] private HexagonSocketDirectory socketDirectory;
         [SerializeField] private TileDirectory tileDirectory;
-        [SerializeField] private WFCCollapseOrder collapseOrder = 0;
-        [Range(1, 10)][SerializeField] private int minEntrances = 1;
-        [Range(1, 10)][SerializeField] private int maxEntrances = 2;
+
+        [Header("Collapse Settings")]
+        [SerializeField] private WFCCollapseOrder_General generalCollapseOrder = 0;
+        [SerializeField] private WFCCollapseOrder_CellGrid collapseOrder_grid = WFCCollapseOrder_CellGrid.Edges_First;
+        [SerializeField] private WFCCollapseOrder_Cells collapseOrder_cells = 0;
+        [SerializeField] private WFC_CellNeighborPropagation neighborPropagation = WFC_CellNeighborPropagation.Edges_Only_Include_Layers;
+
+        [Header("Edge Rules")]
+        [SerializeField] private bool useEdgeMicroClusters;
         [SerializeField] private bool isWalledEdge;
+        [SerializeField] private bool restrictEntryTiles;
+        [Range(0, 10)][SerializeField] private int minEntrances = 1;
+        [Range(1, 10)][SerializeField] private int maxEntrances = 2;
+
+
+        [SerializeField] private HexagonTileCore tilePrefabs_EdgeMicroClusterParent;
 
         [Header("Tile Settings")]
         [SerializeField] private bool allowInvertedTiles = true;
@@ -25,6 +37,7 @@ namespace WFCSystem
         [Header("Pathing")]
         [SerializeField] private bool generatePaths = true;
         [SerializeField] private bool useTerrainMeshPath = true;
+
         [Header("Layering")]
         [Range(0f, 1f)][SerializeField] private float leveledCellChance = 0.8f;
         [Range(0.1f, 1f)][SerializeField] private float leveledCellRadiusMult = 0.5f;
@@ -32,10 +45,20 @@ namespace WFCSystem
         [Range(0.1f, 1f)][SerializeField] private float layerStackChance = 0.5f;
         [SerializeField] private int totalLayers = 1;
 
-        [Header("Clusters")]
+        [Header("Cell Clustering")]
         [SerializeField] private bool enableClusters;
         [Range(0.1f, 1f)][SerializeField] private float clusterChance = 0.5f;
+        [Header("Cluster Host Cell")]
+        [SerializeField] private List<HexagonTileCore> clusterParentPrefabs;
+        [Range(2, 12)][SerializeField] private int cluster_minHosts = 2;
+        [Range(2, 12)][SerializeField] private int cluster_maxHosts = 7;
+        [SerializeField] private bool cluster_randomizeHostCount = true;
 
+        [Header("Cluster Micro Grid")]
+        [Range(3, 12)][SerializeField] private int cluster_CellLayerElevation = 4;
+        [Range(1, 24)][SerializeField] private int cluster_CellLayers = 2;
+        [Range(3, 24)][SerializeField] private int cluster_CellLayersMax = 5;
+        [SerializeField] private bool cluster_randomizeCellLayers;
 
         [Header("System Settings")]
         [SerializeField] private bool logIncompatibilities = false;
@@ -57,8 +80,10 @@ namespace WFCSystem
         public int[,] probabilityMatrix;
         [SerializeField] private GameObject markerPrefab;
         [SerializeField] private List<HexagonTileCore> tilePrefabs;
-        [SerializeField] private List<HexagonTileCore> tilePrefabs_LayerConnector;
         [SerializeField] private List<HexagonTileCore> tilePrefabs_Edgable;
+        [SerializeField] private List<HexagonTileCore> tilePrefabs_Entrances;
+        [SerializeField] private List<HexagonTileCore> tilePrefabs_TopLayer;
+        [SerializeField] private List<HexagonTileCore> tilePrefabs_LayerConnector;
         [SerializeField] private List<HexagonTileCore> tilePrefabs_Leveled;
         [SerializeField] private List<HexagonTileCore> tilePrefabs_Path;
         [SerializeField] private List<HexagonTileCore> tilePrefabs_ClusterSet;
@@ -68,8 +93,9 @@ namespace WFCSystem
         Dictionary<int, HexagonTileCluster> tileClusterLookupByid;
 
         [Header("Cell Debug")]
-        [SerializeField] private List<HexagonCell> allCells;
-        [SerializeField] private List<HexagonCell> edgeCells;
+        [SerializeField] private List<HexagonCell> allCellsList;
+        [SerializeField] private List<HexagonCell> edgeCells_Grid;
+        [SerializeField] private List<HexagonCell> edgeCells_Inner;
         [SerializeField] private List<HexagonCell> entryCells;
         [SerializeField] private List<HexagonCell> allPathingCells;
         [SerializeField] private List<HexagonCellCluster> activeCellClusters;
@@ -96,17 +122,24 @@ namespace WFCSystem
 
             EvaluateCells();
 
-            CollapseEntranceCells();
-            Debug.Log("Entrance Cells Assigned");
-
-            if (isWalledEdge)
+            if (useEdgeMicroClusters && tilePrefabs_EdgeMicroClusterParent != null)
             {
-                CollapseEdgeCells();
-                Debug.Log("Edge Cells Assigned");
+                CollapseEdgeMicroClusters();
+            }
+            else
+            {
+                CollapseEntryCells();
+                Debug.Log("Entrance Cells Assigned");
+
+                if (isWalledEdge)
+                {
+                    CollapseEdgeCells();
+                    Debug.Log("Edge Cells Assigned");
+                }
             }
 
-            CollapseLeveledCells();
-            Debug.Log("Level Cells Assigned");
+            // CollapseLeveledCells();
+            // Debug.Log("Level Cells Assigned");
 
             if (generatePaths)
             {
@@ -114,7 +147,7 @@ namespace WFCSystem
                 Debug.Log("Path Cells Assigned");
             }
 
-            CollapseMicroClusters();
+            // CollapseMicroClusters();
 
             CollapseRemainingCellsByLayer();
 
@@ -132,35 +165,224 @@ namespace WFCSystem
 
         private bool IsUnassignedCells()
         {
-            // Iterate through all cells and check if there is any unassigned cell
-            for (int i = 0; i < allCells.Count; i++)
+            for (int i = 0; i < allCellsList.Count; i++)
             {
-                if (allCells[i].IsAssigned() == false) return true;
+                if (allCellsList[i].IsAssigned() == false) return true;
             }
             return false;
         }
 
-        private void CollapseEntranceCells()
+        private void CollapseEntryCells()
         {
-            // Handle Entrance Cells First
-            List<HexagonCell> entranceCells = edgeCells.FindAll(c => c.isEntryCell);
-
-            for (int i = 0; i < entranceCells.Count; i++)
+            if (entryCells.Count > 0)
             {
-                SelectAndAssignNext(entranceCells[i], tilePrefabs_Edgable);
+                Debug.Log("Collapse Entry Cells");
+
+                foreach (HexagonCell entryCell in entryCells)
+                {
+                    // bool assigned = WFCUtilities.SelectAndAssignNext(entryCell, tilePrefabs_Edgable, TileContext.Default, socketDirectory, isWalledEdge, logIncompatibilities, ignoreFailures, allowInvertedTiles);
+                    WFCUtilities.CollapseCellAndPropagate(entryCell, tilePrefabs, tilePrefabs_Edgable, neighborPropagation, TileContext.Default, socketDirectory, isWalledEdge, logIncompatibilities, ignoreFailures, allowInvertedTiles);
+                }
             }
         }
+
+        // private void CollapseEntranceCells()
+        // {
+        //     // Handle Entrance Cells First
+        //     List<HexagonCell> entranceCells = edgeCells.FindAll(c => c.isEntryCell);
+
+        //     for (int i = 0; i < entranceCells.Count; i++)
+        //     {
+        //         SelectAndAssignNext(entranceCells[i], tilePrefabs_Edgable);
+        //     }
+        // }
+
+        // private void CollapseEdgeCells()
+        // {
+        //     for (int i = 0; i < edgeCells.Count; i++)
+        //     {
+        //         HexagonCell currentCell = edgeCells[i];
+        //         if (currentCell.IsAssigned()) continue;
+
+        //         SelectAndAssignNext(currentCell, tilePrefabs_Edgable);
+        //     }
+        // }
 
         private void CollapseEdgeCells()
         {
-            for (int i = 0; i < edgeCells.Count; i++)
-            {
-                HexagonCell currentCell = edgeCells[i];
-                if (currentCell.IsAssigned()) continue;
+            List<HexagonTileCore> tilePrefabs_Edgable_Formatted = restrictEntryTiles ? tilePrefabs_Edgable.FindAll(t => t.isEntrance == false) : tilePrefabs_Edgable;
+            List<HexagonTileCore> tilePrefabs_Edgable_No_Entry_Top_Only = tilePrefabs_TopLayer.FindAll(t => t.isEdgeable);
+            // List<HexagonTileCore> tilePrefabs_Edgable_GridEdge = tilePrefabs_Edgable.FindAll(t => t.GetGridExclusionRule() == HexagonTileCore.GridExclusionRule.GridEdgesOnly);
 
-                SelectAndAssignNext(currentCell, tilePrefabs_Edgable);
+            if (tilePrefabs_Edgable_No_Entry_Top_Only.Count == 0) tilePrefabs_Edgable_No_Entry_Top_Only = tilePrefabs_Edgable_Formatted;
+
+            bool includeLayers = (neighborPropagation == WFC_CellNeighborPropagation.Edges_Only_Include_Layers || neighborPropagation == WFC_CellNeighborPropagation.Edges_Inners_Include_Layers);
+            int layersToCollapse = includeLayers ? totalLayers : 0;
+
+            // Debug.Log("Collapse Edge Cells for " + (layersToCollapse + 1) + " layers");
+            int currentLayer = 0;
+            do
+            {
+                List<HexagonCell> layerEdgeCells = edgeCells_Grid.FindAll(e => e.GetGridLayer() == currentLayer).OrderByDescending(e => e._neighbors.Count).ToList();
+
+                foreach (HexagonCell edgeCell in layerEdgeCells)
+                {
+                    if (edgeCell.IsAssigned() == false)
+                    {
+                        if (edgeCell.HasTopNeighbor() == false)
+                        {
+                            SelectAndAssignNext(edgeCell, tilePrefabs_Edgable_No_Entry_Top_Only);
+                        }
+                        else
+                        {
+                            SelectAndAssignNext(edgeCell, tilePrefabs_Edgable_Formatted);
+                        }
+                    }
+                    CollapseCellAndPropagate(edgeCell);
+                }
+
+                currentLayer++;
+
+            } while (currentLayer < layersToCollapse);
+        }
+
+        private void CollapseCellAndPropagate(HexagonCell currentCell)
+        {
+            bool assigned = currentCell.IsAssigned() ? true : SelectAndAssignNext(currentCell, currentCell.IsGridEdgeCell() ? tilePrefabs_Edgable : tilePrefabs);
+
+            if (assigned && collapseOrder_cells == WFCCollapseOrder_Cells.Neighbor_Propogation)
+            {
+                int currentCellLayer = currentCell.GetGridLayer();
+
+                bool includeLayerNwighbors = (neighborPropagation == WFC_CellNeighborPropagation.Edges_Only_Include_Layers || neighborPropagation == WFC_CellNeighborPropagation.Edges_Inners_Include_Layers);
+
+                // Get Unassigned Neighbors
+                List<HexagonCell> unassignedNeighbors = currentCell._neighbors.FindAll(n => n.IsAssigned() == false
+                        && ((includeLayerNwighbors == false && n.GetGridLayer() == currentCellLayer)
+                        || (includeLayerNwighbors && n.GetGridLayer() >= currentCellLayer)
+                        ));
+
+                if (unassignedNeighbors.Count > 0)
+                {
+                    bool includeInners = (currentCell.isEdgeCell == false || neighborPropagation == WFC_CellNeighborPropagation.Edges_Inners_Include_Layers || neighborPropagation == WFC_CellNeighborPropagation.Edges_Inners_No_Layers);
+
+                    List<HexagonCell> edgeNeighbors = unassignedNeighbors.FindAll(n => n.isEdgeCell).OrderBy(n => n.GetEdgeCellType()).ToList();
+                    if (edgeNeighbors.Count > 0)
+                    {
+                        foreach (HexagonCell neighbor in edgeNeighbors)
+                        {
+                            if (neighbor.IsAssigned()) continue;
+
+                            bool wasAssigned = SelectAndAssignNext(neighbor, tilePrefabs_Edgable);
+                        }
+                    }
+
+                    if (includeInners)
+                    {
+                        List<HexagonCell> innerNeighbors = unassignedNeighbors.FindAll(n => n.isEdgeCell == false).OrderByDescending(n => n._neighbors.Count).ToList();
+
+                        foreach (HexagonCell neighbor in innerNeighbors)
+                        {
+                            if (neighbor.IsAssigned()) continue;
+                            SelectAndAssignNext(neighbor, tilePrefabs);
+                        }
+                    }
+
+                }
             }
         }
+
+        private void CollapseRemainingCellsByLayer()
+        {
+            for (int currentLayer = 0; currentLayer < totalLayers; currentLayer++)
+            {
+                List<HexagonCell> layerCells;
+                List<HexagonCellCluster> layerClusters = new List<HexagonCellCluster>();
+
+                layerCells = HexagonCell.GetAvailableCellsForNextLayer(allCellsByLayer[currentLayer]);
+                layerCells = layerCells.OrderByDescending(e => e._neighbors.Count).ToList();
+                foreach (HexagonCell cell in layerCells)
+                {
+                    CollapseCellAndPropagate(cell);
+                }
+            }
+        }
+
+        private void CollapseEdgeMicroClusters()
+        {
+
+            if (tilePrefabs_EdgeMicroClusterParent == null)
+            {
+                Debug.LogError("No prefab for tilePrefabs_MicroClusterParent!");
+                return;
+            }
+            List<HexagonCell> cellsToAssign = edgeCells_Grid.FindAll(c => c.isEntryCell == false && c.isPathCell == false && c.IsGroundCell());
+            // List<HexagonCell> cellsToAssign = edgeCells_Grid.FindAll(c => c.isEntryCell == false && c.GetGridLayer() == 0);
+
+            int cellLayers = cluster_CellLayers;
+            if (cluster_randomizeCellLayers) cellLayers = UnityEngine.Random.Range(cellLayers, cluster_CellLayersMax);
+
+            // (HexagonCellManager parentCellManager, List<HexagonCell> pathClusterCells) = WFCUtilities.SetupCellMicroCluster(childCells, tilePrefabs_EdgeMicroClusterParent, 2, 4, this.transform, true);
+            (HexagonCellManager parentCellManager, List<HexagonCell> pathClusterCells) = WFCUtilities.SetupMicroCellClusterFromHosts(cellsToAssign, tilePrefabs_EdgeMicroClusterParent, cellLayers, cluster_CellLayerElevation, this.transform, true);
+
+            parentCellManager.SetClusterParent();
+            activeTiles.Add(parentCellManager.gameObject);
+
+            parentCellManager.gameObject.name += "_EdgeClusterParent";
+
+            HexGridArea gridArea = parentCellManager.gameObject.GetComponent<HexGridArea>();
+            gridArea.InitialSetup();
+            gridArea.Generate();
+        }
+
+        private bool CreateAndCollapseHostClusterAndMicoGrid(List<HexagonCell> availableCells_BaseLayer, List<HexagonTileCore> clusterParentPrefabs)
+        {
+
+            if (clusterParentPrefabs == null || clusterParentPrefabs.Count == 0)
+            {
+                Debug.LogError("No prefabs for clusterParentPrefabs!");
+                return false;
+            }
+
+            bool sucess = false;
+
+            // List<HexagonCell> cellsToAssign = WFCUtilities.SelectRandomCells(availableCells_BaseLayer, cluster_minHosts, cluster_maxHosts);
+            List<HexagonCell> cellsToAssign = new List<HexagonCell>();
+
+            HexagonCell parentCell = availableCells_BaseLayer[UnityEngine.Random.Range(0, availableCells_BaseLayer.Count)];
+
+            int hostCount = cluster_minHosts;
+            if (cluster_randomizeHostCount) hostCount = UnityEngine.Random.Range(cluster_minHosts, cluster_maxHosts);
+
+            cellsToAssign = HexagonCell.GetChildrenForMicroClusterParent(parentCell, 0, hostCount - 1);
+            if (cellsToAssign == null || cellsToAssign.Count == 0)
+            {
+                Debug.LogError("No childCells found");
+                return false;
+            }
+
+            cellsToAssign.Add(parentCell);
+
+            HexagonTileCore clusterParentPrefab = clusterParentPrefabs[UnityEngine.Random.Range(0, clusterParentPrefabs.Count)];
+
+            int cellLayers = cluster_CellLayers;
+            if (cluster_randomizeCellLayers) cellLayers = UnityEngine.Random.Range(cellLayers, cluster_CellLayersMax);
+
+            (HexagonCellManager parentCellManager, List<HexagonCell> clusterCells) = WFCUtilities.SetupMicroCellClusterFromHosts(cellsToAssign, clusterParentPrefab, cellLayers, cluster_CellLayerElevation, this.transform, true);
+
+            parentCellManager.SetClusterParent();
+
+            activeTiles.Add(parentCellManager.gameObject);
+            parentCellManager.gameObject.name += "_ClusterParent";
+
+            HexGridArea gridArea = parentCellManager.gameObject.GetComponent<HexGridArea>();
+            gridArea.InitialSetup();
+            gridArea.Generate();
+
+            return sucess;
+        }
+
+
 
         private void CollapseLeveledCells()
         {
@@ -197,23 +419,23 @@ namespace WFCSystem
                 }
             }
 
-            foreach (var kvp in allCellsByLayer)
-            {
-                int layer = kvp.Key;
-                List<HexagonCell> layerCells = kvp.Value;
+            // foreach (var kvp in allCellsByLayer)
+            // {
+            //     int layer = kvp.Key;
+            //     List<HexagonCell> layerCells = kvp.Value;
 
-                if (layer == 0) continue;
+            //     if (layer == 0) continue;
 
-                foreach (HexagonCell cell in layerCells)
-                {
-                    if (cell.IsAssigned()) continue;
+            //     foreach (HexagonCell cell in layerCells)
+            //     {
+            //         if (cell.IsAssigned()) continue;
 
-                    if (!cell.isLeveledGroundCell) continue;
+            //         if (!cell.isLeveledGroundCell) continue;
 
 
-                    SelectAndAssignNext(cell, tilePrefabs);
-                }
-            }
+            //         SelectAndAssignNext(cell, tilePrefabs);
+            //     }
+            // }
         }
 
         private void CollapsePathCells()
@@ -221,13 +443,17 @@ namespace WFCSystem
             Debug.Log("topLevelCells: " + topLevelCells.Count);
             allPathingCells = new List<HexagonCell>();
 
-            allPathCells = HexagonCell.GenerateRandomCellPaths(entryCells,
-                    allCellsByLayer,
-                    transform.position);
             // allPathCells = HexagonCell.GenerateRandomCellPaths(entryCells,
-            //         topLevelCells.Find(c => c.isLeveledEdge),
             //         allCellsByLayer,
             //         transform.position);
+
+            allPathCells = new Dictionary<int, List<HexagonCell>>();
+            allPathCells.Add(0,
+                HexagonCell.GenerateRandomCellPath(entryCells,
+                    allCellsByLayer,
+                    transform.position)
+
+            );
 
             foreach (var kvp in allPathCells)
             {
@@ -316,7 +542,7 @@ namespace WFCSystem
                 HexagonCell parentCell = availableCells_L1[UnityEngine.Random.Range(0, availableCells_L1.Count)];
                 parentCell.SetTile(tilePrefabs_MicroClusterParent, 0);
 
-                GameObject activeTile = Instantiate(tilePrefabs_MicroClusterParent.gameObject, parentCell.transform.position, Quaternion.identity);
+                GameObject activeTile = Instantiate(parentCell.GetCurrentTile().gameObject, parentCell.transform.position, Quaternion.identity);
                 activeTiles.Add(activeTile);
 
                 availableCells_L1.Remove(parentCell);
@@ -326,8 +552,11 @@ namespace WFCSystem
                 bool success = parentCellManager.InitializeMicroClusterGrid(parentCell, availableCells_L1, 4);
 
                 HexagonTileCore tileCore = activeTile.GetComponent<HexagonTileCore>();
-                tileCore.ShowSocketLabels(false);
-                tileCore.SetIgnoreSocketLabelUpdates(true);
+                tileCore.SetEditorTools(false);
+
+                activeTiles.Add(activeTile);
+                activeTile.transform.SetParent(gameObject.transform);
+
 
                 if (!success)
                 {
@@ -344,54 +573,58 @@ namespace WFCSystem
             }
         }
 
-        private void CollapseRemainingCellsByLayer()
-        {
-            for (int currentLayer = 0; currentLayer < totalLayers; currentLayer++)
-            {
-                List<HexagonCell> layerCells;
-                List<HexagonCellCluster> layerClusters = new List<HexagonCellCluster>();
-                if (currentLayer == 0)
-                {
-                    layerCells = allCellsByLayer[0].FindAll(c => !c.IsAssigned() && !c.isLeveledCell);
-                    // layerClusters = HexagonCellCluster.GetHexagonCellClusters(layerCells, transform.position, collapseOrder, isWalledEdge);
-                }
-                else
-                {
-                    layerCells = HexagonCell.GetAvailableCellsForNextLayer(allCellsByLayer[currentLayer]);
-                }
+        // private void CollapseRemainingCellsByLayer()
+        // {
+        //     for (int currentLayer = 0; currentLayer < totalLayers; currentLayer++)
+        //     {
+        //         List<HexagonCell> layerCells;
+        //         // List<HexagonCellCluster> layerClusters = new List<HexagonCellCluster>();
+        //         if (currentLayer == 0)
+        //         {
+        //             layerCells = allCellsByLayer[0].FindAll(c => !c.IsAssigned() && !c.isLeveledCell);
+        //             // layerClusters = HexagonCellCluster.GetHexagonCellClusters(layerCells, transform.position, collapseOrder, isWalledEdge);
 
-                // bool useCluster = enableClusters && layerClusters.Count > 0 && (100 * clusterChance) >= (UnityEngine.Random.Range(0, 100));
-                // if (useCluster)
-                // {
-                //     while (useCluster)
-                //     {
-                //         HexagonCellCluster selected = SelectCellCluster(layerClusters);
-                //         useCluster = selected != null && (100 * clusterChance) >= (UnityEngine.Random.Range(0, 100));
-                //     }
-                // }
+        //             bool useCluster = enableClusters && layerCells.Count > 1 && (100 * clusterChance) >= (UnityEngine.Random.Range(0, 100));
+        //             if (useCluster)
+        //             {
+        //                 List<HexagonCell> availableCells = layerCells.FindAll(c => c.IsAssigned() == false && c.GetUnassignedNeighborCount(false) > 0);
+        //                 do
+        //                 {
+        //                     CreateAndCollapseHostClusterAndMicoGrid(availableCells, clusterParentPrefabs);
+        //                     availableCells = availableCells.FindAll(c => c.IsAssigned() == false && c.GetUnassignedNeighborCount(false) > 0);
 
-                foreach (HexagonCell cell in layerCells)
-                {
-                    if (cell.IsAssigned()) continue;
+        //                     useCluster = availableCells.Count <= 1 ? false : (100 * clusterChance) >= (UnityEngine.Random.Range(0, 100));
 
-                    cell.highlight = true;
+        //                 } while (useCluster);
+        //             }
+        //         }
+        //         else
+        //         {
+        //             layerCells = HexagonCell.GetAvailableCellsForNextLayer(allCellsByLayer[currentLayer]);
+        //         }
 
-                    bool assigned = SelectAndAssignNext(cell, tilePrefabs);
+        //         foreach (HexagonCell cell in layerCells)
+        //         {
+        //             if (cell.IsAssigned()) continue;
 
-                    if (assigned == false) cell.SetIgnored(true);
+        //             cell.highlight = true;
 
-                    if (assigned == false && !ignoreFailures)
-                    {
-                        Debug.LogError("No tile found for cell: " + cell.id);
+        //             bool assigned = SelectAndAssignNext(cell, tilePrefabs);
 
-                        for (int i = 0; i < cell._neighbors.Count; i++)
-                        {
-                            Debug.LogError("neighbor: " + cell._neighbors[i].id + ",");
-                        }
-                    }
-                }
-            }
-        }
+        //             if (assigned == false) cell.SetIgnored(true);
+
+        //             if (assigned == false && !ignoreFailures)
+        //             {
+        //                 Debug.LogError("No tile found for cell: " + cell.id);
+
+        //                 for (int i = 0; i < cell._neighbors.Count; i++)
+        //                 {
+        //                     Debug.LogError("neighbor: " + cell._neighbors[i].id + ",");
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
 
 
@@ -537,27 +770,6 @@ namespace WFCSystem
             cluster.SetTiles(tileClusterSet);
         }
 
-        private HexagonCell SelectRandomStartCell()
-        {
-            // Select Random Edge Cell
-            if (totalEdgeCells > 0)
-            {
-                return allCells[0]; // edge cells should be ordered by the fewest neighbors first;
-            }
-            return allCells[UnityEngine.Random.Range(0, allCells.Count)];
-        }
-
-        private HexagonTileCore SelectRandomTile(bool edgeTile = false)
-        {
-            // Select Random Edge Cell
-            if (edgeTile && totalEdgeCells > 0 && tilePrefabs_Edgable.Count > 0)
-            {
-                return tilePrefabs_Edgable[0];
-                // return tilePrefabs_Edgable[UnityEngine.Random.Range(0, tilePrefabs_Edgable.Count)];
-            }
-            return tilePrefabs[UnityEngine.Random.Range(0, tilePrefabs.Count)];
-        }
-
         private void AssignTileToCell(HexagonCell cell, HexagonTileCore tile, int rotation = 0)
         {
             cell.SetTile(tile, rotation);
@@ -565,41 +777,65 @@ namespace WFCSystem
 
         private bool SelectAndAssignNext(HexagonCell cell, List<HexagonTileCore> prefabsList)
         {
-            (HexagonTileCore nextTile, List<int[]> rotations) = WFCUtilities.SelectNextTile(cell, prefabsList, allowInvertedTiles, isWalledEdge, socketDirectory, logIncompatibilities);
+            (HexagonTileCore nextTile, List<int[]> rotations) = WFCUtilities.SelectNextTile(cell, prefabsList, allowInvertedTiles, isWalledEdge, TileContext.Default, socketDirectory, logIncompatibilities);
             return WFCUtilities.AssignTileToCell(cell, nextTile, rotations, ignoreFailures);
         }
 
-        // Instantiate the tiles in the appropriate positions to create the final pattern
+
         public void InstantiateAllTiles()
         {
-
             Transform folder = new GameObject("Tiles").transform;
             folder.transform.SetParent(gameObject.transform);
 
-            for (int i = 0; i < edgeCells.Count; i++)
+            foreach (HexagonCell cell in allCellsList)
             {
                 // Skip cluster assigned cells
                 // if (cells[i].IsInCluster()) continue;
 
-                HexagonTileCore prefab = edgeCells[i].GetCurrentTile();
+                HexagonTileCore prefab = cell.GetCurrentTile();
                 if (prefab == null) continue;
 
-                // InstantiateTile(prefab, edgeCells[i], folder);
-                WFCUtilities.InstantiateTile(prefab, edgeCells[i], folder, activeTiles);
-            }
-
-            for (int i = 0; i < allCells.Count; i++)
-            {
-                // Skip cluster assigned cells
-                // if (cells[i].IsInCluster()) continue;
-
-                HexagonTileCore prefab = allCells[i].GetCurrentTile();
-                if (prefab == null) continue;
-
-                // WFCUtilities.InstantiateTile(prefab, allCells[i], folder);
-                WFCUtilities.InstantiateTile(prefab, allCells[i], folder, activeTiles);
+                WFCUtilities.InstantiateTile(prefab, cell, folder, activeTiles);
             }
         }
+
+        List<HexagonCell> allMicroCells;
+        public List<HexagonCell> GetAllMicroCells()
+        {
+            return allMicroCells;
+        }
+
+        // Instantiate the tiles in the appropriate positions to create the final pattern
+        // public void InstantiateAllTiles()
+        // {
+
+        //     Transform folder = new GameObject("Tiles").transform;
+        //     folder.transform.SetParent(gameObject.transform);
+
+        //     for (int i = 0; i < edgeCells.Count; i++)
+        //     {
+        //         // Skip cluster assigned cells
+        //         // if (cells[i].IsInCluster()) continue;
+
+        //         HexagonTileCore prefab = edgeCells[i].GetCurrentTile();
+        //         if (prefab == null) continue;
+
+        //         // InstantiateTile(prefab, edgeCells[i], folder);
+        //         WFCUtilities.InstantiateTile(prefab, edgeCells[i], folder, activeTiles);
+        //     }
+
+        //     for (int i = 0; i < allCells.Count; i++)
+        //     {
+        //         // Skip cluster assigned cells
+        //         // if (cells[i].IsInCluster()) continue;
+
+        //         HexagonTileCore prefab = allCells[i].GetCurrentTile();
+        //         if (prefab == null) continue;
+
+        //         // WFCUtilities.InstantiateTile(prefab, allCells[i], folder);
+        //         WFCUtilities.InstantiateTile(prefab, allCells[i], folder, activeTiles);
+        //     }
+        // }
 
         private void EvaluateTiles()
         {
@@ -608,7 +844,7 @@ namespace WFCSystem
             List<HexagonTileCore> _tilePrefabs = tileLookupByid.Select(x => x.Value).ToList();
 
             // Check For Nulls
-            foreach (HexagonTileCore prefab in tilePrefabs)
+            foreach (HexagonTileCore prefab in _tilePrefabs)
             {
                 int id = prefab.GetId();
             }
@@ -628,13 +864,19 @@ namespace WFCSystem
             // Extract Edge Tiles
             tilePrefabs_Edgable = tilePrefabs.FindAll(x => x.isEdgeable).ToList();
 
+            // Extract Entrance Tiles
+            tilePrefabs_Entrances = tilePrefabs.FindAll(x => x.isEdgeable && x.isEntrance).ToList();
+
+            // Extract Top Layer tiles
+            tilePrefabs_TopLayer = tilePrefabs.FindAll(x => x.GetExcludeLayerState() == HexagonTileCore.ExcludeLayerState.TopLayerOnly || x.IsRoofable()).ToList();
+
             // Extract Leveled Tiles
             tilePrefabs_Leveled = tilePrefabs.FindAll(x => x.isLeveledTile).ToList();
 
             // Extract Layer Connector Tiles
             tilePrefabs_LayerConnector = tilePrefabs.FindAll(x => x.isLayerConnector).ToList();
 
-            // Extract Layer Connector Tiles
+            // Extract Path Tiles
             tilePrefabs_Path = tilePrefabs.FindAll(x => x.isPath).ToList();
 
             // Extract Inner Tiles
@@ -650,20 +892,32 @@ namespace WFCSystem
 
         private void EvaluateCells()
         {
-            // Place edgeCells first 
-            edgeCells = HexagonCell.GetEdgeCells(allCells);
-            totalEdgeCells = edgeCells.Count;
+            entryCells = new List<HexagonCell>();
 
-            entryCells = HexagonCell.GetRandomEntryCells(edgeCells, maxEntrances, true, 0);
+            edgeCells_Grid = allCellsList.FindAll(c => c.IsGridEdgeCell());
+            // edgeCells_Inner = HexagonCell.GetEdgeCells(allCellsList.Except(edgeCells_Grid).ToList());
+            edgeCells_Inner = HexagonCell.GetInnerEdges(allCellsList.Except(edgeCells_Grid).ToList(), EdgeCellType.Inner);
+            totalEdgeCells = edgeCells_Grid.Count + edgeCells_Inner.Count;
+
+            if (minEntrances > 0)
+            {
+                // entryCells = HexagonCell.GetRandomEntryCells(edgeCells, maxEntrances, true, 0);
+                entryCells = HexagonCell.PickRandomEntryCellsFromEdgeCells(edgeCells_Grid, maxEntrances, true);
+            }
 
             // TODO: find a better way to jsut provide this without doing this extra stuff
-            totalLayers = edgeCells.OrderByDescending(c => c.GetGridLayer()).ToList()[0].GetGridLayer() + 1;
+            totalLayers = allCellsByLayer.Keys.Count;// .OrderByDescending(c => c.GetGridLayer()).ToList()[0].GetGridLayer() + 1;
 
-            // allCellClusters = HexagonCellCluster.GetHexagonCellClusters(allCells, transform.position, collapseOrder, isWalledEdge);
-            // availableCellClusters = allCellClusters.Count;
+            // List<HexagonCell> _processedCells = new List<HexagonCell>();
 
-            allCellsByLayer = HexagonCell.OrganizeCellsByLevel(allCells);
+            // if (isWalledEdge == false) _processedCells.AddRange(edgeCells);
 
+            // _processedCells.AddRange(allCells.Except(edgeCells).OrderByDescending(c => c.GetGridLayer()));
+            // allCells = _processedCells;
+
+            // allCellsByLayer = HexagonCell.OrganizeCellsByLevel(allCellsList);
+
+            // LEVEL CELLS 
             bool useLeveledCells = (100 * leveledCellChance) >= (UnityEngine.Random.Range(0, 100));
             if (useLeveledCells)
             {
@@ -674,19 +928,18 @@ namespace WFCSystem
                 allLevelCellsByLayer = null;
             }
 
-            List<HexagonCell> _processedCells = new List<HexagonCell>();
-
-            if (isWalledEdge == false) _processedCells.AddRange(edgeCells);
-
-            _processedCells.AddRange(allCells.Except(edgeCells).OrderByDescending(c => c.GetGridLayer()));
-
-            allCells = _processedCells;
         }
 
-        public void SetCells(List<HexagonCell> _allCells)
+        public void SetCells(Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells)
         {
-            allCells = _allCells;
+            allCellsByLayer = _allCellsByLayer;
+            allCellsList = _allCells;
         }
+
+        // public void SetCells( List<HexagonCell> _allCells)
+        // {
+        //     allCellsList = _allCells;
+        // }
 
         private void UpdateCompatibilityMatrix()
         {

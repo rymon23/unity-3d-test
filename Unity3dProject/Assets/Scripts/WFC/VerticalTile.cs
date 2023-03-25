@@ -53,7 +53,7 @@ namespace WFCSystem
 
 
         [Header("Tile Socket Configuration")]
-        [SerializeField] private TileSocketDirectory tileSocketDirectory;
+        // [SerializeField] private TileSocketDirectory tileSocketDirectory;
         [SerializeField] private TileLabelGroup tileLabelGroup;
         [SerializeField] public int[] edgeSockets = new int[8];
         public int GetEdgeSocketId(VerticalEdges edge) => edgeSockets[(int)edge];

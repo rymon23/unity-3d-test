@@ -6,7 +6,7 @@ namespace WFCSystem
     public class Tile : MonoBehaviour
     {
         // public int id;
-        [SerializeField] private TileSocketDirectory tileSocketDirectory;
+        // [SerializeField] private TileSocketDirectory tileSocketDirectory;
         public bool isEdgeable; // can be placed on the edge / border or the grid
         [SerializeField] private int[] sideSocketIds = new int[4];
 

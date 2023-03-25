@@ -204,7 +204,7 @@ namespace WFCSystem
 
         private void OnDrawGizmos()
         {
-            if (!showCompatibilityVisual || tileDirectCompatibilityMatrix == null) return;
+            if (!showCompatibilityVisual) return;
             DrawCompatibilityVisual();
         }
 
@@ -220,10 +220,10 @@ namespace WFCSystem
 
             EvaluateTiles();
 
-            if (tileDirectCompatibilityMatrix == null)
-            {
-                InitializeCompatibilityMatrix(true);
-            }
+            // if (tileDirectCompatibilityMatrix == null)
+            // {
+            //     InitializeCompatibilityMatrix(true);
+            // }
 
             ResetCurrentNeighborState();
         }
@@ -301,10 +301,10 @@ namespace WFCSystem
         }
 
 
-        private void ClearCompatibility()
-        {
-            InitializeCompatibilityMatrix(false);
-        }
+        // private void ClearCompatibility()
+        // {
+        //     InitializeCompatibilityMatrix(false);
+        // }
 
 
         private void SetPairCompatibility(int incomingTileId, int existingTileId, HexagonTileCompatibilitySide existingTileRotatedSide, int rotationOffset, bool isCompatible)

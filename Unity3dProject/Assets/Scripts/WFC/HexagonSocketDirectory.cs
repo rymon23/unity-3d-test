@@ -14,14 +14,15 @@ namespace WFCSystem
         Any = 0,
         Edge = 1,
         Empty_Space = 2,
-        Unassigned_Edge = 3,
-        Unassigned_Inner = 4,
+        Unassigned_EdgeCell = 3,
+        Unassigned_InnerCell = 4,
         Entrance_Generic = 5,
         InnerCell_Generic = 6,
         Path_Generic = 7,
         Wall_Generic = 8,
         Leveled_Inner = 9,
         Leveled_Edge_Part = 10,
+        Unset_Edge_Connector = 11,
     }
 
     [System.Serializable]
@@ -44,10 +45,9 @@ namespace WFCSystem
         public bool[,] matrix = new bool[52, 52];
 
         public bool[,] GetCompatibilityMatrix() => matrix;
-
-
-        public TileSocketDirectory tileSocketDirectory;
         public bool copyMatrixFromTileSocketDirectory;
+
+
 
         private void InitialSetup()
         {
@@ -55,7 +55,7 @@ namespace WFCSystem
             {
                 sockets = new string[52];
 
-                sockets[26] = "__LAYERED__";
+                sockets[32] = "__LAYERED__";
             }
 
             if (matrix == null)
@@ -138,7 +138,7 @@ namespace WFCSystem
                 {
                     if (sockets[i] == null || sockets[i] == "")
                     {
-                        sockets[i] = "__EMPTY_" + i;
+                        sockets[i] = GetSocketPrefix_Blank() + i;
                     }
                 }
             }
@@ -158,6 +158,12 @@ namespace WFCSystem
             }
         }
 
+        public static string GetSocketPrefix_Layered() => "L_";
+        public static string GetSocketPrefix_Blank() => "__EMPTY_";
+        public static bool IsGlobalUnassignedSocket(int socektId) =>
+            (GlobalSockets)socektId == GlobalSockets.Unassigned_EdgeCell
+                || (GlobalSockets)socektId == GlobalSockets.Unassigned_InnerCell
+                || (GlobalSockets)socektId == GlobalSockets.Unset_Edge_Connector;
 
         // public static Color[] GenerateUniqueColors(int length)
         // {
@@ -185,6 +191,9 @@ namespace WFCSystem
                 generatedColors[i] = Color.HSVToRGB(hue, 1f, 1f);
             }
 
+            generatedColors[(int)GlobalSockets.Any] = Color.white;
+            generatedColors[(int)GlobalSockets.Edge] = Color.black;
+
             return generatedColors;
         }
 
@@ -201,7 +210,7 @@ namespace WFCSystem
 
         public void Load()
         {
-            (bool[,] loadedMatrix, string[] loadedSockets) = LoadData(savedfilePath, savefileName);
+            (bool[,] loadedMatrix, string[] loadedSockets) = LoadData(savedfilePath, savefileName, name);
             if (loadedMatrix != null) matrix = loadedMatrix;
             if (loadedSockets != null) sockets = loadedSockets;
         }
@@ -237,7 +246,7 @@ namespace WFCSystem
             }
         }
 
-        public static (bool[,], string[]) LoadData(string directoryPath, string fileName)
+        public static (bool[,], string[]) LoadData(string directoryPath, string fileName, string directoryName)
         {
             try
             {
@@ -250,7 +259,7 @@ namespace WFCSystem
                     bool[,] matrix = JsonConvert.DeserializeObject<bool[,]>(dict["matrix"].ToString());
                     string[] sockets = JsonConvert.DeserializeObject<string[]>(dict["sockets"].ToString());
 
-                    Debug.Log("Loaded socket directory file: " + fileName);
+                    Debug.Log("\n" + directoryName + " loaded socket directory file: " + fileName);
                     return (matrix, sockets);
                 }
                 else
@@ -266,12 +275,5 @@ namespace WFCSystem
             }
 
         }
-
-        // [System.Serializable]
-        // public struct SocketEntry
-        // {
-        //     public string name;
-        //     public Color color;
-        // }
     }
 }

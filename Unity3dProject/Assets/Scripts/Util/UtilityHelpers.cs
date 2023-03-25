@@ -18,6 +18,13 @@ static class UtilityHelpers
         return _uid;
     }
 
+    public static string GenerateUniqueID(string partial)
+    {
+        // Generate a new unique identifier for the object
+        Guid guid = Guid.NewGuid();
+        string _uid = $"{partial}-{guid}";
+        return _uid;
+    }
 
     public static int ChooseDecision(Dictionary<int, float> decisions)
     {

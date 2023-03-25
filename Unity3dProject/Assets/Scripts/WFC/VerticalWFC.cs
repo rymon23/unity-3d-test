@@ -7,7 +7,7 @@ namespace WFCSystem
 {
     public class VerticalWFC : MonoBehaviour
     {
-        [SerializeField] private TileSocketMatrixGenerator socketMatrixGenerator;
+        // [SerializeField] private TileSocketMatrixGenerator socketMatrixGenerator;
         [SerializeField] private TileDirectory tileDirectory;
         [SerializeField] private VerticalCellManager cellManager;
         [SerializeField] private int outOfBoundsSlotId = 1; // Edge socket
@@ -33,9 +33,9 @@ namespace WFCSystem
 
         private void ExecuteWFC()
         {
-            compatibilityMatrix = socketMatrixGenerator.GetCompatibilityMatrix();
-            if (compatibilityMatrix != null) matrixLength = compatibilityMatrix.Length;
-            matrixLength = socketMatrixGenerator.matrix.Length;
+            // compatibilityMatrix = socketMatrixGenerator.GetCompatibilityMatrix();
+            // if (compatibilityMatrix != null) matrixLength = compatibilityMatrix.Length;
+            // matrixLength = socketMatrixGenerator.matrix.Length;
 
             EvaluateCells();
 
@@ -230,8 +230,8 @@ namespace WFCSystem
 
         private void UpdateCompatibilityMatrix()
         {
-            socketMatrixGenerator = GetComponent<TileSocketMatrixGenerator>();
-            compatibilityMatrix = socketMatrixGenerator.GetCompatibilityMatrix();
+            // socketMatrixGenerator = GetComponent<TileSocketMatrixGenerator>();
+            // compatibilityMatrix = socketMatrixGenerator.GetCompatibilityMatrix();
 
             if (compatibilityMatrix.Length == 0)
             {

@@ -31,6 +31,34 @@ namespace ProceduralBase
             return withinRadius;
         }
 
+        public static List<HexagonTilePrototype> GetTilesWithinPositions(List<HexagonTilePrototype> tiles, List<Vector3> positions, float radius)
+        {
+            List<HexagonTilePrototype> withinPositions = new List<HexagonTilePrototype>();
+            foreach (HexagonTilePrototype tile in tiles)
+            {
+                foreach (Vector3 position in positions)
+                {
+                    bool isWithinPosition = true;
+                    foreach (Vector3 cornerPoint in tile.cornerPoints)
+                    {
+                        float distance = Vector3.Distance(cornerPoint, position);
+                        if (distance > radius)
+                        {
+                            isWithinPosition = false;
+                            break;
+                        }
+                    }
+                    if (isWithinPosition)
+                    {
+                        withinPositions.Add(tile);
+                        break; // Exit the inner loop since the tile is already within a position
+                    }
+                }
+            }
+            return withinPositions;
+        }
+
+
         public static Vector3[] GetLocationSubzonePoints(LocationPrototype locationPrototype)
         {
             Vector3[] subzonePoints = new Vector3[locationPrototype.subzonePrototypes.Count];

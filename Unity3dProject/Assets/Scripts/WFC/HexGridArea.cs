@@ -47,10 +47,17 @@ namespace ProceduralBase
         public void Generate()
         {
             // Setup Cells
-            cellManager.GenerateCells(true);
+            // cellManager.GenerateCells(true);
+
+            cellManager.GenerateCells(true, false);
+            (Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells) = cellManager.GetCells();
             // Add cells to WFC
             wfc.SetRadius(cellManager.radius);
-            wfc.SetCells(cellManager.GetCells());
+            wfc.SetCells(_allCellsByLayer, _allCells);
+
+            // Add cells to WFC
+            // wfc.SetRadius(cellManager.radius);
+            // wfc.SetCells(cellManager.GetCells());
             // Run WFC
             wfc.ExecuteWFC();
         }
