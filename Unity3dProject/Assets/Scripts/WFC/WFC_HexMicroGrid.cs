@@ -258,23 +258,34 @@ namespace WFCSystem
 
         private void CollapseRemainingCellsByLayer()
         {
-            for (int currentLayer = 0; currentLayer < totalLayers; currentLayer++)
+            foreach (var kvp in allCellsByLayer)
             {
-                List<HexagonCell> layerCells;
-                List<HexagonCellCluster> layerClusters = new List<HexagonCellCluster>();
-                // if (currentLayer == 0)
-                // {
-                //     layerCells = allCellsByLayer[0].FindAll(c => !c.IsAssigned() && !c.isLeveledCell);
-                // }
-                // else
-                // {
-                layerCells = HexagonCell.GetAvailableCellsForNextLayer(allCellsByLayer[currentLayer]);
+                int layer = kvp.Key;
+                List<HexagonCell> layerCells = HexagonCell.GetAvailableCellsForNextLayer(kvp.Value);
                 layerCells = layerCells.OrderByDescending(e => e._neighbors.Count).ToList();
                 foreach (HexagonCell cell in layerCells)
                 {
                     CollapseCellAndPropagate(cell);
                 }
             }
+
+            // for (int currentLayer = 0; currentLayer < totalLayers; currentLayer++)
+            // {
+            //     List<HexagonCell> layerCells;
+            //     List<HexagonCellCluster> layerClusters = new List<HexagonCellCluster>();
+            //     // if (currentLayer == 0)
+            //     // {
+            //     //     layerCells = allCellsByLayer[0].FindAll(c => !c.IsAssigned() && !c.isLeveledCell);
+            //     // }
+            //     // else
+            //     // {
+            //     layerCells = HexagonCell.GetAvailableCellsForNextLayer(allCellsByLayer[currentLayer]);
+            //     layerCells = layerCells.OrderByDescending(e => e._neighbors.Count).ToList();
+            //     foreach (HexagonCell cell in layerCells)
+            //     {
+            //         CollapseCellAndPropagate(cell);
+            //     }
+            // }
         }
 
         private bool SelectAndAssignNext(HexagonCell cell, List<HexagonTileCore> prefabsList)
@@ -363,6 +374,14 @@ namespace WFCSystem
         {
             allCellsByLayer = _allCellsByLayer;
             allCellsList = _allCells;
+        }
+
+        public void SetCells(Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells, Dictionary<HexagonCellCluster, Dictionary<int, List<HexagonCell>>> _allCellsByLayer_X4_ByCluster = null)
+        {
+
+            allCellsByLayer = _allCellsByLayer;
+            allCellsList = _allCells;
+            // allCellsByLayer_X4_ByCluster = _allCellsByLayer_X4_ByCluster;
         }
 
         // public void SetCells(List<HexagonCell> _allCells)

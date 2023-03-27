@@ -120,18 +120,24 @@ namespace ProceduralBase
 
             if (cellManager.cellPrototypesByLayer_V2 != null)
             {
-                cellManager.GenerateCells(true, false, cellManager.cellPrototypesByLayer_V2);
+                cellManager.GenerateCells(true, false);
             }
             else
             {
                 Debug.LogError("EMPTY cellPrototypesByLayer_V2!");
             }
 
-            (Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells) = cellManager.GetCells();
+            // (Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells) = cellManager.GetCells();
+            (
+                Dictionary<int, List<HexagonCell>> _allCellsByLayer,
+                List<HexagonCell> _allCells, Dictionary<HexagonCellCluster,
+                Dictionary<int, List<HexagonCell>>> _allCellsByLayer_X4_ByCluster
+            ) = cellManager.GetCellsSet();
 
             // Add cells to WFC
             wfc.SetRadius(cellManager.radius);
-            wfc.SetCells(_allCellsByLayer, _allCells);
+            wfc.SetCells(_allCellsByLayer, _allCells, _allCellsByLayer_X4_ByCluster);
+            // wfc.SetCells(_allCellsByLayer, _allCells);
 
             // Run WFC
             wfc.ExecuteWFC();
@@ -181,12 +187,14 @@ namespace ProceduralBase
             // {
             //     Debug.Log("paths - X12, path - id: " + item.id + ", uid: " + item.uid);
             // }
-            cellManager.GenerateMicroGridFromHosts(path, 4, 3);
+            // cellManager.GenerateMicroGridFromHosts(path, 4, 3);
+            cellManager.GenerateMicroGridFromClusters();
 
             HexagonCellPrototype.AssignPathCenterVertices(path, vertexGrid);
+
             HexagonCellPrototype.SmoothVertexElevationAlongPath(path, vertexGrid);
 
-            // HexagonCellPrototype.SmoothElevationAlongPathNeighbors(path, vertexGrid);
+            HexagonCellPrototype.SmoothElevationAlongPathNeighbors(path, vertexGrid);
 
             if (updateGroundMesh)
             {
@@ -742,12 +750,12 @@ namespace ProceduralBase
                             {
                                 show = currentVertex.type == VertexType.Cell;
                                 Gizmos.color = Color.red;
-                                rad = 0.66f;
+                                rad = 0.6f;
                             }
                             else if (debug_showVertices == ShowVertexState.Path)
                             {
                                 show = currentVertex.type == VertexType.Road;
-                                Gizmos.color = Color.red;
+                                Gizmos.color = Color.cyan;
                                 rad = 0.66f;
                             }
                             else if (debug_showVertices == ShowVertexState.Terrain)
@@ -766,7 +774,7 @@ namespace ProceduralBase
                             {
                                 show = currentVertex.isCellCornerPoint;
                                 Gizmos.color = Color.red;
-                                rad = 0.66f;
+                                rad = 0.6f;
                             }
 
                             Vector3 worldPosition = currentVertex.position;

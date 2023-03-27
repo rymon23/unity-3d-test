@@ -9,6 +9,28 @@ namespace WFCSystem
     [System.Serializable]
     public class HexagonCellCluster
     {
+        public CellClusterType clusterType; // { get; private set; }
+
+        public List<HexagonCellPrototype> prototypes { get; private set; }
+        public Dictionary<int, List<HexagonCellPrototype>> prototypesByLayer_X4;
+        public Dictionary<int, List<HexagonCell>> cellsByLayer;
+        public HexagonCellCluster(int id, List<HexagonCellPrototype> prototypes, CellClusterType clusterType)
+        {
+            this.id = id;
+            this.clusterType = clusterType;
+            this.prototypes = prototypes;
+
+            foreach (var item in prototypes)
+            {
+                item.clusterId = id;
+                item.clusterParent = this;
+            }
+
+            //Temp
+            cells = new List<HexagonCell>();
+        }
+
+
         public List<HexagonCell> cells;
         [SerializeField] private HexagonCell parent;
         public HexagonCell GetParentCell() => cells.Count == 0 ? null : parent;
@@ -19,6 +41,7 @@ namespace WFCSystem
 
             Reevaluate();
         }
+
         public int id = -1;
         public float probability;
         public Vector3 center;

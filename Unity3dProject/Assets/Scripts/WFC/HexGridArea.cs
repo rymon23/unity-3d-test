@@ -49,7 +49,7 @@ namespace ProceduralBase
             // Setup Cells
             // cellManager.GenerateCells(true);
 
-            cellManager.GenerateCells(true, false);
+            cellManager.GenerateCells(true, true);
             (Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells) = cellManager.GetCells();
             // Add cells to WFC
             wfc.SetRadius(cellManager.radius);

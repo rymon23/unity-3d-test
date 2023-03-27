@@ -12,7 +12,7 @@ namespace WFCSystem
         public void ExecuteWFC();
         public void SetRadius(int value);
         public void SetCells(Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells);
-        // public void SetCells(List<HexagonCell> _allCells);
+        public void SetCells(Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells, Dictionary<HexagonCellCluster, Dictionary<int, List<HexagonCell>>> _allCellsByLayer_X4_ByCluster);
         public void InstantiateAllTiles();
     }
 
@@ -200,6 +200,63 @@ namespace WFCSystem
             tileGO.transform.SetParent(folder);
 
             if (disableEditor) tileCore.SetEditorTools(false);
+        }
+
+
+        public static List<GameObject> CreateWFCFromMicroCellGridClusters(Dictionary<HexagonCellCluster, Dictionary<int, List<HexagonCell>>> allCellsByLayer_X4_ByCluster, HexagonTileCore tilePrefabs_MicroClusterParent, Transform parentFolder)
+        {
+            List<GameObject> parentTileGameObjects = new List<GameObject>();
+            foreach (var kvp in allCellsByLayer_X4_ByCluster)
+            {
+                HexagonCellCluster cluster = kvp.Key;
+
+                //TEMP
+                if (cluster.clusterType == CellClusterType.Path) continue;
+
+                GameObject parentTileGO = CreateWFCFromMicroCellGrid(cluster.cells[0], kvp.Value, tilePrefabs_MicroClusterParent, 12, parentFolder);
+                parentTileGameObjects.Add(parentTileGO);
+            }
+            return parentTileGameObjects;
+        }
+        // public static List<GameObject> CreateWFCFromMicroCellGridClusters(List<HexagonCellCluster> clusters, HexagonTileCore tilePrefabs_MicroClusterParent, Transform parentFolder)
+        // {
+        //     List<GameObject> parentTileGameObjects = new List<GameObject>();
+        //     foreach (HexagonCellCluster cluster in clusters)
+        //     {
+        //         parentTileGameObjects.Add(CreateWFCFromMicroCellGrid(cluster.cells[0], cluster.cellsByLayer, tilePrefabs_MicroClusterParent, 12, parentFolder));
+        //     }
+        //     return parentTileGameObjects;
+        // }
+
+        public static GameObject CreateWFCFromMicroCellGrid(HexagonCell parentCell, Dictionary<int, List<HexagonCell>> _allCellsByLayer, HexagonTileCore tilePrefabs_MicroClusterParent, int hostRadius, Transform parentFolder)
+        {
+            parentCell.SetTile(tilePrefabs_MicroClusterParent, 0);
+            GameObject parentTileGO = GameObject.Instantiate(tilePrefabs_MicroClusterParent.gameObject, parentCell.transform.position, Quaternion.identity);
+
+            HexagonTileCore parentTile = parentTileGO.GetComponent<HexagonTileCore>();
+            parentTile.ShowSocketLabels(false);
+            parentTile.SetIgnoreSocketLabelUpdates(true);
+
+            IWFCSystem gridWFC = parentTileGO.GetComponent<IWFCSystem>();
+            if (gridWFC == null) Debug.LogError("Missing WFC system component!");
+
+            if (parentFolder != null) parentTileGO.transform.SetParent(parentFolder);
+
+            List<HexagonCell> _allCells = new List<HexagonCell>();
+            foreach (var kvp in _allCellsByLayer)
+            {
+                _allCells.AddRange(kvp.Value);
+            }
+
+            Debug.Log("CreateWFCFromMicroCellGrid - _allCells: " + _allCells.Count + "");
+
+
+            gridWFC.SetRadius(hostRadius);
+            gridWFC.SetCells(_allCellsByLayer, _allCells);
+            // Run WFC
+            gridWFC.ExecuteWFC();
+
+            return parentTileGO;
         }
 
         public static (HexagonCellManager, List<HexagonCell>) SetupMicroCellClusterFromHosts(List<HexagonCell> cellsToAssign, HexagonTileCore tilePrefabs_MicroClusterParent, int cellLayers, int cellLayerElevation, Transform parentFolder, bool useV2 = false)

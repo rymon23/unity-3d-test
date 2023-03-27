@@ -106,6 +106,11 @@ namespace WFCSystem
         public Dictionary<int, List<HexagonCell>> allLevelCellsByLayer;
         public Dictionary<int, List<HexagonCell>> allPathCells;
         public Dictionary<int, List<HexagonCell>> cellClustersByLayer;
+        public Dictionary<HexagonCellCluster, Dictionary<int, List<HexagonCell>>> allCellsByLayer_X4_ByCluster;
+
+        // [SerializeField] private List<HexagonCellCluster> allClusters;
+        [SerializeField] private int clusterCount = 0;
+
         public List<HexagonCell> topLevelCells;
 
         void Start()
@@ -122,32 +127,37 @@ namespace WFCSystem
 
             EvaluateCells();
 
-            if (useEdgeMicroClusters && tilePrefabs_EdgeMicroClusterParent != null)
+            if (allCellsByLayer_X4_ByCluster != null)
             {
-                CollapseEdgeMicroClusters();
-            }
-            else
-            {
-                CollapseEntryCells();
-                Debug.Log("Entrance Cells Assigned");
-
-                if (isWalledEdge)
-                {
-                    CollapseEdgeCells();
-                    Debug.Log("Edge Cells Assigned");
-                }
+                WFCUtilities.CreateWFCFromMicroCellGridClusters(allCellsByLayer_X4_ByCluster, tilePrefabs_ClusterMicroGrid_TEMP, this.transform);
             }
 
-            // CollapseLeveledCells();
-            // Debug.Log("Level Cells Assigned");
+            // if (useEdgeMicroClusters && tilePrefabs_EdgeMicroClusterParent != null)
+            // {
+            //     CollapseEdgeMicroClusters();
+            // }
+            // else
+            // {
+            //     CollapseEntryCells();
+            //     Debug.Log("Entrance Cells Assigned");
 
-            if (generatePaths)
-            {
-                CollapsePathCells();
-                Debug.Log("Path Cells Assigned");
-            }
+            //     if (isWalledEdge)
+            //     {
+            //         CollapseEdgeCells();
+            //         Debug.Log("Edge Cells Assigned");
+            //     }
+            // }
 
-            // CollapseMicroClusters();
+            // // CollapseLeveledCells();
+            // // Debug.Log("Level Cells Assigned");
+
+            // if (generatePaths)
+            // {
+            //     CollapsePathCells();
+            //     Debug.Log("Path Cells Assigned");
+            // }
+
+            // // CollapseMicroClusters();
 
             CollapseRemainingCellsByLayer();
 
@@ -307,6 +317,32 @@ namespace WFCSystem
                 }
             }
         }
+
+        // private void CollapseHostClusters()
+        // {
+        //     if (tilePrefabs_EdgeMicroClusterParent == null)
+        //     {
+        //         Debug.LogError("No prefab for tilePrefabs_MicroClusterParent!");
+        //         return;
+        //     }
+
+        //     foreach (HexagonCellCluster cluster in allCellClusters)
+        //     {                
+        //         int cellLayers = cluster_CellLayers;
+        //         if (cluster_randomizeCellLayers) cellLayers = UnityEngine.Random.Range(cellLayers, cluster_CellLayersMax);
+
+        //         (HexagonCellManager parentCellManager, List<HexagonCell> pathClusterCells) = WFCUtilities.SetupMicroCellClusterFromHosts(cluster., tilePrefabs_EdgeMicroClusterParent, cellLayers, cluster_CellLayerElevation, this.transform, true);
+
+        //         parentCellManager.SetClusterParent();
+        //         activeTiles.Add(parentCellManager.gameObject);
+
+        //         parentCellManager.gameObject.name += "_EdgeClusterParent";
+
+        //         HexGridArea gridArea = parentCellManager.gameObject.GetComponent<HexGridArea>();
+        //         gridArea.InitialSetup();
+        //         gridArea.Generate();
+        //     }
+        // }
 
         private void CollapseEdgeMicroClusters()
         {
@@ -533,6 +569,7 @@ namespace WFCSystem
         }
 
 
+        [SerializeField] private HexagonTileCore tilePrefabs_ClusterMicroGrid_TEMP;
         [SerializeField] private HexagonTileCore tilePrefabs_MicroClusterParent;
         private void CollapseMicroClusters()
         {
@@ -936,9 +973,15 @@ namespace WFCSystem
             allCellsList = _allCells;
         }
 
-        // public void SetCells( List<HexagonCell> _allCells)
+        public void SetCells(Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells, Dictionary<HexagonCellCluster, Dictionary<int, List<HexagonCell>>> _allCellsByLayer_X4_ByCluster)
+        {
+
+            allCellsByLayer = _allCellsByLayer;
+            allCellsList = _allCells;
+            allCellsByLayer_X4_ByCluster = _allCellsByLayer_X4_ByCluster;
+        }
+        // public void SetCells(Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells, List<HexagonCellCluster> _allClusters)
         // {
-        //     allCellsList = _allCells;
         // }
 
         private void UpdateCompatibilityMatrix()

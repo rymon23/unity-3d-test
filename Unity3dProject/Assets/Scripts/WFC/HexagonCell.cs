@@ -28,6 +28,15 @@ namespace WFCSystem
         public bool IsEntry() => isEntryCell;
         public bool IsPath() => isPathCell;
         public bool IsGround() => cellStatus == CellStatus.Ground;
+        public bool IsGridHost() => isGridHost;
+
+        [SerializeField] private bool isGridHost;
+        public void SetGridHost(bool enable)
+        {
+            // Debug.LogError("SetGridHost on HexagonCell");
+            isGridHost = enable;
+        }
+
         public CellStatus GetCellStatus() => cellStatus;
         public EdgeCellType GetEdgeCellType() => _edgeCellType;
         public Vector3 GetPosition() => transform.position;
@@ -589,7 +598,7 @@ namespace WFCSystem
             isIgnored = ignore;
         }
         public bool IsDisposable() => cellStatus == CellStatus.Remove || cellStatus == CellStatus.UnderGround;
-        public bool IsAssigned() => currentTile != null || isIgnored || IsInClusterSystem() || IsDisposable() || (isLeveledCell && !isLeveledGroundCell);
+        public bool IsAssigned() => currentTile != null || IsGridHost() || isIgnored || IsInClusterSystem() || IsDisposable() || (isLeveledCell && !isLeveledGroundCell);
         public IHexagonTile GetTile() => currentTile;
 
         public void ClearTile()

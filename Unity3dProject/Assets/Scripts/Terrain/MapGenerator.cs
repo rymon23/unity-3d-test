@@ -86,7 +86,7 @@ public class MapGenerator : MonoBehaviour
         ThreadStart threadStart =
             delegate ()
             {
-                MapDataThread (callback);
+                MapDataThread(callback);
             };
 
         new Thread(threadStart).Start();
@@ -111,7 +111,7 @@ public class MapGenerator : MonoBehaviour
         ThreadStart threadStart =
             delegate ()
             {
-                MeshDataThread (mapData, lod, callback);
+                MeshDataThread(mapData, lod, callback);
             };
 
         new Thread(threadStart).Start();
@@ -216,17 +216,24 @@ public struct TerrainType
     public float height;
 
     public Color colour;
+    public Material material;
 }
 
 public struct MapData
 {
     public readonly float[,] heightMap;
-
     public readonly Color[] colourMap;
+    public readonly Material[] materialMap;
 
-    public MapData(float[,] heightMap, Color[] colourMap)
+    // public MapData(float[,] heightMap, Color[] colourMap)
+    // {
+    //     this.heightMap = heightMap;
+    //     this.colourMap = colourMap;
+    // }
+    public MapData(float[,] heightMap, Color[] colourMap, Material[] materialMap = null)
     {
         this.heightMap = heightMap;
         this.colourMap = colourMap;
+        this.materialMap = materialMap;
     }
 }

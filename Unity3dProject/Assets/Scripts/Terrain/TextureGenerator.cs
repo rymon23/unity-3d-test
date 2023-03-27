@@ -13,6 +13,27 @@ public static class TextureGenerator
         texture.Apply();
         return texture;
     }
+    public static Texture2D TextureFromMaterialMap(Material[] materialMap, int width, int height)
+    {
+        Texture2D texture = new Texture2D(width, height);
+        texture.filterMode = FilterMode.Point;
+        texture.wrapMode = TextureWrapMode.Clamp;
+
+        Color[] colorMap = new Color[width * height];
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int index = y * width + x;
+                Texture2D texture2D = (Texture2D)materialMap[index].mainTexture;
+                colorMap[index] = texture2D.GetPixel(0, 0);
+            }
+        }
+        texture.SetPixels(colorMap);
+        texture.Apply();
+        return texture;
+    }
+
 
     public static Texture2D TextureFromHeightMap(float[,] heightMap)
     {

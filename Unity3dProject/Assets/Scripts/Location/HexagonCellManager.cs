@@ -17,6 +17,8 @@ namespace WFCSystem
         public bool IsEntry();
         public bool IsPath();
         public bool IsGround();
+        public bool IsGridHost();
+        public void SetGridHost(bool enable);
         public CellStatus GetCellStatus();
         public EdgeCellType GetEdgeCellType();
         public Vector3 GetPosition();
@@ -24,20 +26,47 @@ namespace WFCSystem
         public Vector3[] GetSides();
         // public List<IHexCell> GetNeighbors();
     }
+    public enum CellClusterType { Path, Edge, Outpost, Other }
 
     public enum GridFilter_Level { None, All, HostCells, MicroCells, }
-    public enum GridFilter_Type { None, All, Edge, Path, Ground, Entrance }
+    public enum GridFilter_Type { None, All, Edge, Path, Ground, Entrance, Cluster }
+
+    public enum GridPreset
+    {
+        Unset = 0,
+        Outpost,
+        Town,
+        City,
+    }
+
+    /// <summary>
+    /// 
+    ///  Outpost Vars 
+    ///      min/max hostCells in a outpost
+    ///       
+    ///      min/ max outposts alowed in WorldArea
+    ///     
+    /// 
+    /// </summary>
 
     public class HexagonCellManager : MonoBehaviour
     {
         [Header("Cell Grid Settings")]
         [Range(4, 648)] public int radius = 72;
         [Range(2, 128)][SerializeField] private int cellSize = 12;
+        [SerializeField] private bool useCorners;
+        [SerializeField] private GridPreset gridPreset;
+
+        [Header("Grid Erosion ")]
+        [SerializeField] private bool useGridErosion;
+        [Range(0.1f, 0.7f)][SerializeField] private float erosionRadiusMult = 0.24f;
+        [Range(1, 8)][SerializeField] private int erosionClumpSets = 5;
+        [Range(4, 64)][SerializeField] private int maxCellsToRemove = 32;
 
         [Header(" ")]
         [SerializeField] private float centerPosYOffset = 0;
-        [SerializeField] private bool enableGridGenerationCenterOffeset;
-        [SerializeField] private Vector2 gridGenerationCenterPosXZOffeset = new Vector2(-1.18f, 0.35f);
+        // [SerializeField] private bool enableGridGenerationCenterOffeset;
+        // [SerializeField] private Vector2 gridGenerationCenterPosXZOffeset = new Vector2(-1.18f, 0.35f);
 
         [Header("Layer Settings")]
         [Range(2, 12)][SerializeField] private int cellLayerElevation = 6;
@@ -72,8 +101,11 @@ namespace WFCSystem
         [SerializeField] private Dictionary<int, List<HexagonCell>> allCellsByLayer_X4;
         [SerializeField] private List<HexagonCell> allCells;
         public (Dictionary<int, List<HexagonCell>>, List<HexagonCell>) GetCells() => (allCellsByLayer, allCells);
+        public (Dictionary<int, List<HexagonCell>>, List<HexagonCell>, Dictionary<HexagonCellCluster, Dictionary<int, List<HexagonCell>>>) GetCellsSet() => (allCellsByLayer, allCells, allCellsByLayer_X4_ByCluster);
         public List<HexagonCell> GetAllCellsList() => allCells;
         [SerializeField] private List<HexagonCell> allCells_X4;
+
+        public Dictionary<HexagonCellCluster, Dictionary<int, List<HexagonCell>>> allCellsByLayer_X4_ByCluster;
 
 
         [Header("Prototypes")]
@@ -83,7 +115,11 @@ namespace WFCSystem
         [SerializeField] private List<HexagonCellPrototype> allPrototypesList;
         public List<HexagonCellPrototype> GetAllPrototypesList() => allPrototypesList;
         public List<HexagonCellPrototype> GetAllPrototypeEdgesOfType(EdgeCellType type) => allPrototypesList.FindAll(c => c._edgeCellType == type);
+        public List<HexagonCellPrototype> GetAllPrototypesOfCellStatus(CellStatus status) => allPrototypesList.FindAll(c => c.cellStatus == status);
         public Dictionary<int, List<HexagonCellPrototype>> cellPrototypes_X4_ByLayer;
+
+        [SerializeField] private List<HexagonCellCluster> cellPrototypeClusters;
+        public Dictionary<HexagonCellCluster, Dictionary<int, List<HexagonCellPrototype>>> cellPrototypesByLayer_X4_ByCluster;
 
         [SerializeField] private int totalPrototypes = 0;
         [SerializeField] private int totalPrototypesX4 = 0;
@@ -217,7 +253,7 @@ namespace WFCSystem
             Vector3 centerPos = gameObject.transform.position;
             centerPos.y += centerPosYOffset;
 
-            Dictionary<int, List<HexagonCellPrototype>> newPrototypesByLayer = HexagonCellPrototype.GenerateGridsByLayer(centerPos, radius, cellSize, cellLayers, cellLayerElevation, null, 0, gameObject.transform);
+            Dictionary<int, List<HexagonCellPrototype>> newPrototypesByLayer = HexagonCellPrototype.GenerateGridsByLayer(centerPos, radius, cellSize, cellLayers, cellLayerElevation, null, 0, gameObject.transform, null, useGridErosion);
             List<HexagonCellPrototype> _allPrototypesList = new List<HexagonCellPrototype>();
 
             int count = 0;
@@ -238,9 +274,10 @@ namespace WFCSystem
             allPrototypesList = _allPrototypesList;
             totalPrototypes = count;
 
+            cellPrototypeClusters = new List<HexagonCellCluster>();
+
             Debug.Log("GenerateGridsByLayer - totalPrototypes: " + totalPrototypes + ", allPrototypesList: " + allPrototypesList.Count);
         }
-
         public (List<HexagonCellPrototype>, List<HexagonCellPrototype>) GeneratePrototypeGridEntryAndPaths()
         {
             List<HexagonCellPrototype> gridEdges = GetAllPrototypeEdgesOfType(EdgeCellType.Grid);
@@ -248,13 +285,85 @@ namespace WFCSystem
 
             Debug.Log("gridEdges: " + gridEdges.Count + ", entryPrototypes: " + entryPrototypes.Count + ", allPrototypesList: " + allPrototypesList.Count);
 
-            List<HexagonCellPrototype> path = HexagonCellPrototype.GenerateRandomPath(entryPrototypes, allPrototypesList, gameObject.transform.position);
-            // foreach (var item in path)
-            // {
-            //     Debug.Log("paths - X12, path - id: " + item.id + ", uid: " + item.uid);
-            // }
-            // return (null, null);
+            List<HexagonCellPrototype> path = HexagonCellPrototype.GenerateRandomPath(entryPrototypes, allPrototypesList, gameObject.transform.position, useGridErosion == false);
+            if (path.Count > 0)
+            {
+                int clusterid = cellPrototypeClusters.Count == 0 ? 0 : cellPrototypeClusters.Count + 1;
+                cellPrototypeClusters.Add(new HexagonCellCluster(clusterid, path, CellClusterType.Path));
+            }
+
+            if (gridPreset == GridPreset.Outpost) GenerateCellClusters_Random();
+
+            if (gridPreset == GridPreset.City) GenerateCellClusters_GridEdge(gridEdges);
+
             return (path, entryPrototypes);
+        }
+
+        public void GenerateCellClusters_Random()
+        {
+            Dictionary<int, List<HexagonCellPrototype>> newClusters = HexagonCellPrototype.GetRandomCellClusters(GetAllPrototypesOfCellStatus(CellStatus.Ground), 36);
+            List<HexagonCellCluster> _cellPrototypeClusters = new List<HexagonCellCluster>();
+            foreach (var kvp in newClusters)
+            {
+                int clusterid = cellPrototypeClusters.Count == 0 ? 0 : cellPrototypeClusters.Count + kvp.Key;
+                _cellPrototypeClusters.Add(new HexagonCellCluster(clusterid, kvp.Value, CellClusterType.Other));
+            }
+            cellPrototypeClusters.AddRange(_cellPrototypeClusters);
+        }
+
+        public void GenerateCellClusters_GridEdge(List<HexagonCellPrototype> gridEdges)
+        {
+            List<HexagonCellPrototype> groundGridEdges = gridEdges.FindAll(c => c.isEntry == false && c.isPath == false && c.IsGround());
+            if (cellPrototypeClusters == null)
+            {
+                cellPrototypeClusters = new List<HexagonCellCluster>();
+                cellPrototypeClusters.Add(new HexagonCellCluster(0, groundGridEdges, CellClusterType.Edge));
+            }
+            else
+            {
+                int clusterid = cellPrototypeClusters.Count + 1;
+                cellPrototypeClusters.Add(new HexagonCellCluster(clusterid, groundGridEdges, CellClusterType.Edge));
+            }
+        }
+
+        public void GenerateMicroGridFromClusters()
+        {
+            HashSet<string> hostIds = new HashSet<string>();
+            Dictionary<HexagonCellCluster, Dictionary<int, List<HexagonCellPrototype>>> _cellPrototypesByLayer_X4_ByCluster = new Dictionary<HexagonCellCluster, Dictionary<int, List<HexagonCellPrototype>>>();
+
+            foreach (HexagonCellCluster cluster in cellPrototypeClusters)
+            {
+                // Skip path for now
+                // if (cluster.clusterType == CellClusterType.Path) continue;
+
+                List<HexagonCellPrototype> filteredHosts = new List<HexagonCellPrototype>();
+                int duplicatesFound = 0;
+
+                foreach (HexagonCellPrototype item in cluster.prototypes)
+                {
+                    if (hostIds.Contains(item.uid) == false)
+                    {
+                        hostIds.Add(item.uid);
+                        filteredHosts.Add(item);
+                    }
+                    else
+                    {
+                        duplicatesFound++;
+                        // Debug.LogError("GenerateMicroGridFromHosts - Duplicate host id found: " + item.uid);
+                    }
+                }
+
+                Dictionary<int, List<HexagonCellPrototype>> newPrototypesByLayer = HexagonCellManager.GenerateProtoypeGridFromHosts(filteredHosts, 4, 3, cellLayerElevation, gameObject.transform, true);
+                foreach (var kvp in newPrototypesByLayer)
+                {
+                    HexagonCellPrototype.PopulateNeighborsFromCornerPoints(kvp.Value, transform, 0.3f);
+                    HexagonCellPrototype.GetEdgePrototypes(kvp.Value, EdgeCellType.Grid);
+                }
+                cluster.prototypesByLayer_X4 = newPrototypesByLayer;
+
+                _cellPrototypesByLayer_X4_ByCluster.Add(cluster, newPrototypesByLayer);
+            }
+            cellPrototypesByLayer_X4_ByCluster = _cellPrototypesByLayer_X4_ByCluster;
         }
 
         public void GenerateMicroGridFromHosts(List<HexagonCellPrototype> allHosts, int cellSize, int cellLayers)
@@ -314,9 +423,9 @@ namespace WFCSystem
 
                 count += kvp.Value.Count;
             }
-            foreach (var kvp in newPrototypesByLayer)
-            {
-            }
+            // foreach (var kvp in newPrototypesByLayer)
+            // {
+            // }
 
             cellPrototypes_X4_ByLayer = newPrototypesByLayer;
             totalPrototypesX4 = count;
@@ -338,13 +447,13 @@ namespace WFCSystem
         {
 
             Vector3 centerPos = transform.position;
-            Vector2 _gridGenCenterPosXZOffeset = Vector2.zero;
-            if (enableGridGenerationCenterOffeset)
-            {
-                _gridGenCenterPosXZOffeset = gridGenerationCenterPosXZOffeset;
-                centerPos.x += gridGenerationCenterPosXZOffeset.x;
-                centerPos.z += gridGenerationCenterPosXZOffeset.y;
-            }
+            // Vector2 _gridGenCenterPosXZOffeset = Vector2.zero;
+            // if (enableGridGenerationCenterOffeset)
+            // {
+            //     _gridGenCenterPosXZOffeset = gridGenerationCenterPosXZOffeset;
+            //     centerPos.x += gridGenerationCenterPosXZOffeset.x;
+            //     centerPos.z += gridGenerationCenterPosXZOffeset.y;
+            // }
 
             // Dictionary<int, List<HexagonTilePrototype>> newPrototypesByLayer = HexagonCellManager.Generate_HexagonCellPrototypes(transform.position, 12, 4, cellLayers, cellLayerElevation, _gridGenCenterPosXZOffeset, 0, null, transform);
             // cellPrototypesByLayer = newPrototypesByLayer;
@@ -403,7 +512,8 @@ namespace WFCSystem
 
 
 
-        public void GenerateCells(bool force, bool regeneratePrototypes = false, Dictionary<int, List<HexagonCellPrototype>> prototypesByLayer = null)
+        public void GenerateCells(bool force, bool regeneratePrototypes = false)
+        // public void GenerateCells(bool force, bool regeneratePrototypes = false, Dictionary<int, List<HexagonCellPrototype>> prototypesByLayer = null)
         {
             if (force || allCells == null || allCells.Count == 0)
             {
@@ -417,7 +527,7 @@ namespace WFCSystem
                 }
 
                 // Generate_HexagonCells(cellPrototypesByLayer, HexagonCell_prefab);
-                allCellsByLayer = GenerateHexagonCellsFromPrototypes(prototypesByLayer != null ? prototypesByLayer : cellPrototypesByLayer_V2, HexagonCell_prefab, gameObject.transform);
+                allCellsByLayer = GenerateHexagonCellsFromPrototypes(cellPrototypesByLayer_V2, HexagonCell_prefab, gameObject.transform);
 
                 List<HexagonCell> _allCells = new List<HexagonCell>();
                 foreach (var kvp in allCellsByLayer)
@@ -427,18 +537,36 @@ namespace WFCSystem
                 }
                 allCells = _allCells;
 
-                if (cellPrototypes_X4_ByLayer != null && cellPrototypes_X4_ByLayer.Count > 0)
+                // if (cellPrototypes_X4_ByLayer != null && cellPrototypes_X4_ByLayer.Count > 0)
+                // {
+                //     allCellsByLayer_X4 = GenerateHexagonCellsFromPrototypes(cellPrototypes_X4_ByLayer, HexagonCell_prefab, gameObject.transform);
+                //     List<HexagonCell> _allCell_X4 = new List<HexagonCell>();
+                //     foreach (var kvp in allCellsByLayer_X4)
+                //     {
+                //         HexagonCell.PopulateNeighborsFromCornerPoints(kvp.Value, HexagonCell.GetCornerNeighborSearchDist(4));
+                //         HexagonCell.GetEdgeCells(kvp.Value);
+                //         _allCell_X4.AddRange(kvp.Value);
+                //     }
+                //     allCells_X4 = _allCell_X4;
+                // }
+
+                if (cellPrototypeClusters != null && cellPrototypeClusters.Count > 0)
                 {
-                    allCellsByLayer_X4 = GenerateHexagonCellsFromPrototypes(cellPrototypes_X4_ByLayer, HexagonCell_prefab, gameObject.transform);
-                    List<HexagonCell> _allCell_X4 = new List<HexagonCell>();
-                    foreach (var kvp in allCellsByLayer_X4)
+                    Dictionary<HexagonCellCluster, Dictionary<int, List<HexagonCell>>> _allCellsByLayer_X4_ByCluster = new Dictionary<HexagonCellCluster, Dictionary<int, List<HexagonCell>>>();
+
+                    foreach (HexagonCellCluster cluster in cellPrototypeClusters)
                     {
-                        HexagonCell.PopulateNeighborsFromCornerPoints(kvp.Value, HexagonCell.GetCornerNeighborSearchDist(4));
-                        HexagonCell.GetEdgeCells(kvp.Value);
-                        _allCell_X4.AddRange(kvp.Value);
+                        Dictionary<int, List<HexagonCell>> newPrototypesByLayer_X4 = GenerateHexagonCellsFromPrototypes(cluster.prototypesByLayer_X4, HexagonCell_prefab, gameObject.transform, "Cells_X4");
+                        foreach (var kvp in newPrototypesByLayer_X4)
+                        {
+                            HexagonCell.PopulateNeighborsFromCornerPoints(kvp.Value, HexagonCell.GetCornerNeighborSearchDist(4));
+                            HexagonCell.GetEdgeCells(kvp.Value);
+                        }
+                        _allCellsByLayer_X4_ByCluster.Add(cluster, newPrototypesByLayer_X4);
                     }
-                    allCells_X4 = _allCell_X4;
+                    allCellsByLayer_X4_ByCluster = _allCellsByLayer_X4_ByCluster;
                 }
+
             }
         }
 
@@ -529,6 +657,11 @@ namespace WFCSystem
                 if (gridFilter_Level == GridFilter_Level.All || gridFilter_Level == GridFilter_Level.MicroCells)
                 {
                     HexagonCellPrototype.DrawHexagonCellPrototypeGrid(cellPrototypes_X4_ByLayer, gameObject.transform, gridFilter_Type);
+
+                    foreach (var cluster in cellPrototypeClusters)
+                    {
+                        HexagonCellPrototype.DrawHexagonCellPrototypeGrid(cluster.prototypesByLayer_X4, gameObject.transform, gridFilter_Type);
+                    }
                 }
                 // HexagonCellPrototype centerHex = new HexagonCellPrototype(transform.position, 24);
                 // foreach (Vector3 side in centerHex.sidePoints)
@@ -541,13 +674,31 @@ namespace WFCSystem
             }
             else
             {
+                // List<int> cornersToUse = new List<int>()
+                // {
+                //     (int)HexagonCorner.FrontA,
+                //     (int)HexagonCorner.FrontB,
+                //     // (int)HexagonCorner.FrontLeftA,
+                //     // (int)HexagonCorner.FrontLeftB,
+                //     // (int)HexagonCorner.FrontRightA,
+                //     // (int)HexagonCorner.FrontRightB
+                //     (int)HexagonCorner.BackA,
+                //     (int)HexagonCorner.BackB,
+
+                // };
+                // List<Vector3> centerPts = HexagonCellPrototype.GenerateHexagonCenterPoints(transform.position, cellSize, cornersToUse, true);
+                // foreach (var item in centerPts)
+                // {
+                //     HexagonCellPrototype hex = new HexagonCellPrototype(item, cellSize);
+                //     HexagonCellPrototype.DrawHexagonCellPrototype(hex, 0.4f);
+                // }
                 // HexagonCellPrototype centerHex = new HexagonCellPrototype(transform.position, cellSize);
+
+
                 // Vector3[] centerPoints = GenerateHexagonSidePoints(centerHex.cornerPoints, cellSize * 1.8f, centerHex.center);
 
                 // Vector3[] centerCornersExtended = GenerateHexagonCornerPoints(centerHex.center, cellSize);
 
-                // // Vector3[] centerPoints = GenerateGridPoints(transform.position, cellSize * 2f, radius);
-                // HexagonCellPrototype.DrawHexagonCellPrototype(centerHex, 0.4f);
 
                 // HexagonCellPrototype parentHex = new HexagonCellPrototype(transform.position, radius);
                 // HexagonCellPrototype.DrawHexagonCellPrototype(parentHex, 0.4f);
@@ -820,11 +971,11 @@ namespace WFCSystem
             }
         }
 
-        private static Dictionary<int, List<HexagonCell>> GenerateHexagonCellsFromPrototypes(Dictionary<int, List<HexagonCellPrototype>> cellPrototypesByLayer, GameObject cellPrefab, Transform transform)
+        private static Dictionary<int, List<HexagonCell>> GenerateHexagonCellsFromPrototypes(Dictionary<int, List<HexagonCellPrototype>> cellPrototypesByLayer, GameObject cellPrefab, Transform transform, string folderName = "Cells")
         {
             Dictionary<int, List<HexagonCell>> newCellsByLayer = new Dictionary<int, List<HexagonCell>>();
 
-            Transform folder = new GameObject("Cells").transform;
+            Transform folder = new GameObject(folderName).transform;
             folder.transform.SetParent(transform);
             List<HexagonCell> prevLayerHexagonCells = new List<HexagonCell>();
 
@@ -861,6 +1012,15 @@ namespace WFCSystem
 
                     if (cellPrototype.isEdge) hexCell.SetEdgeCell(true, EdgeCellType.Grid);
                     if (cellPrototype.isPath) hexCell.SetPathCell(true);
+
+                    if (cellPrototype.isGridHost)
+                    {
+                        hexCell.SetGridHost(true);
+                        if (cellPrototype.clusterParent != null)
+                        {
+                            cellPrototype.clusterParent.cells.Add(hexCell);
+                        }
+                    }
 
                     hexCell.cellStatus = cellPrototype.cellStatus;
 
@@ -1084,23 +1244,38 @@ namespace WFCSystem
         {
             Dictionary<int, List<HexagonCellPrototype>> newPrototypesByLayer = new Dictionary<int, List<HexagonCellPrototype>>();
 
+            List<int> cornersToUse = new List<int>()
+                {
+                    (int)HexagonCorner.FrontA,
+                    (int)HexagonCorner.FrontB,
+                };
+
             foreach (HexagonCellPrototype hostCell in allHosts)
             {
                 Vector3 center = hostCell.center;
                 int layerBaseOffset = hostCell.layer;
 
-                // Generate grid of protottyes 
-                Dictionary<int, List<HexagonCellPrototype>> prototypesByLayer = HexagonCellPrototype.GenerateGridsByLayer(center, hostCell.size, cellSize, cellLayers, cellLayerElevation, hostCell, layerBaseOffset, transform, useCorners);
+                List<int> _cornersToUse = new List<int>();
+                _cornersToUse.AddRange(cornersToUse);
 
-                int passes = 0;
+                bool anyGridHostCellsInBackNeighborStack = HexagonCellPrototype.HasGridHostCellsOnSideNeighborStack(hostCell, (int)HexagonSide.Back);
+
+                if (anyGridHostCellsInBackNeighborStack == false)
+                // if (backNeighbor == null || (backNeighbor != null && backNeighbor.isPath == false))
+                {
+                    _cornersToUse.Add((int)HexagonCorner.BackA);
+                    _cornersToUse.Add((int)HexagonCorner.BackB);
+                }
+
+                // Generate grid of protottyes 
+                Dictionary<int, List<HexagonCellPrototype>> prototypesByLayer = HexagonCellPrototype.GenerateGridsByLayer(center, hostCell.size, cellSize, cellLayers, cellLayerElevation, hostCell, layerBaseOffset, transform, _cornersToUse);
+                hostCell.SetGridHost(true);
+                hostCell.cellPrototypes_X4_ByLayer = prototypesByLayer;
+
                 foreach (var kvp in prototypesByLayer)
                 {
                     int key = kvp.Key;
                     List<HexagonCellPrototype> prototypes = kvp.Value;
-
-                    Debug.Log("host cell: " + hostCell.id + ", layer:" + key + ", prototypes: " + prototypes.Count + ", iterations: " + passes);
-                    passes++;
-
                     if (newPrototypesByLayer.ContainsKey(key) == false)
                     {
                         newPrototypesByLayer.Add(key, prototypes);

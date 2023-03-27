@@ -32,6 +32,12 @@ namespace WFCSystem
         public bool IsEntry() => isEntry;
         public bool IsPath() => isPath;
         public bool IsGround() => cellStatus == CellStatus.Ground;
+        public bool IsGridHost() => isGridHost;
+        public void SetGridHost(bool enable)
+        {
+            isGridHost = enable;
+        }
+
         public CellStatus GetCellStatus() => cellStatus;
         public EdgeCellType GetEdgeCellType() => _edgeCellType;
         public Vector3 GetPosition() => center;
@@ -46,6 +52,7 @@ namespace WFCSystem
         public string name;
         public int size;
         public int layer { get; private set; }
+
         public Vector3 center;
         public Vector3[] cornerPoints;
         public Vector3[] sidePoints;
@@ -63,6 +70,15 @@ namespace WFCSystem
         public bool isEntry;
         public bool isPath;
         public bool isGroundRamp;
+
+
+        #region Host Cell
+        public bool isGridHost { get; private set; }
+        public int clusterId = -1;
+        public HexagonCellCluster clusterParent;
+        public Dictionary<int, List<HexagonCellPrototype>> cellPrototypes_X4_ByLayer;
+        #endregion
+
 
         public HexagonCellPrototype(string id, string topNeighborId, string bottomNeighborId, string parentId, string name, int size, int layer, Vector3 center, Vector3[] cornerPoints)
         {
@@ -117,7 +133,7 @@ namespace WFCSystem
             if (hasParent)
             {
                 this.parentId = parentCell.GetId();
-                parentHeader = "[" + this.parentId + "]/";
+                parentHeader = "[" + this.parentId + "]-";
 
                 this.isPath = parentCell.IsPath();
                 this.cellStatus = parentCell.GetCellStatus();
@@ -143,7 +159,7 @@ namespace WFCSystem
             allEdgePoints.AddRange(sidePoints);
             return allEdgePoints;
         }
-
+        public bool HasSideNeighbor() => neighbors.Any(n => n.GetLayer() == layer);
         public void SetNeighborsBySide(float offset = 0.33f)
         {
             HexagonCellPrototype[] newNeighborsBySide = new HexagonCellPrototype[6];
@@ -202,6 +218,129 @@ namespace WFCSystem
 
         #region Static Methods
 
+        public static Dictionary<int, List<HexagonCellPrototype>> GetRandomCellClusters(List<HexagonCellPrototype> allPrototypesOfBaseLayer, float maxRadius, int maxCells = 7, int maxClusters = 3, bool allowClusterNeighbors = false)
+        {
+            Dictionary<int, List<HexagonCellPrototype>> clusters = new Dictionary<int, List<HexagonCellPrototype>>();
+            List<HexagonCellPrototype> available = allPrototypesOfBaseLayer.FindAll(p => p.isPath == false && p.IsGround() && p.HasSideNeighbor());
+
+            int minClusterSize = 2;
+
+            if (available.Count < minClusterSize)
+            {
+                Debug.LogError("Not enough available cells for clusters");
+                return null;
+            }
+
+            int clustersFound = 0;
+            int totalPossibleClusters = available.Count / minClusterSize;
+            int remainingAvailable = totalPossibleClusters;
+
+            for (int i = 0; i < totalPossibleClusters; i++)
+            {
+                if (remainingAvailable < minClusterSize || clustersFound >= maxClusters) break;
+
+                List<HexagonCellPrototype> newCluster = SelectCellsInRadiusOfRandomCell(available, maxRadius);
+                if (newCluster.Count > 0)
+                {
+                    foreach (var item in newCluster)
+                    {
+                        item.clusterId = clustersFound;
+                    }
+                    clusters.Add(clustersFound, newCluster);
+                    clustersFound++;
+
+                    if (allowClusterNeighbors == false)
+                    {
+                        available = available.FindAll(c => !c.neighbors.Any(n => n.clusterId > -1)).Except(newCluster).ToList();
+                    }
+                    else
+                    {
+                        available = available.Except(newCluster).ToList();
+                    }
+
+                    remainingAvailable = available.Count / minClusterSize;
+                }
+            }
+
+            return clusters;
+        }
+
+
+
+        #region Grid Erosion Methods
+
+        public static List<HexagonCellPrototype> GetRandomGridErosion(List<HexagonCellPrototype> allPrototypesOfBaseLayer, float maxRadius, int maxCells, int clumpSets = 5, int clusters = 1)
+        {
+            // List<HexagonCellPrototype> result = SelectCellsInRadiusOfRandomCell(allPrototypesOfBaseLayer, maxRadius);
+            // for (int i = 0; i < clumpSets; i++)
+            // {
+            //     List<HexagonCellPrototype> newClump = SelectCellsInRadiusOfCell(allPrototypesOfBaseLayer, result[UnityEngine.Random.Range(0, result.Count)], maxRadius * 0.9f);
+            //     result.AddRange(newClump.FindAll(c => result.Contains(c) == false));
+            // }
+
+            // if (clusters > 1) maxRadius = ((maxRadius * 1.5f) / (float)clusters);
+
+            List<HexagonCellPrototype> result = new List<HexagonCellPrototype>();
+            List<HexagonCellPrototype> available = new List<HexagonCellPrototype>();
+
+            available.AddRange(allPrototypesOfBaseLayer);
+
+            for (int i = 0; i < clusters; i++)
+            {
+                List<HexagonCellPrototype> newSet = SelectCellsInRadiusOfRandomCell(available, maxRadius);
+                if (newSet.Count > 0)
+                {
+                    result.AddRange(newSet.FindAll(c => result.Contains(c) == false));
+
+                    for (int j = 0; j < clumpSets; j++)
+                    {
+                        List<HexagonCellPrototype> newClump = SelectCellsInRadiusOfCell(available, result[UnityEngine.Random.Range(0, result.Count)], maxRadius * 0.9f);
+                        result.AddRange(newClump.FindAll(c => result.Contains(c) == false));
+                    }
+                    available = available.Except(result).ToList();
+                }
+            }
+
+            foreach (HexagonCellPrototype cell in result)
+            {
+                cell.cellStatus = CellStatus.Remove;
+            }
+
+            return result;
+        }
+
+        public static List<HexagonCellPrototype> SelectCellsInRadiusOfCell(List<HexagonCellPrototype> cells, HexagonCellPrototype centerCell, float radius)
+        {
+            Vector2 centerPos = new Vector2(centerCell.center.x, centerCell.center.z);
+            //Initialize a list to store cells within the radius distance
+            List<HexagonCellPrototype> selectedCells = new List<HexagonCellPrototype>();
+
+            //Iterate through each cell in the input list
+            foreach (HexagonCellPrototype cell in cells)
+            {
+                Vector2 cellPos = new Vector2(cell.center.x, cell.center.z);
+
+                // Check if the distance between the cell and the center cell is within the given radius
+                if (Vector2.Distance(centerPos, cellPos) <= radius)
+                {
+                    //If the distance is within the radius, add the current cell to the list of selected cells
+                    selectedCells.Add(cell);
+                }
+            }
+            //Return the list of selected cells
+            return selectedCells;
+        }
+
+        public static List<HexagonCellPrototype> SelectCellsInRadiusOfRandomCell(List<HexagonCellPrototype> cells, float radius)
+        {
+            //Select a random center cell
+            HexagonCellPrototype centerCell = cells[UnityEngine.Random.Range(0, cells.Count)];
+            return SelectCellsInRadiusOfCell(cells, centerCell, radius);
+        }
+
+        #endregion
+
+
         public static HexagonCellPrototype GetClosestPrototype(List<HexagonCellPrototype> prototypes, Vector3 position)
         {
             HexagonCellPrototype nearest = prototypes[0];
@@ -238,8 +377,80 @@ namespace WFCSystem
             }
             return null;
         }
+        public static HexagonCellPrototype GetTopCellInLayerStack(HexagonCellPrototype prototype)
+        {
+            HexagonCellPrototype currentPrototype = prototype;
+
+            while (currentPrototype.layerNeighbors[1] != null)
+            {
+                currentPrototype = currentPrototype.layerNeighbors[1];
+            }
+            return currentPrototype;
+        }
+
+        public static List<HexagonCellPrototype> GetAllUpperCellsInLayerStack(HexagonCellPrototype prototype)
+        {
+            List<HexagonCellPrototype> upperPrototypes = new List<HexagonCellPrototype>();
+            HexagonCellPrototype currentPrototype = prototype;
+            while (currentPrototype.layerNeighbors[1] != null)
+            {
+                currentPrototype = currentPrototype.layerNeighbors[1];
+                upperPrototypes.Add(currentPrototype);
+            }
+            return upperPrototypes;
+        }
 
         #region Pathing 
+
+        public static bool HasGridHostCellsOnSideNeighborStack(HexagonCellPrototype prototype, int side)
+        {
+            if (prototype.neighborsBySide == null)
+            {
+                Debug.LogError("neighborsBySide not initiated.");
+                return false;
+            }
+
+            HexagonCellPrototype currentPrototype = prototype.neighborsBySide[side];
+
+            if (currentPrototype != null && currentPrototype.IsGridHost())
+            {
+                return true;
+            }
+            else
+            {
+                if (currentPrototype != null && currentPrototype.IsGround() == false)
+                {
+                    currentPrototype = GetGroundLayerNeighbor(currentPrototype);
+
+                    while (currentPrototype != null)
+                    {
+                        if (currentPrototype.IsGridHost()) return true;
+
+                        currentPrototype = currentPrototype.layerNeighbors[1];
+                    }
+                    return false;
+                }
+                else
+                {
+                    HexagonCellPrototype nextLayerUp = prototype;
+                    while (currentPrototype == null && nextLayerUp != null)
+                    {
+                        nextLayerUp = nextLayerUp.layerNeighbors[1];
+                        if (nextLayerUp != null) currentPrototype = nextLayerUp.neighborsBySide[side];
+                    }
+
+                    if (currentPrototype == null) return false;
+
+                    List<HexagonCellPrototype> upperPrototypesOfSide;
+                    upperPrototypesOfSide = GetAllUpperCellsInLayerStack(currentPrototype);
+                    foreach (HexagonCellPrototype item in upperPrototypesOfSide)
+                    {
+                        if (item.IsGridHost()) return true;
+                    }
+                    return false;
+                }
+            }
+        }
 
         public static List<int> GetPathNeighborSides(HexagonCellPrototype prototype)
         {
@@ -393,10 +604,10 @@ namespace WFCSystem
             }
         }
 
-        public static List<HexagonCellPrototype> GenerateRandomPath(List<HexagonCellPrototype> entryPrototypes, List<HexagonCellPrototype> allPrototypes, Vector3 position)
+        public static List<HexagonCellPrototype> GenerateRandomPath(List<HexagonCellPrototype> entryPrototypes, List<HexagonCellPrototype> allPrototypes, Vector3 position, bool ignoreEdgeCells = true)
         {
             HexagonCellPrototype centerPrototype = GetClosestPrototype(allPrototypes, position);
-            List<HexagonCellPrototype> result = FindPath(entryPrototypes[0], centerPrototype, true, false);
+            List<HexagonCellPrototype> result = FindPath(entryPrototypes[0], centerPrototype, ignoreEdgeCells, false);
             List<HexagonCellPrototype> islandOnRamps = allPrototypes.FindAll(c => c.isGroundRamp);
 
             // int paths = 0;
@@ -412,7 +623,9 @@ namespace WFCSystem
             // Debug.Log("GenerateRandomPath - allPrototypes: " + allPrototypes.Count + ", centerPrototype: " + centerPrototype.id);
             foreach (HexagonCellPrototype ramp in islandOnRamps)
             {
-                result.AddRange(HexagonCellPrototype.FindPath(ramp, entryPrototypes[UnityEngine.Random.Range(0, entryPrototypes.Count)], true));
+                List<HexagonCellPrototype> newPathA = FindPath(ramp, entryPrototypes[UnityEngine.Random.Range(0, entryPrototypes.Count)], true);
+                if (newPathA != null) result.AddRange(newPathA);
+
                 ramp.isPath = true;
                 if (result.Contains(ramp) == false) result.Add(ramp);
             }
@@ -987,7 +1200,7 @@ namespace WFCSystem
                         }
                     }
                 }
-                // cellA.SetNeighborsBySide(offset);
+                cellA.SetNeighborsBySide(offset);
             }
         }
 
@@ -1480,22 +1693,19 @@ namespace WFCSystem
             }
         }
 
-        public static Dictionary<int, List<HexagonCellPrototype>> GenerateGridsByLayer(Vector3 centerPos, float radius, int cellSize, int cellLayers, int cellLayerElevation, IHexCell parentCell, int baseLayerOffset = 0, Transform transform = null, bool useCorners = false)
+        public static Dictionary<int, List<HexagonCellPrototype>> GenerateGridsByLayer(Vector3 centerPos, float radius, int cellSize, int cellLayers, int cellLayerElevation, IHexCell parentCell, int baseLayerOffset = 0, Transform transform = null, List<int> useCorners = null, bool useGridErosion = false)
         {
             int startingLayer = 0 + baseLayerOffset;
-            List<HexagonCellPrototype> newCellPrototypes = GenerateHexGrid(centerPos, cellSize, (int)radius, parentCell, transform);
+            List<HexagonCellPrototype> newCellPrototypes = GenerateHexGrid(centerPos, cellSize, (int)radius, parentCell, transform, useCorners);
+
+            if (useGridErosion)
+            {
+                HexagonCellPrototype.GetRandomGridErosion(newCellPrototypes, radius * 0.25f, 32);
+                newCellPrototypes = newCellPrototypes.FindAll(c => c.GetCellStatus() != CellStatus.Remove);
+            }
+
             Dictionary<int, List<HexagonCellPrototype>> newPrototypesByLayer = new Dictionary<int, List<HexagonCellPrototype>>();
             newPrototypesByLayer.Add(startingLayer, newCellPrototypes);
-
-            // // TEMP
-            // if (useCorners && transform != null || parentCell != null)
-            // {
-            //     Transform tran = transform ? transform : parentCell.gameObject.transform;
-            //     Vector3[] corners = HexagonGenerator.GenerateHexagonPoints(tran.position, 12);
-
-            //     List<HexagonCellPrototype> cornerPrototypesByLayer = GeneratePrototypesAtPoints(corners, cellSize, parentCell);
-            //     newPrototypesByLayer[startingLayer].AddRange(cornerPrototypesByLayer);
-            // }
 
             if (cellLayers > 1)
             {
@@ -1592,14 +1802,16 @@ namespace WFCSystem
             }
             return prototypes;
         }
-        public static List<HexagonCellPrototype> GenerateHexGrid(Vector3 center, int size, int radius, IHexCell parentCell = null, Transform transform = null, bool filterOutCorners = true)
+        public static List<HexagonCellPrototype> GenerateHexGrid(Vector3 center, int size, int radius, IHexCell parentCell = null, Transform transform = null, List<int> useCorners = null)
         {
-            Dictionary<HexagonCellPrototype, List<Vector3>> quadrantCenterPoints = new Dictionary<HexagonCellPrototype, List<Vector3>>();
+            // Dictionary<HexagonCellPrototype, List<Vector3>> quadrantCenterPoints = new Dictionary<HexagonCellPrototype, List<Vector3>>();
             List<Vector3> spawnCenters = new List<Vector3>();
             List<Vector3> quatCenterPoints = new List<Vector3>();
             List<int> quadrantSizes = new List<int>();
 
-            if (transform != null) center = transform.TransformVector(center);
+            // if (transform != null) center = transform.TransformVector(center);
+
+            bool filterOutCorners = (useCorners == null || useCorners.Count == 0);
 
             int prevStepSize = radius;
             int currentStepSize = radius;
@@ -1610,21 +1822,25 @@ namespace WFCSystem
                 List<Vector3> newCenterPoints = new List<Vector3>();
                 if (quatCenterPoints.Count == 0)
                 {
-                    newCenterPoints = GenerateHexagonCenterPoints(center, currentStepSize, true, currentStepSize > size);
+                    newCenterPoints = (!filterOutCorners && currentStepSize <= size) ? GenerateHexagonCenterPoints(center, currentStepSize, useCorners, true)
+                        : GenerateHexagonCenterPoints(center, currentStepSize, true, currentStepSize > size);
+                    // newCenterPoints = GenerateHexagonCenterPoints(center, currentStepSize, true, currentStepSize > size);
                 }
                 else
                 {
                     foreach (Vector3 centerPoint in quatCenterPoints)
                     {
                         HexagonCellPrototype quadrantPrototype = new HexagonCellPrototype(centerPoint, prevStepSize);
-                        List<Vector3> points = GenerateHexagonCenterPoints(centerPoint, currentStepSize, true, true);
-                        newCenterPoints.AddRange(points);
-                        // Debug.Log("newCenterPoints: " + newCenterPoints.Count + ", size" + currentStepSize);
+                        // List<Vector3> points = GenerateHexagonCenterPoints(centerPoint, currentStepSize, true, true);
 
-                        quadrantCenterPoints.Add(quadrantPrototype, points);
+                        List<Vector3> points = (!filterOutCorners && currentStepSize <= size) ? GenerateHexagonCenterPoints(centerPoint, currentStepSize, useCorners, true)
+                            : GenerateHexagonCenterPoints(centerPoint, currentStepSize, true, true);
+
+                        newCenterPoints.AddRange(points);
+                        // quadrantCenterPoints.Add(quadrantPrototype, points);
                     }
                 }
-                Debug.Log("newCenterPoints: " + newCenterPoints.Count + ", currentStepSize" + currentStepSize + ", desired size: " + size);
+                Debug.Log("GenerateHexGrid - newCenterPoints: " + newCenterPoints.Count + ", currentStepSize: " + currentStepSize + ", desired size: " + size);
 
                 prevStepSize = currentStepSize;
 
@@ -1641,57 +1857,23 @@ namespace WFCSystem
                 }
             }
 
-            // int targetSize = radius;
-            // int prevTargetSize;
-            // bool done = false;
-
-            // while (!done)
-            // {
-            //     int quadrantSize = (targetSize / 3);
-            //     if (size > quadrantSize)
-            //     {
-            //         done = true;
-            //     }
-            //     else
-            //     {
-            //         prevTargetSize = targetSize;
-            //         targetSize = quadrantSize;
-            //         quadrantSizes.Add(quadrantSize);
-
-            //         List<Vector3> newCenterPoints = new List<Vector3>();
-            //         if (quatCenterPoints.Count == 0)
-            //         {
-            //             newCenterPoints = GenerateHexagonCenterPoints(center, quadrantSize);
-            //             quatCenterPoints.AddRange(newCenterPoints);
-            //         }
-            //         else
-            //         {
-            //             Debug.Log("Quadrants of size " + prevTargetSize + ": " + quatCenterPoints.Count);
-
-            //             foreach (Vector3 centerPoint in quatCenterPoints)
-            //             {
-            //                 HexagonCellPrototype quadrantPrototype = new HexagonCellPrototype(centerPoint, prevTargetSize);
-
-            //                 List<Vector3> points = GenerateHexagonCenterPoints(centerPoint, quadrantSize);
-            //                 quadrantCenterPoints.Add(quadrantPrototype, points);
-            //                 newCenterPoints.AddRange(points);
-            //             }
-            //             quatCenterPoints = newCenterPoints;
-            //         }
-            //     }
-            // }
-
             List<HexagonCellPrototype> results = new List<HexagonCellPrototype>();
             Vector2 baseCenterPosXZ = new Vector2(center.x, center.z);
+
+            Debug.Log("GenerateHexGrid - spawnCenters: " + spawnCenters.Count + ", size: " + size + ", filterOutCorners: " + filterOutCorners);
 
             int skipped = 0;
             for (int i = 0; i < spawnCenters.Count; i++)
             {
-                Vector3 centerPoint = transform != null ? transform.TransformVector(spawnCenters[i]) : spawnCenters[i];
+                Vector3 centerPoint = spawnCenters[i];
+                // Vector3 centerPoint = transform != null ? transform.TransformVector(spawnCenters[i]) : spawnCenters[i];
 
                 // Filter out duplicate points & out of bounds
                 float distance = Vector2.Distance(new Vector2(centerPoint.x, centerPoint.z), baseCenterPosXZ);
-                if (distance < radius)
+
+                Debug.Log("GenerateHexGrid - centerPoint: " + centerPoint + ", size: " + size + ", distance: " + distance);
+
+                if (filterOutCorners == false || (filterOutCorners && distance < radius))
                 {
                     bool skip = false;
                     foreach (HexagonCellPrototype item in results)
@@ -1708,8 +1890,14 @@ namespace WFCSystem
                 }
             }
 
-            HexagonCellPrototype parentHex = new HexagonCellPrototype(center, radius);
-            results = GetPrototypesWithinHexagon(results, center, radius, parentHex.GetEdgePoints());
+            Debug.Log("GenerateHexGrid - 01 results: " + results.Count + ", size: " + size);
+
+            if (filterOutCorners)
+            {
+                HexagonCellPrototype parentHex = new HexagonCellPrototype(center, radius);
+                results = GetPrototypesWithinHexagon(results, center, radius, parentHex.GetEdgePoints());
+            }
+
             if (parentCell != null)
             {
                 Debug.Log("GenerateHexGrid - results: " + results.Count + ", size: " + size + ", parentCell: " + parentCell.GetId());
@@ -1729,7 +1917,7 @@ namespace WFCSystem
             }
             else
             {
-                Debug.Log("GenerateHexGrid - results: " + results.Count + ", size: " + size);
+                Debug.Log("GenerateHexGrid - 02 results: " + results.Count + ", size: " + size);
                 if (skipped > 0) Debug.LogError("Skipped: " + skipped + ", size: " + size);
 
                 if (size == 12)
@@ -1741,6 +1929,47 @@ namespace WFCSystem
                 }
             }
 
+            return results;
+        }
+
+        public static List<Vector3> GenerateHexagonCenterPoints(Vector3 center, int size, List<int> useCorners, bool addStartingCenter = true)
+        {
+            HexagonCellPrototype centerHex = new HexagonCellPrototype(center, size);
+            List<Vector3> results = new List<Vector3>();
+            if (addStartingCenter) results.Add(center);
+
+            for (int i = 0; i < 6; i++)
+            {
+                // Get Side
+                Vector3 sidePoint = Vector3.Lerp(centerHex.cornerPoints[i], centerHex.cornerPoints[(i + 1) % 6], 0.5f);
+                Vector3 direction = (sidePoint - center).normalized;
+                float edgeDistance = Vector2.Distance(new Vector2(sidePoint.x, sidePoint.z), new Vector2(center.x, center.z));
+
+                sidePoint = center + direction * (edgeDistance * 2f);
+                results.Add(sidePoint);
+
+                if (useCorners != null)
+                {
+                    int currentSide = (i + 5) % 6;
+                    (HexagonCorner cornerA, HexagonCorner cornerB) = HexagonCell.GetCornersFromSide((HexagonSide)currentSide);
+                    if (useCorners.Contains((int)cornerA) || useCorners.Contains((int)cornerB))
+                    {
+                        for (int cornerIX = 0; cornerIX < 2; cornerIX++)
+                        {
+                            float angle = 60f * (i + cornerIX);
+                            float x = center.x + size * Mathf.Cos(Mathf.Deg2Rad * angle);
+                            float z = center.z + size * Mathf.Sin(Mathf.Deg2Rad * angle);
+
+                            Vector3 cornerPoint = new Vector3(x, center.y, z);
+                            direction = (cornerPoint - center).normalized;
+                            edgeDistance = Vector2.Distance(new Vector2(cornerPoint.x, cornerPoint.z), new Vector2(center.x, center.z));
+
+                            cornerPoint = center + direction * (edgeDistance * 3f);
+                            results.Add(cornerPoint);
+                        }
+                    }
+                }
+            }
             return results;
         }
 
@@ -1873,21 +2102,11 @@ namespace WFCSystem
             List<HexagonCellPrototype> newPrototypes = new List<HexagonCellPrototype>();
             foreach (var prototype in prototypes)
             {
-
+                if (prototype.GetCellStatus() == CellStatus.Remove) continue;
 
                 Vector3 newCenterPos = new Vector3(prototype.center.x, prototype.center.y + layerElevation, prototype.center.z);
                 HexagonCellPrototype newPrototype = new HexagonCellPrototype(newCenterPos, prototype.size, parentCell, "", layer);
 
-                // HexagonCellPrototype newPrototype = new HexagonCellPrototype(
-                //     new Vector3(prototype.center.x, prototype.center.y + layerElevation, prototype.center.z),
-                //     prototype.cornerPoints.Select(c => new Vector3(c.x, c.y + layerElevation, c.z)).ToArray(),
-                //     prototype.size
-                // );
-                // newPrototype.id = prototype.id + layer;
-                // newPrototype.parentId = prototype.parentId;
-                // newPrototype.name = "Cell_Prototype-" + prototype.id + "-L" + layer;
-
-                // newPrototype.layer = layer;
                 newPrototype.bottomNeighborId = prototype.id;
 
                 // Set layer neighbors
@@ -1898,46 +2117,44 @@ namespace WFCSystem
                 if (prototype.neighbors.Contains(newPrototype) == false) prototype.neighbors.Add(newPrototype);
 
                 // Debug.Log("newPrototype - size: " + newPrototype.size + ", neighbors: " + newPrototype.neighbors.Count);
-
                 newPrototypes.Add(newPrototype);
             }
             return newPrototypes;
         }
 
-        public static List<HexagonCellPrototype> GenerateGridWithinRadius(Vector3 position, float radius, int hexagonSize, float adjusterMult = 1.734f, string appendToId = "")
-        {
-            float bottomCornerX = position.x - (radius * 0.9f);
-            float bottomCornerZ = position.z - (radius * 0.9f);
-            Vector3 bottomCorner = new Vector3(bottomCornerX, position.y, bottomCornerZ);
+        // public static List<HexagonCellPrototype> GenerateGridWithinRadius(Vector3 position, float radius, int hexagonSize, float adjusterMult = 1.734f, string appendToId = "")
+        // {
+        //     float bottomCornerX = position.x - (radius * 0.9f);
+        //     float bottomCornerZ = position.z - (radius * 0.9f);
+        //     Vector3 bottomCorner = new Vector3(bottomCornerX, position.y, bottomCornerZ);
 
-            int numHexagons = (int)((radius * 2.2f) / (hexagonSize * 1.5f));
-            float numRowsf = ((radius * 2f) / (hexagonSize * adjusterMult));
-            int numRows = Mathf.CeilToInt(numRowsf);
-            List<HexagonCellPrototype> newPrototypes = GenerateGrid(hexagonSize, numHexagons, numRows, bottomCorner, adjusterMult, appendToId);
-            // List<HexagonCellPrototype> newPrototypes = GenerateGrid_MT(hexagonSize, numHexagons, numRows, bottomCorner, adjusterMult, appendToId);
-            return newPrototypes;
-        }
+        //     int numHexagons = (int)((radius * 2.2f) / (hexagonSize * 1.5f));
+        //     float numRowsf = ((radius * 2f) / (hexagonSize * adjusterMult));
+        //     int numRows = Mathf.CeilToInt(numRowsf);
+        //     List<HexagonCellPrototype> newPrototypes = GenerateGrid(hexagonSize, numHexagons, numRows, bottomCorner, adjusterMult, appendToId);
+        //     // List<HexagonCellPrototype> newPrototypes = GenerateGrid_MT(hexagonSize, numHexagons, numRows, bottomCorner, adjusterMult, appendToId);
+        //     return newPrototypes;
+        // }
 
-        public static List<HexagonCellPrototype> GenerateGridWithinRadius(Vector3 position, float radius, int hexagonSize, HexagonCell parentCell, float adjusterMult = 1.734f, string appendToId = "")
-        {
-            float bottomCornerX = position.x - (radius * 0.9f);
-            float bottomCornerZ = position.z - (radius * 0.9f);
-            Vector3 bottomCorner = new Vector3(bottomCornerX, position.y, bottomCornerZ);
+        // public static List<HexagonCellPrototype> GenerateGridWithinRadius(Vector3 position, float radius, int hexagonSize, HexagonCell parentCell, float adjusterMult = 1.734f, string appendToId = "")
+        // {
+        //     float bottomCornerX = position.x - (radius * 0.9f);
+        //     float bottomCornerZ = position.z - (radius * 0.9f);
+        //     Vector3 bottomCorner = new Vector3(bottomCornerX, position.y, bottomCornerZ);
 
-            int numHexagons = (int)((radius * 2.2f) / (hexagonSize * 1.5f));
-            float numRowsf = ((radius * 2f) / (hexagonSize * adjusterMult));
-            int numRows = Mathf.CeilToInt(numRowsf);
-            List<HexagonCellPrototype> newPrototypes = GenerateGrid(hexagonSize, numHexagons, numRows, bottomCorner, adjusterMult, appendToId, parentCell);
-            // List<HexagonCellPrototype> newPrototypes = GenerateGrid_MT(hexagonSize, numHexagons, numRows, bottomCorner, adjusterMult, appendToId, parentCell);
-            return newPrototypes;
-        }
-
-
+        //     int numHexagons = (int)((radius * 2.2f) / (hexagonSize * 1.5f));
+        //     float numRowsf = ((radius * 2f) / (hexagonSize * adjusterMult));
+        //     int numRows = Mathf.CeilToInt(numRowsf);
+        //     List<HexagonCellPrototype> newPrototypes = GenerateGrid(hexagonSize, numHexagons, numRows, bottomCorner, adjusterMult, appendToId, parentCell);
+        //     // List<HexagonCellPrototype> newPrototypes = GenerateGrid_MT(hexagonSize, numHexagons, numRows, bottomCorner, adjusterMult, appendToId, parentCell);
+        //     return newPrototypes;
+        // }
 
         public static List<HexagonCellPrototype> GetPrototypesWithinHexagon(List<HexagonCellPrototype> prototypes, Vector3 position, float radius, List<Vector3> hexEdgePoints)
         {
             List<HexagonCellPrototype> prototypesWithinRadius = new List<HexagonCellPrototype>();
             Vector2 posXZ = new Vector2(position.x, position.z);
+            int skipped = 0;
             foreach (HexagonCellPrototype prototype in prototypes)
             {
                 bool isWithinRadius = true;
@@ -1947,10 +2164,15 @@ namespace WFCSystem
                     if (distance < radius * 0.95f) continue;
 
                     isWithinRadius = IsPositionWithinPolygon(hexEdgePoints, cornerPoint);
-                    if (!isWithinRadius) break;
+                    if (!isWithinRadius)
+                    {
+                        skipped++;
+                        break;
+                    }
                 }
                 if (isWithinRadius) prototypesWithinRadius.Add(prototype);
             }
+            if (skipped > 0) Debug.LogError("GetPrototypesWithinHexagon - filtered: " + skipped + " prototypes. Outside radius: " + radius);
             return prototypesWithinRadius;
         }
 
@@ -2047,12 +2269,12 @@ namespace WFCSystem
                 if (filterType != GridFilter_Type.None)
                 {
                     bool show = false;
-                    // float rad = 4f;
-                    // Gizmos.color = Color.black;
+                    float rad = (item.size / 3f);
 
                     if ((showAll || filterType == GridFilter_Type.Entrance) && item.isEntry)
                     {
                         Gizmos.color = purple;
+                        rad = 7f;
                         show = true;
                     }
                     else if ((showAll || filterType == GridFilter_Type.Edge) && item.isEdge) // item._edgeCellType > 0)
@@ -2070,8 +2292,37 @@ namespace WFCSystem
                         Gizmos.color = brown;
                         show = true;
                     }
-                    if (showAll || show) Gizmos.DrawSphere(item.center, item.size == 4 ? 2f : (item.size / 3f));
+                    else if ((showAll || filterType == GridFilter_Type.Cluster) && item.clusterId > -1)
+                    {
+                        rad = 5.5f;
+                        if (item.clusterId == 1)
+                        {
+                            Gizmos.color = purple;
+                        }
+                        else
+                        {
+                            float hue = (float)item.clusterId / 10;
+                            Gizmos.color = Color.HSVToRGB(hue, 1f, 1f);
+                        }
 
+                        show = true;
+                    }
+                    if (showAll || show) Gizmos.DrawSphere(item.center, item.size == 4 ? 2f : rad);
+
+
+                    // if (item.clusterId > -1 && item.isPath == false)
+                    // {
+                    //     if (item.clusterId == 1)
+                    //     {
+                    //         Gizmos.color = purple;
+                    //     }
+                    //     else
+                    //     {
+                    //         float hue = (float)item.clusterId / 10;
+                    //         Gizmos.color = Color.HSVToRGB(hue, 1f, 1f);
+                    //     }
+                    //     Gizmos.DrawSphere(item.center, 4.5f);
+                    // }
                     // if (item.neighbors.Count > 0)
                     // {
                     //     Gizmos.color = Color.green;
