@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -17,6 +18,8 @@ namespace ProceduralBase
     [ExecuteInEditMode]
     public class WorldArea : MonoBehaviour
     {
+        [SerializeField] private bool enableEditMode = true;
+
         [SerializeField] private HexagonCellManager cellManager;
         [SerializeField] private HexagonCellManager cellPathMicroGridManager;
         [SerializeField] private HexagonTileCore tilePrefabs_MicroClusterParent;
@@ -29,7 +32,7 @@ namespace ProceduralBase
         [SerializeField] private FastNoiseUnity fastNoiseUnity;
         [SerializeField] private NavMeshSurface navMeshSurface;
         [SerializeField] private MapDisplay mapDisplay;
-        public List<Location> locations;
+
         [Header("Settings")]
         [Range(12, 296)] public int areaSize = 72;
 
@@ -47,14 +50,18 @@ namespace ProceduralBase
         [Range(1f, 3f)][SerializeField] private float blendRadiusMult = 1.6f;
         [Range(0.05f, 1.5f)][SerializeField] private float groundSlopeElevationStep = 0.45f;
 
+        [Range(1f, 6f)][SerializeField] float cellVertexSearchRadiusMult = 1.4f;
+        [Range(3f, 108f)][SerializeField] float gridEdgeSmoothingRadius = 48;
+        [Range(0, 1f)][SerializeField] float smoothingFactor = 1f;
+        [Range(0f, 100f)][SerializeField] float smoothingSigma = 0.5f;
+
         [SerializeField] private TerrainType[] terrainTypes;
         [SerializeField] private TerrainType[] pathTypes;
-        // [Header(" ")]
-        // [SerializeField] private bool resetPrototypes;
 
         [Header("Generate")]
         [SerializeField] private bool updateTerrainTexture;
         [SerializeField] private bool generateTerrain;
+        [SerializeField] private bool generatePlacedObjects;
         // [SerializeField] private bool generateNavmesh;
 
         [Header("Vertex Settings")]
@@ -62,6 +69,10 @@ namespace ProceduralBase
         [Range(1f, 10f)][SerializeField] private float stepSize = 3f;
         public TerrainVertex[,] vertexGrid { get; private set; }
         private List<TerrainVertex> accessibleVertices;
+
+        [Header("Procedual Placement Settings")]
+        [Range(0.01f, 1f)][SerializeField] private float placement_density = 0.75f;
+        [SerializeField] private GameObject placeObjectPrefab;
 
         #region Saved State
         Vector3 _position;
@@ -71,6 +82,11 @@ namespace ProceduralBase
         float _fastNoise_Seed;
         private bool _editorUpdate;
         private bool _doOnce;
+
+        float _gridEdgeSmoothingRadius;
+        float _smoothingFactor;
+        float _smoothingSigma;
+
         #endregion
         private Mesh mesh;
 
@@ -81,6 +97,8 @@ namespace ProceduralBase
 
         [Header("World Space Data")]
         [SerializeField] private List<Transform> entranceMarkers;
+        [SerializeField] private List<LocationData> locationData;
+        [SerializeField] private int locations = 0;
 
         private void InitialSetup()
         {
@@ -89,17 +107,22 @@ namespace ProceduralBase
             fastNoiseUnity = GetComponent<FastNoiseUnity>();
 
             cellManager = GetComponent<HexagonCellManager>();
-            locations = GetComponentsInChildren<Location>().ToList();
             navMeshSurface = GetComponent<NavMeshSurface>();
             mapDisplay = GetComponent<MapDisplay>();
 
             wfc = GetComponent<IWFCSystem>();
+
+            if (!enableEditMode) return;
+
             if (wfc == null) Debug.LogError("Missing WFC system component!");
 
-            if (!mesh)
+
+            if (!mesh || !meshFilter.sharedMesh)
             {
                 mesh = new Mesh();
                 mesh.name = "Procedural Terrain";
+                meshFilter.sharedMesh = mesh;
+                meshCollider.sharedMesh = mesh;
             }
         }
 
@@ -115,7 +138,7 @@ namespace ProceduralBase
             if (resetVertexGrid) ResetVertexGrid();
 
             // Setup Cells
-            cellManager.GenerateGridsByLayer();
+            cellManager.GeneratePrototypeGridsByLayer();
             SetupCellPrototypes(true);
 
             if (cellManager.cellPrototypesByLayer_V2 != null)
@@ -127,7 +150,6 @@ namespace ProceduralBase
                 Debug.LogError("EMPTY cellPrototypesByLayer_V2!");
             }
 
-            // (Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells) = cellManager.GetCells();
             (
                 Dictionary<int, List<HexagonCell>> _allCellsByLayer,
                 List<HexagonCell> _allCells, Dictionary<HexagonCellCluster,
@@ -137,7 +159,6 @@ namespace ProceduralBase
             // Add cells to WFC
             wfc.SetRadius(cellManager.radius);
             wfc.SetCells(_allCellsByLayer, _allCells, _allCellsByLayer_X4_ByCluster);
-            // wfc.SetCells(_allCellsByLayer, _allCells);
 
             // Run WFC
             wfc.ExecuteWFC();
@@ -177,24 +198,51 @@ namespace ProceduralBase
             HexagonCellPrototype.GroundPrototypesToTerrainVertexElevation(cellManager.cellPrototypesByLayer_V2, vertexGrid);
             HexagonCellPrototype.CleanupCellIslandLayerPrototypes(cellManager.cellPrototypesByLayer_V2, 3);
 
-            HexagonCellPrototype.AssignTerrainVerticesToGroundPrototypes(cellManager.cellPrototypesByLayer_V2, vertexGrid);
+            HexagonCellPrototype.AssignTerrainVerticesToGroundPrototypes(cellManager.cellPrototypesByLayer_V2, vertexGrid, cellVertexSearchRadiusMult);
             HexagonCellPrototype.CleanupCellIslandLayerPrototypes(cellManager.cellPrototypesByLayer_V2, 3);
 
             HexagonCellPrototype.AssignRampsForIslandLayerPrototypes(cellManager.cellPrototypesByLayer_V2, vertexGrid, 4, groundSlopeElevationStep);
 
             (List<HexagonCellPrototype> path, List<HexagonCellPrototype> entry) = cellManager.GeneratePrototypeGridEntryAndPaths();
-            // foreach (var item in path)
-            // {
-            //     Debug.Log("paths - X12, path - id: " + item.id + ", uid: " + item.uid);
-            // }
             // cellManager.GenerateMicroGridFromHosts(path, 4, 3);
             cellManager.GenerateMicroGridFromClusters();
+
+            if (cellManager.GetGridPreset() == GridPreset.Outpost)
+            {
+                HexagonCellPrototype.CleanupCellIslandLayerPrototypes(cellManager.cellPrototypesByLayer_V2, 3);
+
+                List<HexagonCellPrototype> unused = cellManager.RemoveUnusedPrototypes();
+
+                HexagonCellPrototype.UnassignCellVertices(unused, vertexGrid);
+
+                HexagonCellPrototype.AssignTerrainVerticesToGroundPrototypes(cellManager.cellPrototypesByLayer_V2, vertexGrid, cellVertexSearchRadiusMult);
+
+
+                List<HexagonCellCluster> clusters = cellManager.GetPrototypeClustersOfType(CellClusterType.Outpost);
+                locationData = LocationData.GenerateLocationDataFromClusters(clusters, LocationType.Outpost);
+                locations = locationData.Count;
+            }
 
             HexagonCellPrototype.AssignPathCenterVertices(path, vertexGrid);
 
             HexagonCellPrototype.SmoothVertexElevationAlongPath(path, vertexGrid);
 
-            HexagonCellPrototype.SmoothElevationAlongPathNeighbors(path, vertexGrid);
+            HexagonCellPrototype.GetGridEdgeVertexIndices(
+                cellManager.GetAllPrototypesOfCellStatus(CellStatus.Ground).FindAll(p => p.isEdge && p.IsRemoved() == false),
+                vertexGrid, gridEdgeSmoothingRadius);
+
+            HexagonCellPrototype.SmoothGridEdgeVertexIndices(
+                cellManager.GetAllPrototypesOfCellStatus(CellStatus.Ground).FindAll(p => p.isEdge && p.IsRemoved() == false),
+                vertexGrid, cellVertexSearchRadiusMult, gridEdgeSmoothingRadius, smoothingFactor, smoothingSigma);
+
+            // HexagonCellPrototype.GetGridEdgeVertexIndices(
+            //     HexagonCellPrototype.GetEdgeCornersOfEdgePrototypes(
+            //         cellManager.GetAllPrototypesOfCellStatus(CellStatus.Ground).FindAll(p => p.isEdge && p.IsRemoved() == false)
+            //     ),
+            //     vertexGrid
+            // );
+
+            // HexagonCellPrototype.SmoothElevationAlongPathNeighbors(path, vertexGrid);
 
             if (updateGroundMesh)
             {
@@ -263,14 +311,13 @@ namespace ProceduralBase
             _editorUpdate = true;
 
             bool shouldUpdate = false;
-
-            Debug.Log("WorldArea - OnValidate");
-
+            // Debug.Log("WorldArea - OnValidate");
 
             if (bSaveMesh)
             {
                 bSaveMesh = false;
-                if (mesh != null) SaveMeshAsset(mesh, "New World Area Mesh");
+                if (mesh != null) SaveMesh();
+                //  SaveMeshAsset(mesh, "New World Area Mesh");
             }
 
             if (_fastNoise_Seed != fastNoiseUnity.fastNoise.GetSeed())
@@ -316,11 +363,42 @@ namespace ProceduralBase
 
             if (generateAll && useTerrainGenerator == false) Generate(Application.isPlaying == false);
 
+
+            if (_gridEdgeSmoothingRadius != gridEdgeSmoothingRadius ||
+                _smoothingFactor != smoothingFactor ||
+                _smoothingSigma != smoothingSigma)
+            {
+                _smoothingFactor = smoothingFactor;
+                _smoothingSigma = smoothingSigma;
+                _gridEdgeSmoothingRadius = gridEdgeSmoothingRadius;
+
+                if (cellManager.cellPrototypesByLayer_V2 != null)
+                {
+
+                    HexagonCellPrototype.SmoothGridEdgeVertexIndices(
+                        cellManager.GetAllPrototypesOfCellStatus(CellStatus.Ground).FindAll(p => p.isEdge && p.IsRemoved() == false),
+                        vertexGrid, cellVertexSearchRadiusMult, gridEdgeSmoothingRadius, smoothingFactor, smoothingSigma);
+
+                    GenerateTerrainMesh();
+                    debug_vertexRemapDoOnce = true;
+                }
+            }
+
             if (updateTerrainTexture)
             {
                 updateTerrainTexture = false;
 
                 UpdateTerrainTexture();
+            }
+
+            if (generatePlacedObjects)
+            {
+                generatePlacedObjects = false;
+
+                if (placeObjectPrefab != null)
+                {
+                    PlaceObjects(vertexGrid, placeObjectPrefab, placement_density, fastNoiseUnity.fastNoise);
+                }
             }
             // if (generateNavmesh)
             // {
@@ -336,9 +414,9 @@ namespace ProceduralBase
         {
             if (Application.isPlaying) return;
 
-            // if (_position != transform.position) OnValidate();
+            if (!enableEditMode) return;
 
-            if (!useTerrainGenerator || !enableTerrainEditMode) return;
+            if (!useTerrainGenerator || !enableTerrainEditMode || !enableEditMode) return;
 
             if (!_editorUpdate && timer > 0f)
             {
@@ -366,6 +444,8 @@ namespace ProceduralBase
         {
             if (Application.isPlaying == false) return;
 
+            if (!enableEditMode) return;
+
             InitialSetup();
 
             _doOnce = false;
@@ -387,7 +467,91 @@ namespace ProceduralBase
             AssetDatabase.CreateAsset(lastSavedMesh, "Assets/Terrain/" + assetName + ".asset");
             AssetDatabase.SaveAssets();
         }
+
+        public void SaveMesh()
+        {
+            if (meshFilter == null || meshFilter.sharedMesh == null)
+            {
+                Debug.LogError("No mesh found to save.");
+                return;
+            }
+
+            // Get current date and time
+            DateTime now = DateTime.Now;
+            // Append time to mesh name
+            string meshName = "New_Worldspace_Mesh_" + now.ToString("yyyyMMdd_HHmmss");
+
+            string path = EditorUtility.SaveFilePanel("Save Mesh", "Assets/Terrain/", meshName, "asset");
+
+            if (string.IsNullOrEmpty(path))
+                return;
+
+            // Make sure the path is relative to the project folder
+            path = FileUtil.GetProjectRelativePath(path);
+
+            // Clone the mesh to prevent modifying the original mesh
+            Mesh meshToSave = Mesh.Instantiate(meshFilter.sharedMesh);
+            lastSavedMesh = meshToSave;
+
+            // Optimize the mesh to reduce its size
+            MeshUtility.Optimize(meshToSave);
+
+            // Save the mesh asset to the project folder
+            AssetDatabase.CreateAsset(meshToSave, path);
+
+
+            if (Application.isPlaying)
+            {
+                enableTerrainEditMode = false;
+
+                if (enableTerrainEditMode)
+                {
+
+                }
+            }
+
+
+            Debug.Log("Mesh saved to " + path);
+        }
+
         #endregion
+
+        #region Procedural Placement
+
+
+        public static void PlaceObjects(TerrainVertex[,] vertexGrid, GameObject prefab, float density, FastNoise fastNoise)
+        {
+            if (vertexGrid != null)
+            {
+                Transform parent = new GameObject("PlacedObjects").transform;
+
+                for (int x = 0; x < vertexGrid.GetLength(0); x++)
+                {
+                    for (int z = 0; z < vertexGrid.GetLength(1); z++)
+                    {
+                        if (vertexGrid[x, z].isOnTheEdgeOftheGrid == false && (vertexGrid[x, z].type == VertexType.Generic || vertexGrid[x, z].type == VertexType.Unset))
+                        {
+                            float noiseValue = (float)fastNoise.GetNoise(x, z);
+
+                            if (noiseValue > 1 - density)
+                            {
+                                Vector3 pos = vertexGrid[x, z].position;
+                                pos.y -= 0.2f;
+
+                                GameObject go = Instantiate(prefab, pos, Quaternion.identity);
+                                go.transform.SetParent(parent);
+                                // vertexGrid[x, z].position = transform.TransformPoint(vertexGrid[x, z].position);
+                            }
+                        }
+
+                    }
+                }
+            }
+        }
+
+
+        #endregion
+
 
 
         #region Terrain Generation
@@ -399,7 +563,7 @@ namespace ProceduralBase
 
         public void RefreshTerrainMesh()
         {
-            mesh = meshFilter.mesh;
+            mesh = meshFilter.sharedMesh;
             // Recalculate the normals to ensure proper lighting
             mesh.RecalculateNormals();
             // Apply the mesh data to the MeshFilter component
@@ -409,7 +573,7 @@ namespace ProceduralBase
         public void GenerateTerrainMesh()
         {
             Vector3[] vertexPositions = UpdateVertexElevations().ToArray();
-            Debug.Log("GenerateMesh, vertexPositions: " + vertexPositions.Length);
+            // Debug.Log("GenerateMesh, vertexPositions: " + vertexPositions.Length);
 
             mesh.Clear();
             mesh.vertices = vertexPositions;
@@ -436,10 +600,12 @@ namespace ProceduralBase
                 {
                     for (int z = 0; z < vertexGrid.GetLength(1); z++)
                     {
-                        if (vertexGrid[x, z].type == VertexType.Generic || vertexGrid[x, z].type == VertexType.Unset)
+                        if (vertexGrid[x, z].isOnTheEdgeOftheGrid == false && (vertexGrid[x, z].type == VertexType.Generic || vertexGrid[x, z].type == VertexType.Unset))
                         {
-                            vertexGrid[x, z].position.y = CalculateNoiseHeightForVertex(x, z, terrainHeight, noiseType, fastNoiseUnity.fastNoise, persistence, octaves, noiseScale, lacunarity);
+                            float baseNoiseHeight = CalculateNoiseHeightForVertex(x, z, terrainHeight, noiseType, fastNoiseUnity.fastNoise, persistence, octaves, noiseScale, lacunarity);
+                            vertexGrid[x, z].position.y = baseNoiseHeight;
                             vertexGrid[x, z].position = transform.TransformPoint(vertexGrid[x, z].position);
+                            vertexGrid[x, z].baseNoiseHeight = vertexGrid[x, z].position.y;
                             newAccessibleVertices.Add(vertexGrid[x, z]);
                         }
 
@@ -705,11 +871,13 @@ namespace ProceduralBase
         [Header("Debug Settings")]
         [SerializeField] private ShowVertexState debug_showVertices;
         [SerializeField] private bool debug_showPrototypes;
+        [SerializeField] private bool debug_showLocations;
+
         [SerializeField] private bool debug_showBounds;
         [SerializeField] private bool debug_showBlendRadius;
         [SerializeField] private bool debug_editorUpdateTerrainOnce;
         [SerializeField] private bool debug_vertexRemapDoOnce;
-        public enum ShowVertexState { None, All, Path, Terrain, Cell, CellCenter, CellCorner, CellRamp }
+        public enum ShowVertexState { None, All, Path, Terrain, Cell, CellCenter, CellCorner, CellRamp, GridEdge }
 
         private void OnDrawGizmos()
         {
@@ -725,6 +893,35 @@ namespace ProceduralBase
                 Gizmos.color = Color.red;
                 float radius = cellManager.radius * blendRadiusMult;
                 Gizmos.DrawWireSphere(transform.position, radius);
+            }
+
+            if (debug_showLocations)
+            {
+
+                if (locationData != null && locationData.Count > 0)
+                {
+                    for (int i = 0; i < locationData.Count; i++)
+                    {
+                        LocationData loc = locationData[i];
+
+                        if (loc.locationType == LocationType.Outpost)
+                        {
+                            Gizmos.color = Color.yellow;
+                            float radius = loc.radius;
+                            Gizmos.DrawSphere(loc.centerPosition, 8);
+                            Gizmos.DrawWireSphere(loc.centerPosition, radius);
+
+                            float hue = (float)i / locationData.Count;
+                            Gizmos.color = Color.HSVToRGB(hue, 1f, 1f);
+
+                            foreach (var item in loc.cluster.prototypes)
+                            {
+                                Gizmos.DrawSphere(item.center, 6);
+                            }
+                        }
+                    }
+
+                }
             }
 
             if (debug_showVertices != ShowVertexState.None)
@@ -775,6 +972,12 @@ namespace ProceduralBase
                                 show = currentVertex.isCellCornerPoint;
                                 Gizmos.color = Color.red;
                                 rad = 0.6f;
+                            }
+                            else if (debug_showVertices == ShowVertexState.GridEdge)
+                            {
+                                show = currentVertex.isOnTheEdgeOftheGrid;
+                                Gizmos.color = Color.green;
+                                rad = 0.7f;
                             }
 
                             Vector3 worldPosition = currentVertex.position;

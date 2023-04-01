@@ -10,26 +10,77 @@ namespace WFCSystem
     public class HexagonCellCluster
     {
         public CellClusterType clusterType; // { get; private set; }
-
         public List<HexagonCellPrototype> prototypes { get; private set; }
         public Dictionary<int, List<HexagonCellPrototype>> prototypesByLayer_X4;
         public Dictionary<int, List<HexagonCell>> cellsByLayer;
+        public Vector3 centerPosition { get; private set; }
+        public List<Vector3> boundsCenterPoints;
+        public float radius { get; private set; }
+
+        public void CalculateCenter()
+        {
+            List<Vector3> prototypePositions = new List<Vector3>();
+            foreach (HexagonCellPrototype prototype in prototypes)
+            {
+                prototypePositions.AddRange(prototype.sidePoints);
+                prototypePositions.AddRange(prototype.cornerPoints);
+                prototypePositions.Add(prototype.center);
+            }
+            if (prototypePositions.Count == 0) return;
+            centerPosition = FindClosestPoint(prototypePositions.ToArray());
+        }
+
         public HexagonCellCluster(int id, List<HexagonCellPrototype> prototypes, CellClusterType clusterType)
         {
             this.id = id;
             this.clusterType = clusterType;
             this.prototypes = prototypes;
 
+            List<Vector3> prototypeCenters = new List<Vector3>();
+            int totalSize = 0;
+
+            //Temp
+            HashSet<string> ids = new HashSet<string>();
+
             foreach (var item in prototypes)
             {
-                item.clusterId = id;
-                item.clusterParent = this;
+                if (ids.Contains(item.uid))
+                {
+                    Debug.LogError("Duplicate uid detected - member: " + item.uid);
+                }
+                else
+                {
+                    item.clusterId = id;
+                    item.clusterParent = this;
+
+                    prototypeCenters.Add(item.center);
+                    totalSize += item.size / 2;
+                    // if (clusterType == CellClusterType.Outpost)    Debug.Log("new " + clusterType + " - id: " + id + ", member: " + item.uid);
+                }
             }
+            this.centerPosition = ProceduralTerrainUtility.GetCenterPosition(prototypeCenters);
+            this.radius = totalSize;
+            this.boundsCenterPoints = prototypeCenters;
+
+            if (clusterType == CellClusterType.Outpost) Debug.Log("new HexagonCellCluster type: " + clusterType + ", members: " + prototypes.Count + ", radius: " + radius);
+
+            CalculateCenter();
 
             //Temp
             cells = new List<HexagonCell>();
         }
+        public List<HexagonCellPrototype> GetClusterEdgeCells()
+        {
+            if (prototypes.Count < 7) return prototypes;
 
+            List<HexagonCellPrototype> edges = new List<HexagonCellPrototype>();
+            foreach (var item in prototypes)
+            {
+                int memberNeignborCount = item.neighbors.FindAll(n => n.clusterId == item.clusterId).Count;
+                if (memberNeignborCount < 6) edges.Add(item);
+            }
+            return edges.OrderByDescending(e => e.neighbors.Count).ToList();
+        }
 
         public List<HexagonCell> cells;
         [SerializeField] private HexagonCell parent;

@@ -13,6 +13,9 @@ namespace ProceduralBase
         public VertexType type;
         public bool isCellCenterPoint;
         public bool isCellCornerPoint;
+        public bool isOnTheEdgeOftheGrid;
         public int corner;
+        public float baseNoiseHeight;
+
     }
 }

@@ -7,24 +7,24 @@ using WFCSystem;
 
 namespace ProceduralBase
 {
-    public enum LocationType
-    {
-        Unset = 0,
-        Outpost,
-        City,
-        Dungeon,
-        Settlement,
-        Town,
-    }
-    public enum LocationDistrictType
-    {
-        Unset = 0,
-        Mixed,
-        Residential,
-        Royal,
-        Business,
-        Military,
-    }
+    // public enum LocationType
+    // {
+    //     Unset = 0,
+    //     Outpost,
+    //     City,
+    //     Dungeon,
+    //     Settlement,
+    //     Town,
+    // }
+    // public enum LocationDistrictType
+    // {
+    //     Unset = 0,
+    //     Mixed,
+    //     Residential,
+    //     Royal,
+    //     Business,
+    //     Military,
+    // }
 
 
     public class Location : MonoBehaviour

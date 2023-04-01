@@ -63,8 +63,10 @@ namespace WFCSystem
         public List<int>[] _vertexIndicesBySide = new List<int>[6] { new List<int>(), new List<int>(), new List<int>(), new List<int>(), new List<int>(), new List<int>() };
         public List<int> rampSlopeSides;
         public CellStatus cellStatus;
+        public bool IsRemoved() => (cellStatus == CellStatus.Remove);
         public bool IsDisposable() => (cellStatus == CellStatus.Remove || cellStatus == CellStatus.UnderGround);
-
+        public bool IsPreAssigned() => (isPath || isGridHost || IsInCluster());
+        public bool IsInCluster() => (clusterId > -1);
         public EdgeCellType _edgeCellType;
         public bool isEdge;
         public bool isEntry;
@@ -160,6 +162,7 @@ namespace WFCSystem
             return allEdgePoints;
         }
         public bool HasSideNeighbor() => neighbors.Any(n => n.GetLayer() == layer);
+        public bool HasGroundNeighbor() => neighbors.Any(n => n.GetLayer() == layer && n.IsGround());
         public void SetNeighborsBySide(float offset = 0.33f)
         {
             HexagonCellPrototype[] newNeighborsBySide = new HexagonCellPrototype[6];
@@ -218,10 +221,10 @@ namespace WFCSystem
 
         #region Static Methods
 
-        public static Dictionary<int, List<HexagonCellPrototype>> GetRandomCellClusters(List<HexagonCellPrototype> allPrototypesOfBaseLayer, float maxRadius, int maxCells = 7, int maxClusters = 3, bool allowClusterNeighbors = false)
+        public static Dictionary<int, List<HexagonCellPrototype>> GetRandomCellClusters(List<HexagonCellPrototype> allPrototypesOfBaseLayer, Vector2 searchRadius_MinMax, int maxClusters = 2, int maxMembers = 7, bool allowClusterNeighbors = false)
         {
             Dictionary<int, List<HexagonCellPrototype>> clusters = new Dictionary<int, List<HexagonCellPrototype>>();
-            List<HexagonCellPrototype> available = allPrototypesOfBaseLayer.FindAll(p => p.isPath == false && p.IsGround() && p.HasSideNeighbor());
+            List<HexagonCellPrototype> available = allPrototypesOfBaseLayer.FindAll(p => p.IsPreAssigned() == false && p.IsGround() && p.HasSideNeighbor());
 
             int minClusterSize = 2;
 
@@ -239,7 +242,15 @@ namespace WFCSystem
             {
                 if (remainingAvailable < minClusterSize || clustersFound >= maxClusters) break;
 
-                List<HexagonCellPrototype> newCluster = SelectCellsInRadiusOfRandomCell(available, maxRadius);
+                int searchRadius = UnityEngine.Random.Range((int)searchRadius_MinMax.x, (int)searchRadius_MinMax.y + 1);
+                int remainder = (searchRadius % 4);
+                if (searchRadius + remainder > (int)searchRadius_MinMax.y)
+                {
+                    searchRadius = (int)searchRadius_MinMax.y;
+                }
+                else searchRadius += remainder;
+
+                List<HexagonCellPrototype> newCluster = SelectCellsInRadiusOfRandomCell(available, searchRadius, maxMembers);
                 if (newCluster.Count > 0)
                 {
                     foreach (var item in newCluster)
@@ -309,11 +320,13 @@ namespace WFCSystem
             return result;
         }
 
-        public static List<HexagonCellPrototype> SelectCellsInRadiusOfCell(List<HexagonCellPrototype> cells, HexagonCellPrototype centerCell, float radius)
+        public static List<HexagonCellPrototype> SelectCellsInRadiusOfCell(List<HexagonCellPrototype> cells, HexagonCellPrototype centerCell, float radius, int maximum = -1)
         {
             Vector2 centerPos = new Vector2(centerCell.center.x, centerCell.center.z);
             //Initialize a list to store cells within the radius distance
             List<HexagonCellPrototype> selectedCells = new List<HexagonCellPrototype>();
+            bool limitToMax = (maximum > 0);
+            int found = 0;
 
             //Iterate through each cell in the input list
             foreach (HexagonCellPrototype cell in cells)
@@ -325,29 +338,31 @@ namespace WFCSystem
                 {
                     //If the distance is within the radius, add the current cell to the list of selected cells
                     selectedCells.Add(cell);
+                    found++;
+                    if (limitToMax && found >= maximum) break;
                 }
             }
             //Return the list of selected cells
             return selectedCells;
         }
 
-        public static List<HexagonCellPrototype> SelectCellsInRadiusOfRandomCell(List<HexagonCellPrototype> cells, float radius)
+        public static List<HexagonCellPrototype> SelectCellsInRadiusOfRandomCell(List<HexagonCellPrototype> cells, float radius, int maximum = -1)
         {
             //Select a random center cell
             HexagonCellPrototype centerCell = cells[UnityEngine.Random.Range(0, cells.Count)];
-            return SelectCellsInRadiusOfCell(cells, centerCell, radius);
+            return SelectCellsInRadiusOfCell(cells, centerCell, radius, maximum);
         }
 
         #endregion
 
 
-        public static HexagonCellPrototype GetClosestPrototype(List<HexagonCellPrototype> prototypes, Vector3 position)
+        public static HexagonCellPrototype GetClosestPrototypeXZ(List<HexagonCellPrototype> prototypes, Vector3 position)
         {
             HexagonCellPrototype nearest = prototypes[0];
             float nearestDist = float.MaxValue;
             for (int i = 0; i < prototypes.Count; i++)
             {
-                float dist = Vector2.Distance(new Vector2(position.x, position.y), new Vector2(prototypes[i].center.x, prototypes[i].center.z));
+                float dist = Vector2.Distance(new Vector2(position.x, position.z), new Vector2(prototypes[i].center.x, prototypes[i].center.z));
                 if (dist < nearestDist)
                 {
                     nearestDist = dist;
@@ -355,6 +370,49 @@ namespace WFCSystem
                 }
             }
             return nearest;
+        }
+        public static HexagonCellPrototype GetClosestPrototypeXYZ(List<HexagonCellPrototype> prototypes, Vector3 position)
+        {
+            HexagonCellPrototype nearest = prototypes[0];
+            float nearestDist = float.MaxValue;
+            for (int i = 0; i < prototypes.Count; i++)
+            {
+                float dist = Vector3.Distance(position, prototypes[i].center);
+                if (dist < nearestDist)
+                {
+                    nearestDist = dist;
+                    nearest = prototypes[i];
+                }
+            }
+            return nearest;
+        }
+
+        public static float GetAverageElevationOfClosestPrototypes(List<HexagonCellPrototype> prototypes, Vector3 position, float maxDistance)
+        {
+            HexagonCellPrototype nearest = prototypes[0];
+            float nearestDist = float.MaxValue;
+            float sum = 0;
+            int found = 0;
+            // float sum = position.y;
+            // int found = 1;
+
+            for (int i = 0; i < prototypes.Count; i++)
+            {
+                float dist = Vector3.Distance(position, prototypes[i].center);
+                if (dist < maxDistance && dist < nearestDist)
+                {
+                    nearestDist = dist;
+                    nearest = prototypes[i];
+                    found++;
+                    sum += prototypes[i].center.y;
+                }
+            }
+            if (found > 0)
+            {
+                float average = sum / found;
+                return average;
+            }
+            return position.y;
         }
 
         public static HexagonCellPrototype GetGroundLayerNeighbor(HexagonCellPrototype prototypeCell)
@@ -478,6 +536,21 @@ namespace WFCSystem
             return sidesWithPathNeighbor;
         }
 
+        public static void UnassignCellVertices(List<HexagonCellPrototype> prototypes, TerrainVertex[,] vertexGrid)
+        {
+            foreach (HexagonCellPrototype prototype in prototypes)
+            {
+                if (prototype.IsRemoved() == false || prototype._vertexIndices == null) continue;
+
+                foreach (int vertexIndex in prototype._vertexIndices)
+                {
+                    vertexGrid[vertexIndex / vertexGrid.GetLength(0), vertexIndex % vertexGrid.GetLength(0)].type = VertexType.Generic;
+                    vertexGrid[vertexIndex / vertexGrid.GetLength(0), vertexIndex % vertexGrid.GetLength(0)].isCellCenterPoint = false;
+                    vertexGrid[vertexIndex / vertexGrid.GetLength(0), vertexIndex % vertexGrid.GetLength(0)].isCellCornerPoint = false;
+                }
+            }
+        }
+
         public static void AssignPathCenterVertices(List<HexagonCellPrototype> prototypePath, TerrainVertex[,] vertexGrid)
         {
             foreach (HexagonCellPrototype prototype in prototypePath)
@@ -513,7 +586,16 @@ namespace WFCSystem
                 List<float> neighborElevations = new List<float>();
                 foreach (HexagonCellPrototype item in prototype.neighbors)
                 {
-                    if (item != null && item.cellStatus == CellStatus.Ground) neighborElevations.Add(item.center.y);
+                    if (item != null && item.cellStatus == CellStatus.Ground)
+                    {
+                        neighborElevations.Add(item.center.y);
+                        if (item.IsPath() == false)
+                        {
+                            neighborElevations.Add(item.center.y);
+                            neighborElevations.Add(item.center.y);
+
+                        }
+                    }
                 }
                 neighborElevations.Add(prototype.center.y);
                 // foreach (HexagonCellPrototype item in prototype.neighborsBySide)
@@ -604,47 +686,93 @@ namespace WFCSystem
             }
         }
 
+        public static List<HexagonCellPrototype> GenerateRandomPathBetweenCells(List<HexagonCellPrototype> pathFocusCells, bool ignoreEdgeCells = false, bool allowNonGroundCells = false)
+        {
+            List<HexagonCellPrototype> initialPath = new List<HexagonCellPrototype>();
+
+            for (int i = 0; i < pathFocusCells.Count; i++)
+            {
+                for (int j = 1; j < pathFocusCells.Count; j++)
+                {
+                    List<HexagonCellPrototype> newPathA = FindPath(pathFocusCells[i], pathFocusCells[j], ignoreEdgeCells);
+                    if (newPathA != null) initialPath.AddRange(newPathA);
+                }
+            }
+
+            // Exclude pathFocusCells from final path
+            initialPath = initialPath.FindAll(c => c.IsPreAssigned() == false);
+
+            List<HexagonCellPrototype> finalPath = new List<HexagonCellPrototype>();
+            // List<HexagonCellPrototype> invalids = result.FindAll(r => r.cellStatus != CellStatus.Ground);
+            // Debug.Log("GenerateRandomPath - invalids: " + invalids.Count + ", results: " + result.Count);
+
+            foreach (HexagonCellPrototype item in initialPath)
+            {
+                if (item.IsDisposable() || (allowNonGroundCells == false && item.IsGround() == false) || (allowNonGroundCells && !item.IsGround() && !item.HasGroundNeighbor()))
+                {
+                    HexagonCellPrototype groundLayerNeighbor = GetGroundLayerNeighbor(item);
+                    if (groundLayerNeighbor != null && groundLayerNeighbor.IsGround())
+                    {
+                        if (item.IsPreAssigned() == false)
+                        {
+                            finalPath.Add(groundLayerNeighbor);
+                            groundLayerNeighbor.isPath = true;
+                        }
+                    }
+                    else
+                    {
+                        finalPath.Add(item);
+                        item.isPath = true;
+                    }
+                }
+                else
+                {
+                    finalPath.Add(item);
+                    item.isPath = true;
+                }
+            }
+
+            // return finalPath;
+            return ClearPathCellClumps(finalPath);
+        }
+
         public static List<HexagonCellPrototype> GenerateRandomPath(List<HexagonCellPrototype> entryPrototypes, List<HexagonCellPrototype> allPrototypes, Vector3 position, bool ignoreEdgeCells = true)
         {
-            HexagonCellPrototype centerPrototype = GetClosestPrototype(allPrototypes, position);
-            List<HexagonCellPrototype> result = FindPath(entryPrototypes[0], centerPrototype, ignoreEdgeCells, false);
+            HexagonCellPrototype centerPrototype = GetClosestPrototypeXYZ(allPrototypes, position);
+            List<HexagonCellPrototype> initialPath = FindPath(entryPrototypes[0], centerPrototype, ignoreEdgeCells, false);
             List<HexagonCellPrototype> islandOnRamps = allPrototypes.FindAll(c => c.isGroundRamp);
 
             // int paths = 0;
             for (int i = 1; i < entryPrototypes.Count; i++)
             {
-                List<HexagonCellPrototype> newPathA = FindPath(entryPrototypes[i], centerPrototype, true);
-                if (newPathA != null) result.AddRange(newPathA);
+                List<HexagonCellPrototype> newPathA = FindPath(entryPrototypes[i], centerPrototype, ignoreEdgeCells);
+                if (newPathA != null) initialPath.AddRange(newPathA);
 
-                List<HexagonCellPrototype> newPathB = FindPath(entryPrototypes[i], entryPrototypes[i - 1], true);
-                if (newPathB != null) result.AddRange(newPathB);
+                List<HexagonCellPrototype> newPathB = FindPath(entryPrototypes[i], entryPrototypes[i - 1], ignoreEdgeCells);
+                if (newPathB != null) initialPath.AddRange(newPathB);
             }
 
             // Debug.Log("GenerateRandomPath - allPrototypes: " + allPrototypes.Count + ", centerPrototype: " + centerPrototype.id);
             foreach (HexagonCellPrototype ramp in islandOnRamps)
             {
-                List<HexagonCellPrototype> newPathA = FindPath(ramp, entryPrototypes[UnityEngine.Random.Range(0, entryPrototypes.Count)], true);
-                if (newPathA != null) result.AddRange(newPathA);
+                List<HexagonCellPrototype> newPathA = FindPath(ramp, entryPrototypes[UnityEngine.Random.Range(0, entryPrototypes.Count)], ignoreEdgeCells);
+                if (newPathA != null) initialPath.AddRange(newPathA);
 
                 ramp.isPath = true;
-                if (result.Contains(ramp) == false) result.Add(ramp);
+                if (initialPath.Contains(ramp) == false) initialPath.Add(ramp);
             }
 
             List<HexagonCellPrototype> finalPath = new List<HexagonCellPrototype>();
 
-            List<HexagonCellPrototype> invalids = result.FindAll(r => r.cellStatus != CellStatus.Ground);
+            List<HexagonCellPrototype> invalids = initialPath.FindAll(r => r.IsGround() == false);
+            Debug.Log("GenerateRandomPath - invalids: " + invalids.Count + ", initialPaths: " + initialPath.Count);
 
-            // result = result.FindAll(r => r.cellStatus == CellStatus.Ground);
-
-            Debug.Log("GenerateRandomPath - invalids: " + invalids.Count + ", results: " + result.Count);
-
-
-            foreach (HexagonCellPrototype item in result)
+            foreach (HexagonCellPrototype item in initialPath)
             {
                 if (item.IsDisposable() || item.cellStatus != CellStatus.Ground)
                 {
                     HexagonCellPrototype groundLayerNeighbor = GetGroundLayerNeighbor(item);
-                    if (groundLayerNeighbor != null && groundLayerNeighbor.cellStatus == CellStatus.Ground)
+                    if (groundLayerNeighbor != null && groundLayerNeighbor.IsGround())
                     {
                         finalPath.Add(groundLayerNeighbor);
                         groundLayerNeighbor.isPath = true;
@@ -673,7 +801,7 @@ namespace WFCSystem
 
             foreach (HexagonCellPrototype cell in pathCells)
             {
-                if (cell.cellStatus != CellStatus.Ground && cell.layerNeighbors[0] != null && cell.layerNeighbors[0].isPath)
+                if (cell.IsInCluster() || cell.cellStatus != CellStatus.Ground && cell.layerNeighbors[0] != null && cell.layerNeighbors[0].isPath)
                 {
                     cell.isPath = false;
                     cleared.Add(cell);
@@ -838,7 +966,7 @@ namespace WFCSystem
         {
             if (prototype == null) return false;
 
-            List<HexagonCellPrototype> allSideNeighbors = prototype.neighbors.FindAll(c => c.layer == prototype.layer);
+            List<HexagonCellPrototype> allSideNeighbors = prototype.neighbors.FindAll(c => c.layer == prototype.layer && c.IsRemoved() == false);
             // bool isConnectorCell = allSideNeighbors.Find(n => n.GetParenCellId() != prototype.GetParenCellId());
             // if (scopeToParentCell) allSideNeighbors = allSideNeighbors.FindAll(n => n.GetParenCellId() == cell.GetParenCellId());
 
@@ -1144,13 +1272,13 @@ namespace WFCSystem
                     {
                         VisitNeighbors(neighbor, cluster, visited, prototypesForLayer);
                     }
-
                 }
             }
         }
 
         public static void PopulateNeighborsFromCornerPoints(List<HexagonCellPrototype> cells, Transform transform, float offset = 0.33f)
         {
+            int duplicatesFound = 0;
             for (int ixA = 0; ixA < cells.Count; ixA++)
             {
                 HexagonCellPrototype cellA = cells[ixA];
@@ -1170,7 +1298,8 @@ namespace WFCSystem
                     if (distance < 1f)
                     {
                         cellB.cellStatus = CellStatus.Remove;
-                        Debug.LogError("Duplicate Cells: " + cellA.id + ", uid: " + cellA.uid + ", and " + cellB.id + ", uid: " + cellB.uid + "\n total cells: " + cells.Count);
+                        duplicatesFound++;
+                        // Debug.LogError("Duplicate Cells: " + cellA.id + ", uid: " + cellA.uid + ", and " + cellB.id + ", uid: " + cellB.uid + "\n total cells: " + cells.Count);
                         continue;
                     }
 
@@ -1202,150 +1331,10 @@ namespace WFCSystem
                 }
                 cellA.SetNeighborsBySide(offset);
             }
+            if (duplicatesFound > 0) Debug.LogError("Duplicate Cells found and marked for removal: " + duplicatesFound);
         }
 
-        // public static void PopulateNeighborsFromCornerPoints(List<HexagonCellPrototype> cells, Transform transform, float offset = 0.33f)
-        // {
-        //     foreach (HexagonCellPrototype cell in cells)
-        //     {
-        //         if (cell.cellStatus == CellStatus.Remove) continue;
-
-        //         //for each edgepoint on the current hexagontile
-        //         for (int i = 0; i < cell.cornerPoints.Length; i++)
-        //         {
-        //             //loop through all the hexagontile to check for neighbors
-        //             for (int j = 0; j < cells.Count; j++)
-        //             {
-        //                 //skip if the hexagontile is the current tile
-        //                 if (cells[j] == cell || cells[j].layer != cell.layer)
-        //                     continue;
-
-        //                 Vector3 distA = transform.TransformVector(cell.center);
-        //                 Vector3 distB = transform.TransformVector(cells[j].center);
-
-        //                 float distance = Vector3.Distance(distA, distB);
-        //                 if (distance > cell.size * neighborSearchCenterDistMult) continue;
-
-        //                 if (distance < 1f)
-        //                 {
-        //                     cells[j].cellStatus = CellStatus.Remove;
-        //                     Debug.LogError("Possible Duplicate Cells: " + cell.id + " and " + cells[j].id + ", removing the latter");
-        //                     continue;
-        //                 }
-
-
-        //                 //loop through the cornerPoints of the neighboring tile
-        //                 for (int k = 0; k < cells[j].cornerPoints.Length; k++)
-        //                 {
-        //                     // if (Vector3.Distance(cells[j].cornerPoints[k], cell.cornerPoints[i]) <= offset)
-        //                     if (Vector2.Distance(new Vector2(cells[j].cornerPoints[k].x, cells[j].cornerPoints[k].z), new Vector2(cell.cornerPoints[i].x, cell.cornerPoints[i].z)) <= offset)
-        //                     {
-        //                         if (cell.neighbors.Contains(cells[j]) == false) cell.neighbors.Add(cells[j]);
-        //                         if (cells[j].neighbors.Contains(cell) == false) cells[j].neighbors.Add(cell);
-        //                         break;
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //         cell.SetNeighborsBySide(offset);
-        //     }
-        // }
-
-        public static List<HexagonCellPrototype> PopulateNeighborsFromCornerPoints(List<HexagonCellPrototype> prototypes, float offset = 0.33f)
-        {
-            // Debug.Log("PopulateNeighborsFromCornerPoints: prototypes count: " + prototypes.Count);
-            List<HexagonCellPrototype> results = new List<HexagonCellPrototype>();
-            int neighborsAssigned = 0;
-            int removed = 0;
-
-            // foreach (HexagonCellPrototype prototype in prototypes)
-            // {
-
-            for (int ix = 0; ix < prototypes.Count; ix++)
-            {
-                HexagonCellPrototype prototype = prototypes[ix];
-
-                if (prototype.cellStatus == CellStatus.Remove) continue;
-                // if (prototype.neighbors.Count > 2)
-                // {
-                //     Debug.LogError("PopulateNeighborsFromCornerPoints - " + prototype.id + ", Pre check Neighbors " + prototype.neighbors.Count + "");
-                //     foreach (var item in prototype.neighbors)
-                //     {
-                //         if (prototype.layerNeighbors.Contains(item) == false)
-                //         {
-                //             if (item == null)
-                //             {
-                //                 Debug.LogError("ERROR in prototype: " + prototype.id + " ,  neighbor is Null ");
-                //             }
-                //             else if (item.id == prototype.id) Debug.LogError("ERROR in prototype: " + prototype.id + " ,  neighbor has Same ID");
-                //             else Debug.LogError("ERROR in prototype: " + prototype.id + " ,  neighbor: " + item.id + ", Layer: " + item.layer);
-                //         }
-                //     }
-                // }
-                results.Add(prototype);
-                prototype.RecalculateEdgePoints();
-
-                //for each edgepoint on the current hexagontile
-                for (int i = 0; i < prototype.cornerPoints.Length; i++)
-                {
-                    //loop through all the hexagontile to check for neighbors
-                    for (int j = 0; j < prototypes.Count; j++)
-                    {
-                        //skip if the hexagontile is the current tile
-                        if ((prototypes[j].center == prototype.center) || (prototypes[j] == prototype) || (prototypes[j].layer != prototype.layer) || (prototypes[j].cellStatus == CellStatus.Remove))
-                        {
-                            if (prototype.neighbors.Contains(prototypes[j]))
-                            {
-                                prototype.neighbors.Remove(prototypes[j]);
-                                Debug.LogError("prototype removed: " + prototypes[j].id + ", from " + prototype + " neighbors");
-                            }
-                            continue;
-                        }
-
-                        float distance = Vector3.Distance(prototype.center, prototypes[j].center);
-                        if (distance > prototype.size * neighborSearchCenterDistMult) continue;
-
-                        if (distance < 1f)
-                        {
-                            prototypes[j].cellStatus = CellStatus.Remove;
-                            removed++;
-                            Debug.LogError("Possible Duplicate Cells: " + prototype.id + " and " + prototypes[j].id + ", removing the latter");
-                            continue;
-                        }
-
-                        //loop through the cornerPoints of the neighboring tile
-                        for (int k = 0; k < prototypes[j].cornerPoints.Length; k++)
-                        {
-                            if (Vector2.Distance(new Vector2(prototypes[j].cornerPoints[k].x, prototypes[j].cornerPoints[k].z), new Vector2(prototype.cornerPoints[i].x, prototype.cornerPoints[i].z)) <= offset)
-                            {
-                                if (prototype.neighbors.Contains(prototypes[j]) == false) prototype.neighbors.Add(prototypes[j]);
-                                if (prototypes[j].neighbors.Contains(prototype) == false) prototypes[j].neighbors.Add(prototype);
-
-                                neighborsAssigned++;
-
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                List<HexagonCellPrototype> allSideNeighbors = prototype.neighbors.FindAll(c => c.layer == prototype.layer);
-                if (allSideNeighbors.Count > 7)
-                {
-                    foreach (var item in allSideNeighbors)
-                    {
-                        Debug.LogError(prototype.id + " - neighbor: " + item.id + ", distance: " + Vector3.Distance(prototype.center, item.center));
-                    }
-                }
-
-                // prototype.SetNeighborsBySide(offset);
-            }
-            Debug.Log("PopulateNeighborsFromCornerPoints: neighborsAssigned: " + neighborsAssigned + ", Removed: " + removed);
-            if (removed > 0) Debug.LogError("Removed " + removed + " Duplicate Cells");
-            return results;
-        }
-
-        public static void AssignTerrainVerticesToGroundPrototypes(Dictionary<int, List<HexagonCellPrototype>> prototypesByLayer, TerrainVertex[,] vertexGrid, float unassignedYOffset = -1f)
+        public static void AssignTerrainVerticesToGroundPrototypes(Dictionary<int, List<HexagonCellPrototype>> prototypesByLayer, TerrainVertex[,] vertexGrid, float cellRadiusMult = 1.3f, bool checkCorners = false)
         {
             List<HexagonCellPrototype> allGroundPrototypes = new List<HexagonCellPrototype>();
 
@@ -1381,24 +1370,32 @@ namespace WFCSystem
                     float distance = Vector2.Distance(vertexPosXZ, currentPosXZ);
                     if (distance < closestDistance)
                     {
-                        Vector3[] prototypeCorners = prototype.cornerPoints;
-                        float xMin = prototypeCorners[0].x;
-                        float xMax = prototypeCorners[0].x;
-                        float zMin = prototypeCorners[0].z;
-                        float zMax = prototypeCorners[0].z;
-                        for (int i = 1; i < prototypeCorners.Length; i++)
+                        if (checkCorners)
                         {
-                            if (prototypeCorners[i].x < xMin)
-                                xMin = prototypeCorners[i].x;
-                            if (prototypeCorners[i].x > xMax)
-                                xMax = prototypeCorners[i].x;
-                            if (prototypeCorners[i].z < zMin)
-                                zMin = prototypeCorners[i].z;
-                            if (prototypeCorners[i].z > zMax)
-                                zMax = prototypeCorners[i].z;
-                        }
+                            Vector3[] prototypeCorners = prototype.cornerPoints;
+                            float xMin = prototypeCorners[0].x;
+                            float xMax = prototypeCorners[0].x;
+                            float zMin = prototypeCorners[0].z;
+                            float zMax = prototypeCorners[0].z;
+                            for (int i = 1; i < prototypeCorners.Length; i++)
+                            {
+                                if (prototypeCorners[i].x < xMin)
+                                    xMin = prototypeCorners[i].x;
+                                if (prototypeCorners[i].x > xMax)
+                                    xMax = prototypeCorners[i].x;
+                                if (prototypeCorners[i].z < zMin)
+                                    zMin = prototypeCorners[i].z;
+                                if (prototypeCorners[i].z > zMax)
+                                    zMax = prototypeCorners[i].z;
+                            }
 
-                        if (vertice.position.x >= xMin && vertice.position.x <= xMax && vertice.position.z >= zMin && vertice.position.z <= zMax)
+                            if (vertice.position.x >= xMin && vertice.position.x <= xMax && vertice.position.z >= zMin && vertice.position.z <= zMax)
+                            {
+                                closestDistance = distance;
+                                closestCell = prototype;
+                            }
+                        }
+                        else
                         {
                             closestDistance = distance;
                             closestCell = prototype;
@@ -1409,17 +1406,32 @@ namespace WFCSystem
                 int indexX = verticeIndex / vertexGrid.GetLength(0);
                 int indexZ = verticeIndex % vertexGrid.GetLength(0);
 
-                if (closestCell != null)
+                if (closestCell != null && closestDistance < (closestCell.size * cellRadiusMult))
                 {
                     closestCell._vertexIndices.Add(verticeIndex);
 
                     bool isCellCenterVertex = false;
+                    float outerRadiusOffset = 0f;
+                    // float pathCellYOffset = 0f;
+
                     if (closestDistance < closestCell.size * 0.33f)
                     {
                         isCellCenterVertex = true;
                     }
                     else
                     {
+                        if (closestDistance > (closestCell.size * 1.05f))
+                        {
+                            if (vertexGrid[verticeIndex / vertexGrid.GetLength(0), verticeIndex % vertexGrid.GetLength(0)].position.y >= closestCell.center.y)
+                            {
+                                outerRadiusOffset += 0.5f;
+                            }
+                            else
+                            {
+                                outerRadiusOffset -= 0.5f;
+                            }
+                        }
+
                         // Get Closest Corner if not within center radius   
                         (Vector3 nearestPoint, float nearestDistance, int nearestIndex) = ProceduralTerrainUtility.
                                                             GetClosestPoint(closestCell.cornerPoints, vertexPosXZ);
@@ -1434,7 +1446,6 @@ namespace WFCSystem
                         }
                     }
 
-                    float pathCellYOffset = 0f;
                     // if (closestCell.isLeveledRampCell)
                     // {
                     //     pathCellYOffset = 2f;
@@ -1443,13 +1454,13 @@ namespace WFCSystem
                     // {
                     //     pathCellYOffset = closestCell.GetGridLayer() == 0 ? 0.3f : -0.8f;
                     // }
-                    vertexGrid[verticeIndex / vertexGrid.GetLength(0), verticeIndex % vertexGrid.GetLength(0)].position = new Vector3(vertice.position.x, closestCell.center.y + pathCellYOffset, vertice.position.z);
+                    vertexGrid[verticeIndex / vertexGrid.GetLength(0), verticeIndex % vertexGrid.GetLength(0)].position = new Vector3(vertice.position.x, closestCell.center.y + outerRadiusOffset, vertice.position.z);
                     vertexGrid[verticeIndex / vertexGrid.GetLength(0), verticeIndex % vertexGrid.GetLength(0)].isCellCenterPoint = isCellCenterVertex;
                     vertexGrid[verticeIndex / vertexGrid.GetLength(0), verticeIndex % vertexGrid.GetLength(0)].type = VertexType.Cell;
                 }
                 else
                 {
-                    vertexGrid[verticeIndex / vertexGrid.GetLength(0), verticeIndex % vertexGrid.GetLength(0)].position = new Vector3(vertice.position.x, vertice.position.y + unassignedYOffset, vertice.position.z);
+                    vertexGrid[verticeIndex / vertexGrid.GetLength(0), verticeIndex % vertexGrid.GetLength(0)].position = new Vector3(vertice.position.x, vertice.position.y, vertice.position.z);
                 }
                 verticeIndex++;
             }
@@ -1556,13 +1567,12 @@ namespace WFCSystem
             {
                 if (prototypeCell._vertexIndices != null && prototypeCell._vertexIndices.Count > 0)
                 {
-                    Debug.Log("GroundPrototypesToTerrainVertexElevation - A");
+                    // Debug.Log("GroundPrototypesToTerrainVertexElevation - A");
                     ClearLayersAboveVertexElevationsAndSetGround(prototypeCell, prototypeCell._vertexIndices, prototypeCell._vertexIndicesBySide, vertexGrid, distanceYOffset, fallbackOnBottomCell);
                     continue;
                 }
 
-                Debug.Log("GroundPrototypesToTerrainVertexElevation - B");
-
+                // Debug.Log("GroundPrototypesToTerrainVertexElevation - B");
                 Vector2 currentPosXZ = new Vector2(prototypeCell.center.x, prototypeCell.center.z);
 
                 // Get closest vertex
@@ -1592,10 +1602,261 @@ namespace WFCSystem
             }
         }
 
+
+        // public static void SmoothGridEdgeVertexIndices(List<HexagonCellPrototype> allGroundEdgePrototypes, TerrainVertex[,] vertexGrid, float searchDistance = 48f)
+        // {
+        //     List<int> vertexIndices = new List<int>();
+
+        //     for (int x = 0; x < vertexGrid.GetLength(0); x++)
+        //     {
+        //         for (int z = 0; z < vertexGrid.GetLength(1); z++)
+        //         {
+        //             TerrainVertex currentVertex = vertexGrid[x, z];
+        //             if (currentVertex.isOnTheEdgeOftheGrid)
+        //             {
+
+        //                 HexagonCellPrototype closestPrototype = GetClosestPrototype(allGroundEdgePrototypes, currentVertex.position);
+        //                 if (closestPrototype != null)
+        //                 {
+        //                     Vector2 vertexPosXZ = new Vector2(currentVertex.position.x, currentVertex.position.z);
+        //                     Vector2 cellPosXZ = new Vector2(closestPrototype.center.x, closestPrototype.center.z);
+
+        //                     float distance = Vector3.Distance(vertexGrid[x, z].position, closestPrototype.center);
+        //                     // float distance = Vector2.Distance(cellPosXZ, vertexPosXZ);
+        //                     float distanceNormalized = (distance / (searchDistance));
+        //                     // float distanceNormalized = ((distance * 0.5f) / (searchDistance));
+        //                     // if (distanceNormalized > 0.9f)
+        //                     // {
+        //                     //     distanceNormalized = 0.9f;
+        //                     // }
+        //                     // else if (distanceNormalized < 0)
+        //                     // {
+        //                     //     distanceNormalized = 0;
+        //                     // }
+
+        //                     float slope = Mathf.Lerp(closestPrototype.center.y, vertexGrid[x, z].position.y, distanceNormalized * 4f);
+
+        //                     Debug.Log("distanceNormalized: " + distanceNormalized + ", dist: " + distance + ", slope: " + slope + ",  center.y: " + closestPrototype.center.y + ", currentVertex.y: " + currentVertex.position.y);
+
+        //                     vertexGrid[x, z].isOnTheEdgeOftheGrid = true;
+        //                     vertexGrid[x, z].position.y = slope;
+        //                     // vertexGrid[x, z].position.y = 0;
+        //                 }
+
+        //             }
+        //         }
+
+        //     }
+        // }
+
+        public static void SmoothGridEdgeVertexIndices(List<HexagonCellPrototype> allGroundEdgePrototypes, TerrainVertex[,] vertexGrid, float cellRadiusMult, float searchDistance = 36f, float smoothingFactor = 1f, float smoothingSigma = 0.5f)
+        {
+            // const float smoothingFactor = 4f;
+            // const float smoothingSigma = 0.5f;
+            for (int x = 0; x < vertexGrid.GetLength(0); x++)
+            {
+                for (int z = 0; z < vertexGrid.GetLength(1); z++)
+                {
+                    TerrainVertex currentVertex = vertexGrid[x, z];
+                    if (currentVertex.isOnTheEdgeOftheGrid)
+                    {
+                        HexagonCellPrototype closestPrototype = GetClosestPrototypeXYZ(allGroundEdgePrototypes, currentVertex.position);
+                        if (closestPrototype != null)
+                        {
+                            float avgY = GetAverageElevationOfClosestPrototypes(allGroundEdgePrototypes, currentVertex.position, searchDistance * 1.25f);
+
+                            Vector2 vertexPosXZ = new Vector2(currentVertex.position.x, currentVertex.position.z);
+                            Vector2 cellPosXZ = new Vector2(closestPrototype.center.x, closestPrototype.center.z);
+
+                            float distanceY = Mathf.Abs(currentVertex.baseNoiseHeight - (avgY));
+                            // float distanceY = Mathf.Abs(currentVertex.baseNoiseHeight - (closestPrototype.center.y));
+                            // float distance = Mathf.Abs((Vector2.Distance(vertexPosXZ, cellPosXZ) - ((closestPrototype.size * cellRadiusMult) * 0.7f)));
+                            // float distance = Mathf.Abs((Vector3.Distance(currentVertex.position, closestPrototype.center) - ((closestPrototype.size * cellRadiusMult) * 0.7f)));
+
+                            float distanceBase = Mathf.Abs((Vector3.Distance(currentVertex.position, closestPrototype.center) - ((closestPrototype.size * cellRadiusMult) * 0.8f)));
+                            // float distanceMod = Mathf.Abs((Vector3.Distance(currentVertex.position, closestPrototype.center) - ((closestPrototype.size * cellRadiusMult) * 0.8f)) + distanceY);
+                            float distanceMod = Mathf.Abs((Vector2.Distance(vertexPosXZ, cellPosXZ) - ((closestPrototype.size * cellRadiusMult) * 0.8f) + distanceY));
+
+                            // if (distance < (closestPrototype.size * cellRadiusMult))
+                            // {
+                            //     currentVertex.isOnTheEdgeOftheGrid = true;
+                            //     // currentVertex.position.y = closestPrototype.center.y;
+                            //     // float slope = Mathf.Lerp(closestPrototype.center.y, currentVertex.baseNoiseHeight * distanceNormalized, distanceNormalized * smoothingFactor);
+
+                            //     vertexGrid[x, z].position.y = avgY;
+                            //     continue;
+                            // }
+
+                            // float distanceNormalized = distance / searchDistance;
+                            float distanceNormalized = Mathf.Clamp01(distanceMod / searchDistance);
+
+                            if (distanceNormalized < 0.4f)
+                            {
+                                // Debug.Log("distanceNormalized: " + distanceNormalized + ", distanceBase: " + distanceBase + ", distanceMod: " + distanceMod + ",  center.y: " + closestPrototype.center.y + ", currentVertex.y: " + currentVertex.position.y);
+                                distanceNormalized *= 0.1f;
+                            }
+
+
+                            float totalWeight = 0f;
+                            float weightedHeightSum = 0f;
+                            for (int dx = -1; dx <= 1; dx++)
+                            {
+                                for (int dz = -1; dz <= 1; dz++)
+                                {
+                                    if (dx == 0 && dz == 0) continue;
+
+                                    int nx = x + dx;
+                                    int nz = z + dz;
+                                    if (nx < 0 || nx >= vertexGrid.GetLength(0) || nz < 0 || nz >= vertexGrid.GetLength(1)) continue;
+
+                                    TerrainVertex neighborVertex = vertexGrid[nx, nz];
+                                    // if (!neighborVertex.isOnTheEdgeOftheGrid) continue;
+
+                                    float neighborDistanceY = Mathf.Abs(currentVertex.baseNoiseHeight - neighborVertex.baseNoiseHeight);
+                                    float neighborDistance = Vector3.Distance(currentVertex.position, neighborVertex.position) + (neighborDistanceY);
+
+                                    float neighborWeight = Mathf.Exp(-neighborDistance * neighborDistance / (2f * smoothingSigma * smoothingSigma));
+
+                                    weightedHeightSum += neighborWeight * neighborVertex.baseNoiseHeight;
+                                    totalWeight += neighborWeight;
+                                }
+                            }
+                            // float slope = Mathf.Lerp(avgY, weightedHeightSum / totalWeight, distanceNormalized * smoothingFactor);
+                            // float slope = Mathf.Lerp(weightedHeightSum / totalWeight, currentVertex.baseNoiseHeight * distanceNormalized, distanceNormalized * smoothingFactor);
+
+
+                            // float slope = avgY + (distanceY * distanceNormalized);//Mathf.Lerp(closestPrototype.center.y, currentVertex.baseNoiseHeight * distanceNormalized, distanceNormalized * smoothingFactor);
+                            // float slope = Mathf.Lerp(closestPrototype.center.y, currentVertex.baseNoiseHeight * distanceNormalized, distanceNormalized * smoothingFactor);
+                            // float slope = Mathf.Lerp(closestPrototype.center.y, weightedHeightSum / totalWeight, distanceNormalized * smoothingFactor);
+                            // Debug.Log("distanceNormalized: " + distanceNormalized + ", dist: " + distance + ", slope: " + slope + ",  center.y: " + closestPrototype.center.y + ", currentVertex.y: " + currentVertex.position.y);
+
+                            float distY = Mathf.Abs(currentVertex.baseNoiseHeight - (avgY));
+                            // float distY = Mathf.Abs(currentVertex.baseNoiseHeight - (slope));
+
+                            // float avgFinal = avgY * (1 - distanceNormalized);
+
+                            float desiredElevation = avgY + ((distY * (distanceNormalized)));
+                            // float desiredElevation = avgFinal + ((distY * (distanceNormalized)));
+
+                            desiredElevation = Mathf.Lerp(desiredElevation, (weightedHeightSum / totalWeight), distanceNormalized * smoothingFactor);
+                            // desiredElevation = Mathf.Lerp(desiredElevation, (weightedHeightSum / totalWeight), distanceNormalized * smoothingFactor);
+                            // float distYB = Mathf.Abs(desiredElevation - (avgY));
+
+                            // float offsetY;
+
+                            float distanceNormalizedBase = Mathf.Clamp01(distanceBase / searchDistance);
+                            if (distanceNormalizedBase > 0.25f)
+                            {
+                                distanceNormalizedBase = Mathf.Clamp01(distanceNormalizedBase * 2f);
+                            }
+
+                            // if (desiredElevation < 0)
+                            // {
+                            //     offsetY = Mathf.Abs(desiredElevation - (avgY)) * -1;
+                            // }
+                            // else
+                            // {
+                            //     offsetY = Mathf.Abs(desiredElevation - (avgY));
+                            // }
+
+                            // vertexGrid[x, z].position.y = avgY + (offsetY * (distanceNormalizedBase));
+                            vertexGrid[x, z].position.y = Mathf.Lerp(avgY, desiredElevation, distanceNormalizedBase); ;
+                            // vertexGrid[x, z].position.y = avgFinal + ((distY * (distanceNormalized)));
+                            // vertexGrid[x, z].position.y = slope + (distY * distanceNormalized);
+                            vertexGrid[x, z].isOnTheEdgeOftheGrid = true;
+                        }
+                    }
+                }
+            }
+        }
+
+
+
+
+        public static List<int> GetGridEdgeVertexIndices(List<HexagonCellPrototype> allGroundEdgePrototypes, TerrainVertex[,] vertexGrid, float searchDistance = 36f)
+        {
+            List<int> vertexIndices = new List<int>();
+
+            for (int x = 0; x < vertexGrid.GetLength(0); x++)
+            {
+                for (int z = 0; z < vertexGrid.GetLength(1); z++)
+                {
+                    TerrainVertex currentVertex = vertexGrid[x, z];
+                    if (currentVertex.type == VertexType.Generic || currentVertex.type == VertexType.Unset)
+                    {
+                        Vector2 vertexPosXZ = new Vector2(currentVertex.position.x, currentVertex.position.z);
+                        foreach (HexagonCellPrototype edge in allGroundEdgePrototypes)
+                        {
+                            Vector2 currentPosXZ = new Vector2(edge.center.x, edge.center.z);
+                            float dist = Vector2.Distance(currentPosXZ, vertexPosXZ);
+                            if (dist < searchDistance)
+                            {
+                                vertexIndices.Add(currentVertex.index);
+                                vertexGrid[x, z].isOnTheEdgeOftheGrid = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+            }
+            return vertexIndices;
+        }
+
+        public static List<int> GetGridEdgeVertexIndices(List<Vector3> gridEdgeCornerPoints, TerrainVertex[,] vertexGrid, float searchDistance = 12f)
+        {
+            List<int> vertexIndices = new List<int>();
+
+            for (int x = 0; x < vertexGrid.GetLength(0); x++)
+            {
+                for (int z = 0; z < vertexGrid.GetLength(1); z++)
+                {
+                    TerrainVertex currentVertex = vertexGrid[x, z];
+                    if (currentVertex.type == VertexType.Generic || currentVertex.type == VertexType.Unset)
+                    {
+                        Vector2 vertexPosXZ = new Vector2(currentVertex.position.x, currentVertex.position.z);
+                        foreach (Vector3 edgePoint in gridEdgeCornerPoints)
+                        {
+                            Vector2 currentPosXZ = new Vector2(edgePoint.x, edgePoint.z);
+                            float dist = Vector2.Distance(currentPosXZ, vertexPosXZ);
+                            if (dist < searchDistance)
+                            {
+                                vertexIndices.Add(currentVertex.index);
+                                vertexGrid[x, z].isOnTheEdgeOftheGrid = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+            }
+            return vertexIndices;
+        }
+
+
+        public static List<Vector3> GetEdgeCornersOfEdgePrototypes(List<HexagonCellPrototype> allGroundEdgePrototypes)
+        {
+            List<Vector3> points = new List<Vector3>();
+            foreach (HexagonCellPrototype edge in allGroundEdgePrototypes)
+            {
+                for (int i = 0; i < 6; i++)
+                {
+                    if (edge.neighborsBySide[i] == null)
+                    {
+                        (HexagonCorner cornerA, HexagonCorner cornerB) = HexagonCell.GetCornersFromSide((HexagonSide)i);
+                        points.Add(edge.sidePoints[i]);
+                        points.Add(edge.cornerPoints[(int)cornerA % 6]);
+                        points.Add(edge.cornerPoints[(int)cornerB % 6]);
+                    }
+                }
+            }
+            return points;
+        }
+
         public static bool IsPrototypeCenterBelowAllVertices(HexagonCellPrototype prototype, List<int> vertexIndices, TerrainVertex[,] vertexGrid, float distanceYOffset = 1.8f)
         {
             if (vertexIndices == null || vertexIndices.Count == 0) return false;
-            Debug.Log("IsPrototypeCenterBelowAllVertices - A");
+            // Debug.Log("IsPrototypeCenterBelowAllVertices - A");
             bool passed = true;
             foreach (int ix in vertexIndices)
             {
@@ -1608,8 +1869,7 @@ namespace WFCSystem
                 }
 
             }
-            Debug.Log("IsPrototypeCenterBelowAllVertices - passed");
-
+            // Debug.Log("IsPrototypeCenterBelowAllVertices - passed");
             return passed;
             // return vertexIndices.All(ix => (prototype.center.y - distanceYOffset) <= vertexGrid[ix / vertexGrid.GetLength(0), ix % vertexGrid.GetLength(0)].position.y);
         }
@@ -1623,7 +1883,7 @@ namespace WFCSystem
             {
                 if (IsPrototypeCenterBelowAllVertices(currentPrototype, vertexIndices, vertexGrid, distanceYOffset) == false)
                 {
-                    Debug.Log("ClearLayersAboveVertexElevationsAndSetGround - A");
+                    // Debug.Log("ClearLayersAboveVertexElevationsAndSetGround - A");
 
                     if (fallbackOnBottomCell && currentPrototype.layerNeighbors[0] == null)
                     {
@@ -1640,7 +1900,7 @@ namespace WFCSystem
                 }
                 else
                 {
-                    Debug.Log("ClearLayersAboveVertexElevationsAndSetGround - B");
+                    // Debug.Log("ClearLayersAboveVertexElevationsAndSetGround - B");
 
                     groundFound = true;
                     currentPrototype._vertexIndices = vertexIndices;
@@ -1700,7 +1960,7 @@ namespace WFCSystem
 
             if (useGridErosion)
             {
-                HexagonCellPrototype.GetRandomGridErosion(newCellPrototypes, radius * 0.25f, 32);
+                HexagonCellPrototype.GetRandomGridErosion(newCellPrototypes, UnityEngine.Random.Range(radius * 0.2f, radius * 0.36f), 32);
                 newCellPrototypes = newCellPrototypes.FindAll(c => c.GetCellStatus() != CellStatus.Remove);
             }
 
@@ -1802,14 +2062,12 @@ namespace WFCSystem
             }
             return prototypes;
         }
-        public static List<HexagonCellPrototype> GenerateHexGrid(Vector3 center, int size, int radius, IHexCell parentCell = null, Transform transform = null, List<int> useCorners = null)
+        public static List<HexagonCellPrototype> GenerateHexGrid(Vector3 center, int size, int radius, IHexCell parentCell = null, Transform transform = null, List<int> useCorners = null, bool logResults = false)
         {
             // Dictionary<HexagonCellPrototype, List<Vector3>> quadrantCenterPoints = new Dictionary<HexagonCellPrototype, List<Vector3>>();
             List<Vector3> spawnCenters = new List<Vector3>();
             List<Vector3> quatCenterPoints = new List<Vector3>();
             List<int> quadrantSizes = new List<int>();
-
-            // if (transform != null) center = transform.TransformVector(center);
 
             bool filterOutCorners = (useCorners == null || useCorners.Count == 0);
 
@@ -1840,7 +2098,7 @@ namespace WFCSystem
                         // quadrantCenterPoints.Add(quadrantPrototype, points);
                     }
                 }
-                Debug.Log("GenerateHexGrid - newCenterPoints: " + newCenterPoints.Count + ", currentStepSize: " + currentStepSize + ", desired size: " + size);
+                // Debug.Log("GenerateHexGrid - newCenterPoints: " + newCenterPoints.Count + ", currentStepSize: " + currentStepSize + ", desired size: " + size);
 
                 prevStepSize = currentStepSize;
 
@@ -1853,14 +2111,14 @@ namespace WFCSystem
                 {
                     quatCenterPoints.Clear();
                     quatCenterPoints.AddRange(newCenterPoints);
-                    Debug.Log("Quadrants of size " + currentStepSize + ": " + quatCenterPoints.Count);
+                    // Debug.Log("Quadrants of size " + currentStepSize + ": " + quatCenterPoints.Count);
                 }
             }
 
             List<HexagonCellPrototype> results = new List<HexagonCellPrototype>();
             Vector2 baseCenterPosXZ = new Vector2(center.x, center.z);
 
-            Debug.Log("GenerateHexGrid - spawnCenters: " + spawnCenters.Count + ", size: " + size + ", filterOutCorners: " + filterOutCorners);
+            // Debug.Log("GenerateHexGrid - spawnCenters: " + spawnCenters.Count + ", size: " + size + ", filterOutCorners: " + filterOutCorners);
 
             int skipped = 0;
             for (int i = 0; i < spawnCenters.Count; i++)
@@ -1870,8 +2128,7 @@ namespace WFCSystem
 
                 // Filter out duplicate points & out of bounds
                 float distance = Vector2.Distance(new Vector2(centerPoint.x, centerPoint.z), baseCenterPosXZ);
-
-                Debug.Log("GenerateHexGrid - centerPoint: " + centerPoint + ", size: " + size + ", distance: " + distance);
+                // Debug.Log("GenerateHexGrid - centerPoint: " + centerPoint + ", size: " + size + ", distance: " + distance);
 
                 if (filterOutCorners == false || (filterOutCorners && distance < radius))
                 {
@@ -1890,7 +2147,7 @@ namespace WFCSystem
                 }
             }
 
-            Debug.Log("GenerateHexGrid - 01 results: " + results.Count + ", size: " + size);
+            // Debug.Log("GenerateHexGrid - 01 results: " + results.Count + ", size: " + size);
 
             if (filterOutCorners)
             {
@@ -1898,33 +2155,36 @@ namespace WFCSystem
                 results = GetPrototypesWithinHexagon(results, center, radius, parentHex.GetEdgePoints());
             }
 
-            if (parentCell != null)
+            if (logResults)
             {
-                Debug.Log("GenerateHexGrid - results: " + results.Count + ", size: " + size + ", parentCell: " + parentCell.GetId());
-                if (skipped > 0) Debug.LogError("Skipped: " + skipped + ", parentCell: " + parentCell.GetId() + ",  size: " + size);
+                if (parentCell != null)
+                {
+                    Debug.Log("GenerateHexGrid - results: " + results.Count + ", size: " + size + ", parentCell: " + parentCell.GetId());
+                    if (skipped > 0) Debug.LogError("Skipped: " + skipped + ", parentCell: " + parentCell.GetId() + ",  size: " + size);
 
-                if (transform != null)
-                {
-                    Debug.Log("GenerateHexGrid - parent: " + parentCell.GetId() + ", position: " + parentCell.GetPosition() + ",  center: " + center + ", transformed Pos: " + transform.InverseTransformVector(parentCell.GetPosition()));
-                }
-                if (size == 4)
-                {
-                    foreach (var item in results)
+                    if (transform != null)
                     {
-                        Debug.Log("GenerateHexGrid - parent: " + parentCell.GetId() + ", result: " + item.id);
+                        Debug.Log("GenerateHexGrid - parent: " + parentCell.GetId() + ", position: " + parentCell.GetPosition() + ",  center: " + center + ", transformed Pos: " + transform.InverseTransformVector(parentCell.GetPosition()));
+                    }
+                    if (size == 4)
+                    {
+                        foreach (var item in results)
+                        {
+                            Debug.Log("GenerateHexGrid - parent: " + parentCell.GetId() + ", result: " + item.id);
+                        }
                     }
                 }
-            }
-            else
-            {
-                Debug.Log("GenerateHexGrid - 02 results: " + results.Count + ", size: " + size);
-                if (skipped > 0) Debug.LogError("Skipped: " + skipped + ", size: " + size);
-
-                if (size == 12)
+                else
                 {
-                    foreach (var item in results)
+                    Debug.Log("GenerateHexGrid - 02 results: " + results.Count + ", size: " + size);
+                    if (skipped > 0) Debug.LogError("Skipped: " + skipped + ", size: " + size);
+
+                    if (size == 12)
                     {
-                        Debug.Log("GenerateHexGrid - X12, result - id: " + item.id + ", uid: " + item.uid);
+                        foreach (var item in results)
+                        {
+                            Debug.Log("GenerateHexGrid - X12, result - id: " + item.id + ", uid: " + item.uid);
+                        }
                     }
                 }
             }
@@ -2290,6 +2550,11 @@ namespace WFCSystem
                     else if ((showAll || filterType == GridFilter_Type.Ground) && item.cellStatus == CellStatus.Ground)
                     {
                         Gizmos.color = brown;
+                        show = true;
+                    }
+                    else if ((showAll || filterType == GridFilter_Type.Removed) && item.cellStatus == CellStatus.Remove)
+                    {
+                        Gizmos.color = Color.white;
                         show = true;
                     }
                     else if ((showAll || filterType == GridFilter_Type.Cluster) && item.clusterId > -1)
