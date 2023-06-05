@@ -779,7 +779,7 @@ namespace WFCSystem
             if (compatibilityCheck == CompatibilityCheck.DirectTile)
             {
 
-                if (currentCell.GetGridLayer() != evaluatedCell.GetGridLayer())
+                if (currentCell.GetLayer() != evaluatedCell.GetLayer())
                 {
                     // HexagonTileCompatibilitySide relativeLayer;
                     // relativeLayer = (currentLayer == 0) ? HexagonTileCompatibilitySide.Top : HexagonTileCompatibilitySide.Bottom;
@@ -814,7 +814,7 @@ namespace WFCSystem
                 {
                     // Debug.Log("socketDirectory - 0");
 
-                    if (currentCell.GetGridLayer() != evaluatedCell.GetGridLayer())
+                    if (currentCell.GetLayer() != evaluatedCell.GetLayer())
                     {
                         if (currentTileNeighborSide == HexagonTileCompatibilitySide.Bottom)
                         {

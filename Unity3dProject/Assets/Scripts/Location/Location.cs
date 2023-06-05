@@ -2,270 +2,149 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
-using UnityEditor;
 using WFCSystem;
 
 namespace ProceduralBase
 {
-    // public enum LocationType
-    // {
-    //     Unset = 0,
-    //     Outpost,
-    //     City,
-    //     Dungeon,
-    //     Settlement,
-    //     Town,
-    // }
-    // public enum LocationDistrictType
-    // {
-    //     Unset = 0,
-    //     Mixed,
-    //     Residential,
-    //     Royal,
-    //     Business,
-    //     Military,
-    // }
-
-
-    public class Location : MonoBehaviour
+    public interface ILocation
     {
-        [SerializeField] private List<Vector3> locationCenterPoints;
-        [SerializeField] private List<SubZone> _subZones;
-        [SerializeField] private float totalSize;
-        [SerializeField] private float radius;
-        public List<GameObject> objects;
-        public ProceduralTerrainMesh9.Vertex[] verticeData;
+        public Territory GetTerritory();
+        public LocationData GetLocationData();
+        public void SetLocationData(LocationData data);
+        public float GetRadius();
+        public Faction GetFactionOwner();
+        public Vector3[] GetEntryPoints();
+        public Vector3[] GetSpawnPoints();
+        public Vector3[] GetBorderPoints();
+    }
 
-        public void MapFromPrototype(LocationPrototype prototype, List<SubZone> subZones)
+    public class Location : MonoBehaviour, ILocation
+    {
+        public static float borderPointsRadiusMult = 1.25f;
+        [SerializeField] private WorldArea _worldArea;
+        public WorldArea GetWorldArea() => _worldArea;
+        public void SetWorldArea(WorldArea worldArea)
         {
-            radius = prototype.radius;
-            _subZones = subZones;
+            _worldArea = worldArea;
+        }
+        [SerializeField] private Territory territory;
+        [SerializeField] private LocationData locationData;
+        [SerializeField] private List<Vector3> locationCenterPoints;
+
+        [SerializeField] private int borderWaypointMax = 10;
+
+        #region Interface Methods
+        public Territory GetTerritory() => territory;
+        public LocationData GetLocationData() => locationData;
+        public void SetLocationData(LocationData data)
+        {
+            locationData = data;
+        }
+        public float GetRadius() => locationData.radius;
+        [SerializeField] private float _radius_debug;
+
+        public Faction GetFactionOwner()
+        {
+            if (territory != null) return territory.GetOwner();
+            return null;
+        }
+        public Vector3[] GetEntryPoints() => locationData?.entryPoints;
+        public Vector3[] GetSpawnPoints() => locationData?.spawnPoints;
+        public Vector3[] GetBorderPoints() => locationData?.borderPoints;
+
+        #endregion
+
+        #region Tiles
+        List<GameObject> tiles;
+        #endregion
+
+        public Vector3? GetRandomBorderPoint()
+        {
+            if (locationData.borderPoints == null) return null;
+            return locationData?.borderPoints[Random.Range(0, locationData.borderPoints.Length)];
         }
 
-        //Districts
+        private void GenerateBorderPoints()
+        {
+            locationData.borderPoints = GenerateBorderPoints(this.transform, locationData.radius * borderPointsRadiusMult, borderWaypointMax);
+        }
 
-        //Roads
+        public static Vector3[] GenerateBorderPoints(Transform transform, float radius, int amount, float distanceOffset = 6f)
+        {
+            List<Vector3> newPoints = new List<Vector3>();
+            float angle = 0f;
+            float incAmount = (360f / amount);
+
+            int attempts = 999;
+
+            while (attempts > 0 && newPoints.Count < amount)
+            {
+                Vector3 pos = transform.position + Quaternion.AngleAxis(angle, transform.up) * (Vector3.forward * radius);
+                bool getPoint = UtilityHelpers.GetCloseNavMeshPoint(pos, distanceOffset, out Vector3 point, 50);
+                if (getPoint)
+                {
+                    newPoints.Add(point);
+                    angle += incAmount;
+                }
+                {
+                    attempts--;
+                }
+            }
+
+            return newPoints.ToArray();
+        }
+
         #region TO DO
         public void PopulateLocation() { }
         #endregion
 
-        //tiles
-
         //buildings
-
-        //Entrances 
-
-        //Faction Owner
-
         //Neighbors
-
         //Population
 
-        //Economy
 
-        //Governance
-
-        //Spawn Points
-
-
-        [Header("Sub-Zone Controller")]
-        [SerializeField] private bool showZoneBounds;
-        [SerializeField] private bool showTileGrid;
-        [SerializeField] private bool resetHexagonTilePrototypes;
-        [SerializeField] private bool generateHexagonTileCells;
-        private bool _showZoneBounds;
-        private bool _showTileGrid;
-        private bool _resetHexagonTilePrototypes;
-        private bool _generateHexagonTileCells;
-
-
-        private void OnValidate()
+        private void InitialSetup()
         {
-            if (_showTileGrid != showTileGrid ||
-                _showZoneBounds != showZoneBounds ||
-                _resetHexagonTilePrototypes != resetHexagonTilePrototypes ||
-                _generateHexagonTileCells != generateHexagonTileCells)
-            {
-
-                for (int i = 0; i < _subZones.Count; i++)
-                {
-                    if (_subZones[i] != null)
-                    {
-                        _subZones[i].Debug_ShowTiles(showZoneBounds);
-                        _subZones[i].Debug_ShowBounds(showTileGrid);
-                        _subZones[i].Debug_ResetHexagonellPrototypes(resetHexagonTilePrototypes);
-                        _subZones[i].Debug_GenerateHexagonCells(generateHexagonTileCells);
-                    }
-                }
-
-                if (_resetHexagonTilePrototypes != resetHexagonTilePrototypes ||
-                _generateHexagonTileCells != generateHexagonTileCells)
-                {
-                    resetHexagonTilePrototypes = false;
-                    generateHexagonTileCells = false;
-                }
-
-                _showTileGrid = showTileGrid;
-                _showZoneBounds = showZoneBounds;
-                _resetHexagonTilePrototypes = resetHexagonTilePrototypes;
-                _generateHexagonTileCells = generateHexagonTileCells;
-            }
-
-            if (generateSubzoneCells)
-            {
-                generateSubzoneCells = false;
-                GenerateSubZones();
-            }
+            territory = GetComponent<Territory>();
+            _radius_debug = GetRadius();
         }
 
-
-
-        public int maxSubzones = 3;
-        public List<HexagonCellPrimitive> subZoneCells;
-        public List<Vector3> zoneConnectorPoints;
-        private void GenerateSubZones()
+        public void Revaluate()
         {
-            List<HexagonTilePrototype> hexagonTilePrototypes = LocationUtility.GetTilesWithinRadius(
-                                        HexagonGenerator.DetermineHexagonTilePrototypeGrideSize(
-                                                transform.position,
-                                                withinRadius,
-                                                zoneSize),
-                                                transform.position,
-                                                withinRadius);
-            List<HexagonCellPrimitive> newSubZoneCells = HexagonCellPrimitive.GenerateHexagonCellPrimitives(hexagonTilePrototypes, hexagonCellPrimitive_prefab, transform);
-            HexagonCellPrimitive.PopulateNeighborsFromCornerPoints(newSubZoneCells, 0.33f * (zoneSize / 12f));
-
-            subZoneCells = HexagonCellPrimitive.GetRandomConsecutiveSetOfCount(newSubZoneCells, maxSubzones, transform.position);
-
-            List<HexagonCellPrimitive> toRemove = new List<HexagonCellPrimitive>();
-            toRemove.AddRange(newSubZoneCells.Except(subZoneCells));
-
-            for (int i = 0; i < toRemove.Count; i++)
-            {
-                toRemove[i].gameObject.SetActive(false);
-                // Destroy(toRemove[i].gameObject);
-            }
-
-            if (subZoneCells.Count > 0)
-            {
-                Transform folder = new GameObject("Zones").transform;
-                folder.transform.SetParent(transform);
-
-                foreach (HexagonCellPrimitive item in subZoneCells)
-                {
-                    item.gameObject.transform.SetParent(folder);
-                }
-            }
-
-            zoneConnectorPoints = HexagonCellPrimitive.GetZoneConnectorPoints(subZoneCells, 0.33f * (zoneSize / 12f));
+            InitialSetup();
+            GenerateBorderPoints();
         }
 
+        private void Start()
+        {
+            InitialSetup();
+        }
 
-        //         public static void DeleteGameObjects(List<HexagonCellPrimitive> gameObjects)
-        //         {
-        // #if UNITY_EDITOR
-        //             foreach (HexagonCellPrimitive go in gameObjects)
-        //             {
-        //                 Selection.activeGameObject = go.gameObject;
-        //                 UnityEditor.EditorApplication.ExecuteMenuItem("Edit/Delete");
-        //             }
-        // #endif
-        //         }
-
-
-        [Range(264, 640)] public int withinRadius = 500;
-        [Range(24, 360)] public int zoneSize = 102;
-
-        public List<HexagonTilePrototype> hexagonTilePrototypesTEMP;
-        [SerializeField] private bool showZBounds;
-        [SerializeField] private bool generateSubzoneCells;
-        int _withinRadius;
-        int _zoneSize;
-
-        public GameObject hexagonCellPrimitive_prefab;
+        [Header("Debug Settings")]
+        [SerializeField] private bool showBorderPoints;
 
         private void OnDrawGizmos()
         {
-            if (showZBounds)
+            // Gizmos.DrawWireSphere(this.transform.position, radius);
+            // Gizmos.DrawWireSphere(this.transform.position, GetMinInvasionRadius());
+            Gizmos.color = Color.green;
+            float pointSize = 1f;
+
+            if (showBorderPoints && locationData?.borderPoints != null && locationData.borderPoints.Length > 0)
             {
-                Gizmos.color = Color.magenta;
-                Gizmos.DrawWireSphere(transform.position, withinRadius * transform.lossyScale.x);
-
-
-                if (withinRadius != _withinRadius || zoneSize != _zoneSize || hexagonTilePrototypesTEMP == null || hexagonTilePrototypesTEMP.Count == 0)
+                foreach (Vector3 item in locationData.borderPoints)
                 {
-
-                    hexagonTilePrototypesTEMP = LocationUtility.GetTilesWithinRadius(
-                                            HexagonGenerator.DetermineHexagonTilePrototypeGrideSize(
-                                                    transform.position,
-                                                    withinRadius,
-                                                    zoneSize),
-                                                    transform.position,
-                                                    withinRadius);
+                    Gizmos.DrawSphere(item, pointSize);
                 }
-
-                if (hexagonTilePrototypesTEMP.Count == 0) return;
-
-                Gizmos.color = Color.red;
-
-                for (int i = 0; i < hexagonTilePrototypesTEMP.Count; i++)
-                {
-                    Vector3 pointPos = hexagonTilePrototypesTEMP[i].center;
-                    Gizmos.color = Color.magenta;
-                    Gizmos.DrawSphere(pointPos, 0.3f);
-
-                    for (int j = 0; j < hexagonTilePrototypesTEMP[i].cornerPoints.Length; j++)
-                    {
-                        pointPos = hexagonTilePrototypesTEMP[i].cornerPoints[j];
-                        Gizmos.DrawSphere(pointPos, 0.25f);
-                    }
-
-                    Gizmos.color = Color.black;
-                    ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(hexagonTilePrototypesTEMP[i].cornerPoints);
-                }
+                // }
+                // else
+                // {
+                // Gizmos.DrawWireSphere(this.transform.position + (Vector3.forward * radius), pointSize);
+                // Gizmos.DrawWireSphere(this.transform.position + (-Vector3.forward * radius), pointSize);
+                // Gizmos.DrawWireSphere(this.transform.position + (Vector3.right * radius), pointSize);
+                // Gizmos.DrawWireSphere(this.transform.position + (-Vector3.right * radius), pointSize);
             }
-
-
-            if (zoneConnectorPoints.Count > 0)
-            {
-                foreach (Vector3 item in zoneConnectorPoints)
-                {
-                    Gizmos.color = Color.yellow;
-                    Gizmos.DrawSphere(item, 3f);
-                }
-            }
-
         }
-
-        public List<HexagonCellPrimitive> GenerateHexagonCellPrimitives(List<HexagonTilePrototype> hexagonTilePrototypes, GameObject prefab, Transform transform)
-        {
-            List<HexagonCellPrimitive> hexagonCellPrimitives = new List<HexagonCellPrimitive>();
-            int cellId = 0;
-
-            Transform folder = new GameObject("HexagonCellPrimitives").transform;
-            folder.transform.SetParent(transform);
-
-            foreach (HexagonTilePrototype prototype in hexagonTilePrototypes)
-            {
-                Vector3 pointPos = prototype.center;
-
-                GameObject newTile = Instantiate(prefab, pointPos, Quaternion.identity);
-                HexagonCellPrimitive hexagonTile = newTile.GetComponent<HexagonCellPrimitive>();
-                hexagonTile._cornerPoints = prototype.cornerPoints;
-                hexagonTile.size = prototype.size;
-                hexagonTile.SetID(cellId);
-                hexagonTile.name = "HexagonCellPrimitive_" + cellId;
-
-                hexagonCellPrimitives.Add(hexagonTile);
-
-                hexagonTile.transform.SetParent(folder);
-
-                cellId++;
-            }
-            return hexagonCellPrimitives;
-        }
-
-
     }
 
     [System.Serializable]
@@ -273,7 +152,76 @@ namespace ProceduralBase
     {
         public Vector3 position;
         public float radius;
-        public List<SubzonePrototype> subzonePrototypes;
-        public List<ZoneConnector> subzoneConnectors;
     }
+
+    [System.Serializable]
+    public struct LocationNeighborBufferRule
+    {
+        public LocationType locationType;
+        // [Range(0f, 10f)] public float minDistanceMult;
+        [Range(0f, 964f)] public float minDistance;
+    }
+
+    [System.Serializable]
+    public struct LocationMarkerPrefabOption
+    {
+        public LocationMarkerPrefabOption(
+            GridPreset _gridPreset,
+            LocationType _locationType,
+            TileDirectory _tileDirectory,
+            HexagonSocketDirectory _socketDirectory,
+            CellSearchPriority _cellSearchPriority,
+            bool _enableTunnels,
+            int _defaultNeightborBufferDistanceMin,
+            int _priority,
+            int _cluster_memberMin,
+            int _cluster_memberMax,
+            int _cluster_TunnelMemberMin,
+            int _cluster_TunnelMemberMax,
+            int _worldSpacesMin,
+            int _worldSpacesMax,
+            Vector2 _elevationRangeMinMax
+        )
+        {
+            gridPreset = _gridPreset;
+            locationType = _locationType;
+            cellSearchPriority = _cellSearchPriority;
+            enableTunnels = _enableTunnels;
+            defaultNeightborBufferDistanceMin = _defaultNeightborBufferDistanceMin;
+            priority = _priority;
+            tileDirectory = _tileDirectory;
+            socketDirectory = _socketDirectory;
+            cluster_memberMin = _cluster_memberMin;
+            cluster_memberMax = _cluster_memberMax;
+            cluster_TunnelMemberMin = _cluster_memberMin;
+            cluster_TunnelMemberMax = _cluster_memberMax;
+            worldSpacesMin = _worldSpacesMin;
+            worldSpacesMax = _worldSpacesMax;
+            elevationRangeMinMax = _elevationRangeMinMax;
+        }
+        public LocationType locationType;
+        public GridPreset gridPreset;
+        [Header(" ")]
+        public TileDirectory tileDirectory;
+        public HexagonSocketDirectory socketDirectory;
+        [Header(" ")]
+        public Vector2 elevationRangeMinMax;
+        [Header(" ")]
+        public int defaultNeightborBufferDistanceMin;
+        public int priority;
+        public int cluster_memberMin;
+        public int cluster_memberMax;
+
+        [Header(" ")]
+        public int worldSpacesMin;
+        public int worldSpacesMax;
+
+        [Header(" ")]
+        public bool enableTunnels;
+        public int cluster_TunnelMemberMin;
+        public int cluster_TunnelMemberMax;
+        public CellSearchPriority cellSearchPriority;
+
+    }
+
 }

@@ -46,7 +46,7 @@ namespace WFCSystem
 
         public bool[,] GetCompatibilityMatrix() => matrix;
         public bool copyMatrixFromTileSocketDirectory;
-
+        public bool enableDebugLogs;
 
 
         private void InitialSetup()
@@ -58,15 +58,10 @@ namespace WFCSystem
                 sockets[32] = "__LAYERED__";
             }
 
-            if (matrix == null)
-            {
-                matrix = new bool[sockets.Length, sockets.Length];
-            }
+            if (matrix == null) matrix = new bool[sockets.Length, sockets.Length];
 
-            if (colors == null)
-            {
-                colors = GenerateUniqueColors(sockets.Length);
-            }
+            if (colors == null) colors = GenerateUniqueColors(sockets.Length);
+
 
             EvaluateGlobalSockets();
 
@@ -210,7 +205,7 @@ namespace WFCSystem
 
         public void Load()
         {
-            (bool[,] loadedMatrix, string[] loadedSockets) = LoadData(savedfilePath, savefileName, name);
+            (bool[,] loadedMatrix, string[] loadedSockets) = LoadData(savedfilePath, savefileName, name, enableDebugLogs);
             if (loadedMatrix != null) matrix = loadedMatrix;
             if (loadedSockets != null) sockets = loadedSockets;
         }
@@ -246,7 +241,7 @@ namespace WFCSystem
             }
         }
 
-        public static (bool[,], string[]) LoadData(string directoryPath, string fileName, string directoryName)
+        public static (bool[,], string[]) LoadData(string directoryPath, string fileName, string directoryName, bool enableDebugLogs = false)
         {
             try
             {
@@ -259,7 +254,7 @@ namespace WFCSystem
                     bool[,] matrix = JsonConvert.DeserializeObject<bool[,]>(dict["matrix"].ToString());
                     string[] sockets = JsonConvert.DeserializeObject<string[]>(dict["sockets"].ToString());
 
-                    Debug.Log("\n" + directoryName + " loaded socket directory file: " + fileName);
+                    if (enableDebugLogs) Debug.Log("\n" + directoryName + " loaded socket directory file: " + fileName);
                     return (matrix, sockets);
                 }
                 else

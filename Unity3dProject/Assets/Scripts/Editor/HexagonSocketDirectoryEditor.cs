@@ -11,6 +11,13 @@ public class HexagonSocketDirectoryEditor : Editor
     private SerializedProperty colors;
     private bool[,] matrix;
 
+    private GUIStyle headerStyle;
+    private GUIStyle fontStyleSocket_matrix;
+    private GUIStyle fontStyleSocket_sides;
+    private GUIStyle fontStyleSocket_layers;
+    private GUIStyle fontStyleSocket_hover;
+
+
     private void OnEnable()
     {
         socketDirectory = (HexagonSocketDirectory)target;
@@ -70,6 +77,10 @@ public class HexagonSocketDirectoryEditor : Editor
         sockets = serializedObject.FindProperty("sockets");
 
 
+        fontStyleSocket_matrix = new GUIStyle(GUI.skin.label);
+
+        fontStyleSocket_matrix.normal.textColor = Color.yellow;
+
         // DrawDefaultInspector();
         // if (matrix == null || sockets == null) return;
 
@@ -119,7 +130,9 @@ public class HexagonSocketDirectoryEditor : Editor
             GUIUtility.RotateAroundPivot(-90f, new Vector2(5, 0));
 
             // Display the socket name with a fixed width
-            GUILayout.Label(sockets.GetArrayElementAtIndex(x).stringValue, GUILayout.Width(horizontalOffset), GUILayout.Height(21));
+            // GUILayout.Label(sockets.GetArrayElementAtIndex(x).stringValue, GUILayout.Width(horizontalOffset), GUILayout.Height(21));
+            EditorGUILayout.LabelField(sockets.GetArrayElementAtIndex(x).stringValue, fontStyleSocket_matrix, GUILayout.Width(horizontalOffset), GUILayout.Height(21));
+
             // GUILayout.Space(50); // Add more space before the horizontal labels
 
             // Reset the GUI matrix
@@ -140,7 +153,8 @@ public class HexagonSocketDirectoryEditor : Editor
             GUILayout.BeginHorizontal();
 
             // Display the socket name beside the grid with a fixed width
-            GUILayout.Label(sockets.GetArrayElementAtIndex(i).stringValue, GUILayout.Width(horizontalOffset));
+            // GUILayout.Label(sockets.GetArrayElementAtIndex(i).stringValue, GUILayout.Width(horizontalOffset));
+            EditorGUILayout.LabelField(sockets.GetArrayElementAtIndex(i).stringValue, fontStyleSocket_matrix, GUILayout.Width(horizontalOffset));
 
             for (int j = 0; j < matrix.GetLength(1); j++)
             {

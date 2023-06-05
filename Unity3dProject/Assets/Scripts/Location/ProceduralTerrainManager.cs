@@ -136,7 +136,7 @@ namespace ProceduralBase
         {
             if (vertexGrid == null)
             {
-                vertexGrid = HexagonCell.GenerateVertexGrid(transform.position, terrainSize, 6);
+                vertexGrid = TerrainVertexUtil.GenerateVertexGrid(transform.position, terrainSize, 6, Vector2.zero);
                 Debug.Log("GenerateMesh, vertexGrid: " + vertexGrid.GetLength(0));
             }
 

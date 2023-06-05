@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEditor;
 using System.Linq;
 using ProceduralBase;
+using WFCSystem;
 
 [System.Serializable]
 public struct LocationPoint
@@ -613,7 +614,7 @@ public class ProceduralTerrainMesh10 : MonoBehaviour
 
                     if (nearestZoneDist < locationPointZoneRadius && nearestLocation.subZonePoints.Length > 1)
                     {
-                        (Vector3 nearestConnector, float connectorDistance, int index) = ProceduralTerrainUtility.GetClosestPoint(nearestLocation.zoneConnectors, new Vector2(x, y));
+                        (Vector3 nearestConnector, float connectorDistance, int index) = VectorUtil.GetClosestPoint_XZ_WithDistanceAndIndex(nearestLocation.zoneConnectors, new Vector3(x, 0, y));
                         // (Vector3 nearestConnector, float connectorDistance) = ProceduralTerrainUtility.GetClosestPoint(nearestLocation.zoneConnectorPoints, new Vector2(x, y));
 
                         if (connectorDistance < zoneConnectorPointRadius * 1.6f)
@@ -755,7 +756,7 @@ public class ProceduralTerrainMesh10 : MonoBehaviour
 
             for (int i = 0; i < newZones.Length; i++)
             {
-                Vector3[] corners = ProceduralTerrainUtility.GenerateHexagonPoints(newZones[i], locationPointZoneRadius * 0.85f);
+                Vector3[] corners = HexCoreUtil.GenerateHexagonPoints(newZones[i], locationPointZoneRadius * 0.85f);
                 zoneCorners.Add(corners);
                 // Vector3[,] grid = ProceduralTerrainUtility.GenerateGrid(corners, minRoadPointSpacing, newZones[i].y);
                 // zoneGrid.Add(grid);

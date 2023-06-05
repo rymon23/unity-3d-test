@@ -125,7 +125,7 @@ namespace WFCSystem
             foreach (VerticalCellPrototype cellPrototype in cellPrototypes)
             {
                 Vector3[] _cornerPoints = cellPrototype._cornerPoints;
-                ProceduralTerrainUtility.DrawRectangleInGizmos(_cornerPoints);
+                VectorUtil.DrawRectangleInGizmos(_cornerPoints);
 
                 // for (int i = 0; i < corners.Length; i++)
                 // {

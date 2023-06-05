@@ -6,25 +6,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
+
 namespace WFCSystem
 {
-    public interface IHexagonTile
-    {
-        public TileContext GetTileContext();
-        public int[] GetRotatedLayerCornerSockets(bool top, int rotation, bool inverted = false);
-        public int GetRotatedSideCornerSocketId(HexagonCorner corner, int rotation, bool top, bool inverted = false);
-        public void SetCornerSocketSetIds(CornerSocketSetType socketSetType, int[] _newCornerSocketIds);
-    }
-
-    public enum CornerSocketSetType { SideBottom, SideTop, Bottom, Top }
-    public enum GridExclusionRule { Unset = 0, EdgeOnly, InnerCellOnly, GridEdgesOnly, InnerGrid_NoEdges, InnerGrid_Any }
-    public enum TileContext
-    {
-        Default = 0,
-        Micro = 1,
-        Meta,
-    }
-
     public enum TileSeries
     {
         Unset = 0,
@@ -150,7 +134,7 @@ namespace WFCSystem
         public bool isClusterCenterTile; // Is the center part of a set of tiles that make a cluster
         public bool isLeveledTile;
         public bool isLeveledRamp;
-        // public bool isVerticalWFC;
+
         [Range(0.05f, 1f)] public float probabilityWeight = 0.3f;
 
         [Header("Tile Socket Configuration")]
@@ -249,7 +233,7 @@ namespace WFCSystem
 
         public (int[], int[]) GetCornerSocketsBySide(HexagonSide side)
         {
-            (HexagonCorner cornerA, HexagonCorner cornerB) = HexagonCell.GetCornersFromSide(side);
+            (HexagonCorner cornerA, HexagonCorner cornerB) = HexCoreUtil.GetCornersFromSide(side);
 
             int[] top = new int[2];
             int[] bottom = new int[2];
@@ -333,7 +317,7 @@ namespace WFCSystem
 
         public (int[], int[]) GetRotatedCornerSocketsBySide(HexagonSide side, int rotation, bool inverted)
         {
-            (HexagonCorner cornerA, HexagonCorner cornerB) = HexagonCell.GetCornersFromSide(side);
+            (HexagonCorner cornerA, HexagonCorner cornerB) = HexCoreUtil.GetCornersFromSide(side);
 
             int[] top = new int[2];
             int[] bottom = new int[2];
@@ -456,7 +440,7 @@ namespace WFCSystem
 
         private void RecalculateEdgePoints()
         {
-            _corners = ProceduralTerrainUtility.GenerateHexagonPoints(transform.position, size);
+            _corners = HexCoreUtil.GenerateHexagonPoints(transform.position, size);
             _sides = HexagonGenerator.GenerateHexagonSidePoints(_corners);
             EvaluateRotatedCornerSockets();
         }
@@ -720,7 +704,7 @@ namespace WFCSystem
             if (showEdges)
             {
                 Gizmos.color = Color.magenta;
-                ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(_corners);
+                VectorUtil.DrawHexagonPointLinesInGizmos(_corners);
             }
 
 
@@ -749,7 +733,7 @@ namespace WFCSystem
 
         private void UpdateSocketLabelPlacement(HexagonSide _side, bool top, bool layered)
         {
-            (HexagonCorner _cornerA, HexagonCorner _cornerB) = HexagonCell.GetCornersFromSide(_side);
+            (HexagonCorner _cornerA, HexagonCorner _cornerB) = HexCoreUtil.GetCornersFromSide(_side);
 
             int cornerA = (int)_cornerA;
             int cornerB = (int)_cornerB;
@@ -853,13 +837,13 @@ namespace WFCSystem
             HexagonSide _displaySide = _side;
             HexagonCorner[] _displayCorners = new HexagonCorner[2];
 
-            (HexagonCorner _cornerA, HexagonCorner _cornerB) = HexagonCell.GetCornersFromSide(_side);
+            (HexagonCorner _cornerA, HexagonCorner _cornerB) = HexCoreUtil.GetCornersFromSide(_side);
             int cornerA = (int)_cornerA;
             int cornerB = (int)_cornerB;
 
             if (inverted)
             {
-                (HexagonCorner _displayCornerA, HexagonCorner _displayCornerB) = HexagonCell.GetCornersFromSide(_displaySide);
+                (HexagonCorner _displayCornerA, HexagonCorner _displayCornerB) = HexCoreUtil.GetCornersFromSide(_displaySide);
                 _displayCorners[0] = _displayCornerA;
                 _displayCorners[1] = _displayCornerB;
             }

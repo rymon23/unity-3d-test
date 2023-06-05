@@ -13,6 +13,8 @@ namespace ProceduralBase
         Dungeon,
         Settlement,
         Town,
+        Building,
+        Tunnel
     }
     public enum LocationDistrictType
     {
@@ -30,45 +32,54 @@ namespace ProceduralBase
         public string uid { get; private set; }
         public HexagonCellCluster cluster { get; private set; }
         public LocationType locationType;
+        public Bounds bounds;
         public float radius { get; private set; }
         public Vector3 centerPosition;
         public List<Vector3> boundsCenterPoints;
-        public List<Vector3> borderPoints;
-        public List<Vector3> entryPoints;
+        public Vector3[] borderPoints;
+        public Vector3[] entryPoints;
+        public Vector3[] spawnPoints;
+        public LocationMarkerPrefabOption prefabSettings { get; private set; }
 
-        public LocationData(string id, Vector3 centerPostion, LocationType type, float radius)
+        // public LocationData(string id, Vector3 centerPostion, LocationType type, LocationMarkerPrefabOption _prefabSettings, float radius)
+        // {
+        //     this.id = id;
+        //     this.uid = UtilityHelpers.GenerateUniqueID(id);
+        //     this.locationType = type;
+        //     this.prefabSettings = _prefabSettings;
+        //     this.centerPosition = centerPostion;
+        //     this.radius = radius;
+        //     this.boundsCenterPoints = new List<Vector3>();
+        //     this.boundsCenterPoints.Add(centerPosition);
+        // }
+
+        public LocationData(HexagonCellCluster cluster, LocationType type, LocationMarkerPrefabOption _prefabSettings)
         {
             this.id = id;
             this.uid = UtilityHelpers.GenerateUniqueID(id);
             this.locationType = type;
-            this.centerPosition = centerPostion;
-            this.radius = radius;
-            this.boundsCenterPoints = new List<Vector3>();
-            this.boundsCenterPoints.Add(centerPosition);
-        }
-
-        public LocationData(HexagonCellCluster cluster, LocationType type)
-        {
-            this.id = id;
-            this.uid = UtilityHelpers.GenerateUniqueID(id);
-            this.locationType = type;
+            this.prefabSettings = _prefabSettings;
             this.centerPosition = cluster.centerPosition;
-            this.radius = cluster.radius;
             this.boundsCenterPoints = cluster.boundsCenterPoints;
             this.cluster = cluster;
+            this.bounds = cluster.CalculateBounds();
+            this.radius = cluster.radius;
+            // this.radius = VectorUtil.CalculateBoundingSphereRadius(this.bounds);
+
+            Debug.Log("New Location: " + locationType + ", radius: " + radius);
         }
 
-        public static LocationData GenerateLocationDataFromCluster(HexagonCellCluster cluster, LocationType locationType)
+        public static LocationData GenerateLocationDataFromCluster(HexagonCellCluster cluster, LocationType locationType, LocationMarkerPrefabOption prefabSettings)
         {
-            return new LocationData(cluster, locationType);
+            return new LocationData(cluster, locationType, prefabSettings);
         }
 
-        public static List<LocationData> GenerateLocationDataFromClusters(List<HexagonCellCluster> clusters, LocationType locationType)
+        public static List<LocationData> GenerateLocationDataFromClusters(List<HexagonCellCluster> clusters, LocationType locationType, LocationMarkerPrefabOption prefabSettings)
         {
             List<LocationData> locationData = new List<LocationData>();
             foreach (HexagonCellCluster item in clusters)
             {
-                locationData.Add(GenerateLocationDataFromCluster(item, LocationType.Outpost));
+                locationData.Add(GenerateLocationDataFromCluster(item, locationType, prefabSettings));
             }
             return locationData;
         }

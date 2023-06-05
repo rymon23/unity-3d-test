@@ -8,26 +8,55 @@ using UnityEditor;
 
 namespace WFCSystem
 {
-
-    public enum EdgeCellType { None = 0, Default = 1, Connector = 2, Grid, Inner }
-
     [System.Serializable]
     public class HexagonCell : MonoBehaviour, IHexCell
     {
         #region Static Vars
-        static float neighborSearchCenterDistMult = 2.4f;
+        public static float neighborSearchCenterDistMult = 2.4f;
         public static float GetCornerNeighborSearchDist(int cellSize) => 1.2f * ((float)cellSize / 12f);
         #endregion
 
         #region Interface Methods
         public string GetId() => id;
         public string Get_Uid() => null;
+        public string GetLayerStackId() => layerStackId;
         public int GetSize() => size;
-        public int GetLayer() => _gridLayer;
+        public int GetLayer() => _layer;
+
+        public void SetGridLayer(int value)
+        {
+            _layer = value;
+        }
+
         public bool IsEdge() => isEdgeCell;
+        public bool IsEdgeOfParent() => isEdgeOfParent;
+        public bool IsOriginalGridEdge() => isOGGridEdge;
+
         public bool IsEntry() => isEntryCell;
         public bool IsPath() => isPathCell;
-        public bool IsGround() => cellStatus == CellStatus.Ground;
+        public bool IsGround() => cellStatus == CellStatus.GenericGround || cellStatus == CellStatus.FlatGround;
+        public bool IsGroundCell() => IsGround() || isLeveledGroundCell;
+        public bool IsGenericGround() => cellStatus == CellStatus.GenericGround;
+        public bool IsFlatGround() => cellStatus == CellStatus.FlatGround;
+        public bool IsUnderGround() => cellStatus == CellStatus.UnderGround;
+        public bool IsUnderWater() => cellStatus == CellStatus.Underwater;
+        public void SetToGround(bool isFlatGround)
+        {
+            if (isFlatGround)
+            {
+                SetCellStatus(CellStatus.FlatGround);
+            }
+            else SetCellStatus(CellStatus.GenericGround);
+        }
+
+
+        public Vector2 parentCoordinate { get; private set; } = Vector2.positiveInfinity;
+        public Vector2 worldCoordinate { get; private set; } = Vector2.positiveInfinity;
+        public Vector2 GetLookup() => worldCoordinate;
+        public Vector2 GetParentLookup() => parentCoordinate;
+        public Vector2 GetWorldSpaceLookup() => worldCoordinate;
+
+
         public bool IsGridHost() => isGridHost;
 
         [SerializeField] private bool isGridHost;
@@ -38,6 +67,10 @@ namespace WFCSystem
         }
 
         public CellStatus GetCellStatus() => cellStatus;
+        public void SetCellStatus(CellStatus status)
+        {
+            cellStatus = status;
+        }
         public EdgeCellType GetEdgeCellType() => _edgeCellType;
         public Vector3 GetPosition() => transform.position;
         public Vector3[] GetCorners() => _cornerPoints;
@@ -45,6 +78,8 @@ namespace WFCSystem
         #endregion
 
         public string id = "-1";
+        public string layerStackId { get; private set; }
+        [SerializeField] private int _layer = 0;
 
         [Header("Base Settings")]
         [SerializeField] private int size = 12;
@@ -52,6 +87,7 @@ namespace WFCSystem
         {
             size = value;
         }
+
 
         [Header("Vector Points")]
         #region Vector Points & Vertices
@@ -93,9 +129,9 @@ namespace WFCSystem
             return count;
         }
 
-        public List<HexagonCell> GetLayerNeighbors() => _neighbors.FindAll(n => n.GetGridLayer() == GetGridLayer());
+        public List<HexagonCell> GetLayerNeighbors() => _neighbors.FindAll(n => n.GetLayer() == GetLayer());
         public bool HasEntryNeighbor() => _neighbors.Find(n => n.isEntryCell);
-        public int GetUnassignedNeighborCount(bool includeLayers) => _neighbors.FindAll(n => n.IsAssigned() == false && n.GetGridLayer() == GetGridLayer()).Count;
+        public int GetUnassignedNeighborCount(bool includeLayers) => _neighbors.FindAll(n => n.IsAssigned() == false && n.GetLayer() == GetLayer()).Count;
 
         public List<HexagonCell> GetPathNeighbors()
         {
@@ -148,7 +184,7 @@ namespace WFCSystem
 
         public int[] GetBottomNeighborTileSockets(bool top)
         {
-            if (GetGridLayer() == 0) return null;
+            if (GetLayer() == 0) return null;
 
             if (layeredNeighbor[0] == null) return null;
 
@@ -247,7 +283,7 @@ namespace WFCSystem
             neighborCornerSockets.bottomCorners = new int[2];
             neighborCornerSockets.topCorners = new int[2];
 
-            (HexagonCorner cornerA, HexagonCorner cornerB) = GetCornersFromSide((HexagonSide)neighborRelativeSide);
+            (HexagonCorner cornerA, HexagonCorner cornerB) = HexCoreUtil.GetCornersFromSide((HexagonSide)neighborRelativeSide);
             neighborCornerSockets.bottomCorners[0] = sideNeighbor.currentTile.GetRotatedSideCornerSocketId(cornerA, sideNeighbor.currentTileRotation, false, isNeighborInverted);
             neighborCornerSockets.bottomCorners[1] = sideNeighbor.currentTile.GetRotatedSideCornerSocketId(cornerB, sideNeighbor.currentTileRotation, false, isNeighborInverted);
             neighborCornerSockets.topCorners[0] = sideNeighbor.currentTile.GetRotatedSideCornerSocketId(cornerA, sideNeighbor.currentTileRotation, true, isNeighborInverted);
@@ -271,7 +307,7 @@ namespace WFCSystem
                 // If no neighbor, socket is Edge socket value
                 if (sideNeighbor == null)
                 {
-                    if (IsInnerEdgeCell())
+                    if (IsInnerEdge())
                     {
                         neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(GlobalSockets.InnerCell_Generic);
                         neighborCornerSockets.topCorners = GetDefaultSideSocketSet(GlobalSockets.InnerCell_Generic);
@@ -294,7 +330,7 @@ namespace WFCSystem
                     {
 
                         // EDGED
-                        if (useWalledEdgePreference && IsGridEdgeCell() && !IsInCluster())
+                        if (useWalledEdgePreference && IsGridEdge() && !IsInCluster())
                         {
                             GlobalSockets defaultSocketId;
 
@@ -350,7 +386,7 @@ namespace WFCSystem
                             {
                                 GlobalSockets defaultSocketId;
 
-                                if (IsGridEdgeCell())
+                                if (IsGridEdge())
                                 {
                                     // Edge Connectors
                                     if (GetEdgeCellType() == EdgeCellType.Connector && (sideNeighbor.GetParenCellId() != GetParenCellId()))
@@ -451,9 +487,11 @@ namespace WFCSystem
         {
             isEntryCell = enable;
         }
+        private bool isOGGridEdge;
         public bool isEdgeCell;//{ private set; get; }
-        public bool IsInnerEdgeCell() => isEdgeCell && _edgeCellType == EdgeCellType.Inner;
-        public bool IsGridEdgeCell() => isEdgeCell && _edgeCellType == EdgeCellType.Grid;
+        public bool isEdgeOfParent;//{ private set; get; }
+        public bool IsInnerEdge() => isEdgeCell && _edgeCellType == EdgeCellType.Inner;
+        public bool IsGridEdge() => isEdgeCell && _edgeCellType == EdgeCellType.Default;
         public void SetEdgeCell(bool enable, EdgeCellType type)
         {
             isEdgeCell = enable;
@@ -477,20 +515,25 @@ namespace WFCSystem
             isPathPrototype = enable;
         }
 
-        // public bool isGroundCell;
-        // public void SetGroundCell(bool enable)
-        // {
-        //     isGroundCell = enable;
-        // }
-        public bool IsGroundCell()
+        #region World Space
+        public Vector2 worldspaceCoord { get; private set; } = Vector2.positiveInfinity;
+        public Vector2 GetWorldSpaceCoordinate() => worldspaceCoord;
+        public void SetWorldSpaceCoordinate(Vector2 coordinate)
         {
-            return cellStatus == CellStatus.Ground || isLeveledGroundCell || (_gridLayer == 0 && !isLeveledCell);
+            worldspaceCoord = coordinate;
         }
+
+        public bool HasWorldSpaceCoordinate() => worldspaceCoord != Vector2.positiveInfinity;
+        public bool isWorldSpaceCellActive;
+        #endregion
+
         public bool isLeveledGroundCell;//{ private set; get; }
-        public void SetLeveledGroundCell(bool enable)
+        public void SetLeveledGroundCell(bool enable, bool isFlatGround)
         {
             isLeveledGroundCell = enable;
+            SetToGround(isFlatGround);
         }
+
         public bool isLeveledCell;//{ private set; get; }
         public void SetLeveledCell(bool enable)
         {
@@ -507,13 +550,7 @@ namespace WFCSystem
             isLeveledRampCell = enable;
         }
 
-        [Header("Grid Layer")]
-        [SerializeField] private int _gridLayer = 0;
-        public int GetGridLayer() => _gridLayer;
-        public void SetGridLayer(int gridlayer)
-        {
-            _gridLayer = gridlayer;
-        }
+
 
         [Header("Host Parent Cell")]
         [SerializeField] private string _parentId = null;
@@ -524,23 +561,14 @@ namespace WFCSystem
         }
 
         [Header("Micro Cluster System")]
-        private bool _isClusterCellParent;
-        public bool IsClusterCellParent() => _isClusterCellParent;
-        public bool IsInClusterSystem() => IsInCluster() || IsClusterCellParent() || (_clusterCellParentId != "" && _clusterCellParentId != null);
 
-        [SerializeField] private string _clusterCellParentId;
-        public string GetClusterCellParentId() => _clusterCellParentId;
-        public void SetClusterCellParentId(string _id)
-        {
-            _clusterCellParentId = _id;
-        }
 
         [Header("Cluster")]
         [SerializeField] public bool isClusterPrototype;
-        [SerializeField] private int clusterId = -1;
-        public bool IsInCluster() => clusterId != -1;
-        public int GetClusterID() => clusterId;
-        public void SetClusterID(int _id)
+        [SerializeField] private string clusterId = null;
+        public bool IsInCluster() => clusterId != null;
+        public string GetClusterID() => clusterId;
+        public void SetClusterID(string _id)
         {
             clusterId = _id;
         }
@@ -560,6 +588,16 @@ namespace WFCSystem
             }
             return num;
         }
+        private bool _isClusterCellParent;
+        public bool IsClusterCellParent() => _isClusterCellParent;
+        public bool IsInClusterSystem() => IsInCluster() || IsClusterCellParent() || (_clusterCellParentId != "" && _clusterCellParentId != null);
+
+        [SerializeField] private string _clusterCellParentId;
+        public string GetClusterCellParentId() => _clusterCellParentId;
+        public void SetClusterCellParentId(string _id)
+        {
+            _clusterCellParentId = _id;
+        }
 
         [Header("Tile")]
         [SerializeField] private IHexagonTile currentTile;
@@ -570,11 +608,11 @@ namespace WFCSystem
         public HexagonTileCore GetCurrentTile() => (HexagonTileCore)currentTile;
         public void SetTile(HexagonTileCore newTile, int rotation, bool inverted = false)
         {
-            if (IsInCluster())
-            {
-                Debug.LogError("Trying to set a Tile on a cell with a clusterId assigned");
-                return;
-            }
+            // if (IsInCluster())
+            // {
+            //     Debug.LogError("Trying to set a Tile on a cell with a clusterId assigned");
+            //     return;
+            // }
             currentTile = (IHexagonTile)newTile;
             currentTileRotation = rotation;
             isCurrentTileInverted = inverted;
@@ -593,24 +631,29 @@ namespace WFCSystem
         // }
 
         public bool isIgnored;
-        public void SetIgnored(bool ignore)
+        public void SetIgnore(bool ignore)
         {
             isIgnored = ignore;
         }
-        public bool IsDisposable() => cellStatus == CellStatus.Remove || cellStatus == CellStatus.UnderGround;
-        public bool IsAssigned() => currentTile != null || IsGridHost() || isIgnored || IsInClusterSystem() || IsDisposable() || (isLeveledCell && !isLeveledGroundCell);
+
+        public bool IsWFC_Assigned() => (isPathCell || isGridHost || currentTile != null || (isLeveledCell && !isLeveledGroundCell));
+        public bool IsPreAssigned() => (isPathCell || isGridHost || IsInCluster());
+        public bool IsAssigned() => currentTile != null || isGridHost || isIgnored || IsInClusterSystem() || IsDisposable() || (isLeveledCell && !isLeveledGroundCell);
+        public bool IsDisposable() => cellStatus == CellStatus.Remove;
+        public bool IsRemoved() => (cellStatus == CellStatus.Remove);
+
         public IHexagonTile GetTile() => currentTile;
 
         public void ClearTile()
         {
             currentTile = null;
             currentTileRotation = 0;
-            SetIgnored(false);
+            SetIgnore(false);
         }
 
-        private void RecalculateEdgePoints()
+        public void RecalculateEdgePoints()
         {
-            _cornerPoints = ProceduralTerrainUtility.GenerateHexagonPoints(transform.position, size);
+            _cornerPoints = HexCoreUtil.GenerateHexagonPoints(transform.position, size);
             _sides = HexagonGenerator.GenerateHexagonSidePoints(_cornerPoints);
         }
 
@@ -656,7 +699,13 @@ namespace WFCSystem
         [SerializeField] private bool showCorners;
         [SerializeField] private bool showEdges;
         [SerializeField] private bool resetPoints;
-        public bool highlight;
+
+        public bool isHighlighted { get; private set; }
+        public void Highlight(bool enable)
+        {
+            isHighlighted = enable;
+        }
+
 
         #region Saved State
         private Vector3 _currentCenterPosition;
@@ -715,7 +764,7 @@ namespace WFCSystem
                         Gizmos.color = Color.green;
                         radius = 0.5f;
                     }
-                    else if (_edgeCellType == EdgeCellType.Grid)
+                    else if (_edgeCellType == EdgeCellType.Default)
                     {
                         Gizmos.color = Color.red;
                         radius = 0.9f;
@@ -790,7 +839,7 @@ namespace WFCSystem
             if (showEdges)
             {
                 Gizmos.color = Color.magenta;
-                ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(_cornerPoints);
+                VectorUtil.DrawHexagonPointLinesInGizmos(_cornerPoints);
             }
 
             if (showNeighbors)
@@ -815,7 +864,7 @@ namespace WFCSystem
 
                 for (int neighbor = 0; neighbor < _neighbors.Count; neighbor++)
                 {
-                    if (_neighbors[neighbor].GetGridLayer() != GetGridLayer() || added.Contains(_neighbors[neighbor].id)) continue;
+                    if (_neighbors[neighbor].GetLayer() != GetLayer() || added.Contains(_neighbors[neighbor].id)) continue;
 
                     _neighbors[neighbor].RecalculateEdgePoints();
 
@@ -840,40 +889,6 @@ namespace WFCSystem
         }
 
 
-        public static (HexagonCorner, HexagonCorner) GetCornersFromSide(HexagonSide side)
-        {
-            switch (side)
-            {
-                case HexagonSide.Front:
-                    return (HexagonCorner.FrontA, HexagonCorner.FrontB);
-                case HexagonSide.FrontRight:
-                    return (HexagonCorner.FrontRightA, HexagonCorner.FrontRightB);
-                case HexagonSide.BackRight:
-                    return (HexagonCorner.BackRightA, HexagonCorner.BackRightB);
-                case HexagonSide.Back:
-                    return (HexagonCorner.BackA, HexagonCorner.BackB);
-                case HexagonSide.BackLeft:
-                    return (HexagonCorner.BackLeftA, HexagonCorner.BackLeftB);
-                case HexagonSide.FrontLeft:
-                    return (HexagonCorner.FrontLeftA, HexagonCorner.FrontLeftB);
-                // Front
-                default:
-                    return (HexagonCorner.FrontA, HexagonCorner.FrontB);
-            }
-        }
-
-        public static HexagonSide GetSideFromCorner(HexagonCorner corner)
-        {
-            if (corner == HexagonCorner.FrontA || corner == HexagonCorner.FrontB) return HexagonSide.Front;
-            if (corner == HexagonCorner.FrontRightA || corner == HexagonCorner.FrontRightB) return HexagonSide.FrontRight;
-            if (corner == HexagonCorner.BackRightA || corner == HexagonCorner.BackRightB) return HexagonSide.BackRight;
-
-            if (corner == HexagonCorner.BackA || corner == HexagonCorner.BackB) return HexagonSide.Back;
-            if (corner == HexagonCorner.BackLeftA || corner == HexagonCorner.BackLeftB) return HexagonSide.BackLeft;
-            if (corner == HexagonCorner.FrontLeftA || corner == HexagonCorner.FrontLeftB) return HexagonSide.FrontLeft;
-
-            return HexagonSide.Front;
-        }
 
         public static HexagonCell EvaluateLevelGroundPath(HexagonCell pathCell)
         {
@@ -897,80 +912,6 @@ namespace WFCSystem
             return pathCell;
         }
 
-        public static bool IsEdgeCell(HexagonCell cell, bool isMultilayerCellGrid, bool assignToName, bool scopeToParentCell)
-        {
-            if (cell == null) return false;
-
-            if (cell._edgeCellType > EdgeCellType.Default)
-            {
-                if (assignToName && !cell.gameObject.name.Contains("_EDGE")) cell.gameObject.name += "_EDGE";
-                return true;
-            }
-
-            List<HexagonCell> allSideNeighbors = cell._neighbors.FindAll(c => c.GetGridLayer() == cell.GetGridLayer());
-            bool isConnectorCell = allSideNeighbors.Find(n => n.GetParenCellId() != cell.GetParenCellId());
-
-            if (scopeToParentCell) allSideNeighbors = allSideNeighbors.FindAll(n => n.GetParenCellId() == cell.GetParenCellId());
-
-            int sideNeighborCount = allSideNeighbors.Count; //cell.GetSideNeighborCount(scopeToParentCell);
-            int totalNeighborCount = cell._neighbors.Count;
-            bool isEdge = false;
-
-            if (sideNeighborCount < 6 || (isMultilayerCellGrid && totalNeighborCount < 7) || (cell.GetGridLayer() > 0 && cell.layeredNeighbor[0] != null && cell.layeredNeighbor[0]._neighbors.Count < 7))
-            {
-                cell.SetEdgeCell(true, isConnectorCell ? EdgeCellType.Connector : EdgeCellType.Default);
-                isEdge = true;
-
-                if (assignToName && !cell.gameObject.name.Contains("_EDGE")) cell.gameObject.name += isConnectorCell ? "_EDGE_CONNECTOR" : "_EDGE";
-            }
-            return isEdge;
-        }
-
-        public static List<HexagonCell> GetEdgeCells(List<HexagonCell> cells, bool assignToName = true, bool scopeToParentCell = false)
-        {
-            List<HexagonCell> edgeCells = new List<HexagonCell>();
-            bool hasMultilayerCells = cells.Any(c => c.GetGridLayer() > 0);
-
-            foreach (HexagonCell cell in cells)
-            {
-                if (IsEdgeCell(cell, hasMultilayerCells, assignToName, scopeToParentCell))
-                {
-                    edgeCells.Add(cell);
-                    // cell.SetEdgeCell(true);
-                }
-            }
-            // Order edge cells by the fewest neighbors first
-            return edgeCells.OrderByDescending(x => x._neighbors.Count).ToList();
-        }
-
-
-        public static List<HexagonCell> GetInnerEdges(List<HexagonCell> cells, EdgeCellType edgeCellType, bool assignToName = true, bool scopeToParentCell = false)
-        {
-            List<HexagonCell> edgeCells = new List<HexagonCell>();
-            foreach (HexagonCell prototype in cells)
-            {
-                if (IsEdge(prototype, edgeCellType, assignToName, scopeToParentCell)) edgeCells.Add(prototype);
-            }
-            return edgeCells;
-        }
-
-        private static bool IsEdge(HexagonCell cell, EdgeCellType edgeCellType, bool assignToName, bool scopeToParentCell = false)
-        {
-            if (cell == null) return false;
-
-            List<HexagonCell> allSideNeighbors = cell._neighbors.FindAll(c => c.GetGridLayer() == cell.GetGridLayer());
-            // bool isConnectorCell = allSideNeighbors.Find(n => n.GetParenCellId() != cell.GetParenCellId());
-            // if (scopeToParentCell) allSideNeighbors = allSideNeighbors.FindAll(n => n.GetParenCellId() == cell.GetParenCellId());
-            int sideNeighborCount = allSideNeighbors.Count; //cell.GetSideNeighborCount(scopeToParentCell);
-
-            if (sideNeighborCount < 6)
-            {
-                cell.SetEdgeCell(true, edgeCellType);
-                if (assignToName && !cell.gameObject.name.Contains("_EDGE")) cell.gameObject.name += "_EDGE";
-                return true;
-            }
-            return false;
-        }
 
 
         public static List<HexagonCell> GetLeveledEdgeCells(List<HexagonCell> layerCells, bool assign)
@@ -979,7 +920,7 @@ namespace WFCSystem
 
             foreach (HexagonCell cell in layerCells)
             {
-                int neighborCount = cell._neighbors.FindAll(n => layerCells.Contains(n) && n.GetGridLayer() == cell.GetGridLayer()).Count;
+                int neighborCount = cell._neighbors.FindAll(n => layerCells.Contains(n) && n.GetLayer() == cell.GetLayer()).Count;
                 if (neighborCount < 6)
                 {
                     edgeCells.Add(cell);
@@ -993,9 +934,9 @@ namespace WFCSystem
         public static List<HexagonCell> GetRandomEntryCells(List<HexagonCell> edgeCells, int num, bool assign, int gridLayer = 0, bool excludeAdjacentNeighbors = true)
         {
             List<HexagonCell> cells = new List<HexagonCell>();
-            cells.AddRange(gridLayer == -1 ? edgeCells : edgeCells.FindAll(c => c.GetGridLayer() == gridLayer));
+            cells.AddRange(gridLayer == -1 ? edgeCells : edgeCells.FindAll(c => c.GetLayer() == gridLayer));
 
-            ShuffleCells(cells);
+            HexCellUtil.ShuffleCells(cells);
 
             List<HexagonCell> entrances = new List<HexagonCell>();
 
@@ -1030,51 +971,46 @@ namespace WFCSystem
             List<HexagonCell> possibleCells = new List<HexagonCell>();
             foreach (HexagonCell edgeCell in allEdgeCells)
             {
-                if (edgeCell.cellStatus != CellStatus.Ground) continue;
+                if (edgeCell.cellStatus != CellStatus.GenericGround) continue;
                 int groundNeighborCount = edgeCell._neighbors.FindAll(
-                        n => n.cellStatus == CellStatus.Ground && n.GetGridLayer() == edgeCell.GetGridLayer()).Count;
+                        n => n.cellStatus == CellStatus.GenericGround && n.GetLayer() == edgeCell.GetLayer()).Count;
                 if (groundNeighborCount >= 3) possibleCells.Add(edgeCell);
             }
 
             return GetRandomEntryCells(possibleCells, num, assign, -1, excludeAdjacentNeighbors);
         }
 
-        public static void PopulateNeighborsFromCornerPoints(List<HexagonCell> cells, float offset = 0.33f)
+        public static (Dictionary<int, List<HexagonCell>>, Dictionary<int, List<HexagonCell>>) GetRandomGridPathsForLevels(Dictionary<int, List<HexagonCell>> cellsByLevel, Vector3 position, int max, bool ignoreEdgeCells, int maxEntryCellsPerLevel = 2)
         {
-            foreach (HexagonCell cell in cells)
+            Dictionary<int, List<HexagonCell>> pathsByLevel = new Dictionary<int, List<HexagonCell>>();
+            Dictionary<int, List<HexagonCell>> rampsByLevel = new Dictionary<int, List<HexagonCell>>();
+
+            int lastLevel = cellsByLevel.Count;
+
+            foreach (var kvp in cellsByLevel)
             {
-                //for each edgepoint on the current hexagontile
-                for (int i = 0; i < cell._cornerPoints.Length; i++)
+                int level = kvp.Key;
+                List<HexagonCell> levelCells = kvp.Value;
+
+                List<HexagonCell> entryCells = GetRandomEntryCells(levelCells.FindAll(c => c.isEdgeCell), maxEntryCellsPerLevel, false, level);
+                List<HexagonCell> newPaths = GetRandomCellPaths(entryCells, levelCells, position, ignoreEdgeCells);
+
+                if (newPaths.Count > 0)
                 {
-                    //loop through all the hexagontile to check for neighbors
-                    for (int j = 0; j < cells.Count; j++)
+                    pathsByLevel.Add(level, newPaths);
+
+                    if (level < lastLevel)
                     {
-                        //skip if the hexagontile is the current tile
-                        if (cells[j] == cell || cells[j].GetGridLayer() != cell.GetGridLayer())
-                            continue;
-
-                        Vector3 distA = cell.transform.TransformPoint(cell.transform.position);
-                        Vector3 distB = cell.transform.TransformPoint(cells[j].transform.position);
-
-                        float distance = Vector3.Distance(distA, distB);
-                        if (distance > cell.size * neighborSearchCenterDistMult) continue;
-
-                        //loop through the _cornerPoints of the neighboring tile
-                        for (int k = 0; k < cells[j]._cornerPoints.Length; k++)
-                        {
-                            // if (Vector3.Distance(cells[j]._cornerPoints[k], cell._cornerPoints[i]) <= offset)
-                            if (Vector2.Distance(new Vector2(cells[j]._cornerPoints[k].x, cells[j]._cornerPoints[k].z), new Vector2(cell._cornerPoints[i].x, cell._cornerPoints[i].z)) <= offset)
-                            {
-                                if (cell._neighbors.Contains(cells[j]) == false) cell._neighbors.Add(cells[j]);
-                                if (cells[j]._neighbors.Contains(cell) == false) cells[j]._neighbors.Add(cell);
-                                break;
-                            }
-                        }
+                        List<HexagonCell> newRamps = GetRandomLevelConnectorCells(newPaths, maxEntryCellsPerLevel);
+                        rampsByLevel.Add(level, newRamps);
                     }
                 }
-                cell.SetNeighborsBySide(offset);
             }
+
+            return (pathsByLevel, rampsByLevel);
         }
+
+
         public static HexagonCell GetClosestCellByCenterPoint(List<HexagonCell> cells, Vector3 position)
         {
             HexagonCell nearestCellToPos = cells[0];
@@ -1123,7 +1059,7 @@ namespace WFCSystem
 
             foreach (HexagonCell cell in pathCells)
             {
-                List<HexagonCell> pathNeighbors = cell._neighbors.FindAll(n => pathCells.Contains(n) && cleared.Contains(n) == false && n.GetGridLayer() == cell.GetGridLayer());
+                List<HexagonCell> pathNeighbors = cell._neighbors.FindAll(n => pathCells.Contains(n) && cleared.Contains(n) == false && n.GetLayer() == cell.GetLayer());
 
                 if (pathNeighbors.Count >= 4)
                 {
@@ -1171,7 +1107,7 @@ namespace WFCSystem
             // Get an inner neighbor of endCell if it is on the edge 
             if (ignoreEdgeCells && endCell.isEdgeCell || endCell.isEntryCell)
             {
-                HexagonCell newEndCell = endCell._neighbors.Find(n => n.GetGridLayer() == endCell.GetGridLayer() && !n.isEdgeCell && !n.isEntryCell);
+                HexagonCell newEndCell = endCell._neighbors.Find(n => n.GetLayer() == endCell.GetLayer() && !n.isEdgeCell && !n.isEntryCell);
                 if (newEndCell != null) endCell = newEndCell;
             }
 
@@ -1281,7 +1217,7 @@ namespace WFCSystem
             {
                 if (results.Count == max) break;
 
-                HexagonCell found = item._neighbors.Find(c => !c.isEntryCell && !c.isEdgeCell && !levelPathCells.Contains(c) && c.GetGridLayer() == item.GetGridLayer());
+                HexagonCell found = item._neighbors.Find(c => !c.isEntryCell && !c.isEdgeCell && !levelPathCells.Contains(c) && c.GetLayer() == item.GetLayer());
                 if (found != null && !results.Contains(found)) results.Add(found);
             }
             return results;
@@ -1367,42 +1303,6 @@ namespace WFCSystem
             return result;
         }
 
-        // public static List<HexagonCell> GetLeveledCellsOfLayer(List<HexagonCell> alllevelCells, bool assign, int offsetNextLevelEdgeBy = 2)
-        // {
-        //     List<HexagonCell> result = new List<HexagonCell>();
-
-        //     foreach (HexagonCell item in alllevelCells)
-        //     {
-        //         if (item.layeredNeighbor[0] != null && item.layeredNeighbor[0].isLeveledCell && item.layeredNeighbor[0].isLeveledEdge == false)
-        //         {
-        //             if (result.Contains(item) == false)
-        //             {
-        //                 result.Add(item);
-        //             }
-        //         }
-        //     }
-
-        //     //Offeset the next level edge by one 
-        //     List<HexagonCell> toRemoveOffsetEdgeCells;
-        //     for (int offset = 0; offset < offsetNextLevelEdgeBy; offset++)
-        //     {
-        //         toRemoveOffsetEdgeCells = HexagonCell.GetLeveledEdgeCells(result, false);
-        //         result = result.Except(toRemoveOffsetEdgeCells).ToList();
-        //     }
-
-        //     if (assign)
-        //     {
-        //         List<HexagonCell> leveledEdgeCells = HexagonCell.GetLeveledEdgeCells(result, true);
-        //         foreach (HexagonCell cell in result)
-        //         {
-        //             cell.SetLeveledCell(true);
-        //         }
-
-        //         HexagonCell.GetRandomLeveledRampCells(leveledEdgeCells, 4, true, true);
-        //     }
-        //     return result;
-        // }
-
         public static Dictionary<int, List<HexagonCell>> SetRandomLeveledCellsForAllLayers(Dictionary<int, List<HexagonCell>> allCellsByLayer, float maxRadius, int clumpSets = 5)
         {
             Dictionary<int, List<HexagonCell>> allLeveledCellsForAllLayers = new Dictionary<int, List<HexagonCell>>();
@@ -1433,62 +1333,15 @@ namespace WFCSystem
                 {
                     if (item.layeredNeighbor[1] != null)
                     {
-                        item.layeredNeighbor[1].SetLeveledGroundCell(true);
-                        item.SetLeveledGroundCell(false);
+                        item.layeredNeighbor[1].SetLeveledGroundCell(true, false);
+                        item.SetLeveledGroundCell(false, false);
                     }
                 }
 
                 lastLayerInnerCells = innerLeveledCells;
-
-                // allLeveledCellsForAllLayers.Add(layer, leveledEdgeCells);
             }
 
             return allLeveledCellsForAllLayers;
-        }
-
-        // public static Dictionary<int, List<HexagonCell>> SetRandomLeveledCellsForAllLayers(Dictionary<int, List<HexagonCell>> allCellsByLayer, float maxRadius, int clumpSets = 5)
-        // {
-        //     Dictionary<int, List<HexagonCell>> allLeveledCellsForAllLayers = new Dictionary<int, List<HexagonCell>>();
-
-        //     // Get first layer
-        //     List<HexagonCell> result = GetRandomLeveledCells(allCellsByLayer[0], maxRadius, true, clumpSets);
-        //     allLeveledCellsForAllLayers.Add(0, result);
-
-        //     List<HexagonCell> leveledEdgeCells = HexagonCell.GetLeveledEdgeCells(result, true);
-        //      HexagonCell.GetRandomLeveledRampCells(leveledEdgeCells, 5, true, true);
-
-        //     foreach (var kvp in allCellsByLayer)
-        //     {
-        //         int layer = kvp.Key;
-
-        //         // Skip level 0
-        //         if (layer == 0) continue;
-
-        //         List<HexagonCell> allLayerCells = kvp.Value;
-
-        //         List<HexagonCell> levelCells = GetLeveledCellsOfLayer(allLayerCells, true);
-
-        //         allLeveledCellsForAllLayers.Add(layer, levelCells);
-        //     }
-        //     return allLeveledCellsForAllLayers;
-        // }
-
-        public static List<HexagonCell> GetAvailableCellsForNextLayer(List<HexagonCell> allLayerCells)
-        {
-            List<HexagonCell> available = new List<HexagonCell>();
-
-            foreach (HexagonCell currentCell in allLayerCells)
-            {
-                if (currentCell.IsAssigned() || currentCell.isGroundRamp) continue;
-
-                // if (!currentCell.isLeveledCell && currentCell.layeredNeighbor[0] != null && !currentCell.layeredNeighbor[0].isLeveledRampCell && currentCell.layeredNeighbor[0].isLeveledCell  )
-                // if (currentCell.HasBottomNeighbor() && !currentCell.isLeveledCell && !currentCell.layeredNeighbor[0].isLeveledRampCell)
-                if (!currentCell.isLeveledCell && (currentCell.HasBottomNeighbor() == false || currentCell.GetBottomNeighbor().isLeveledRampCell == false))
-                {
-                    if (available.Contains(currentCell) == false) available.Add(currentCell);
-                }
-            }
-            return available;
         }
 
         public static List<HexagonCell> GetRandomLeveledRampCells(List<HexagonCell> leveledEdgeCells, int num, bool assign, bool allowNeighbors = true)
@@ -1496,7 +1349,7 @@ namespace WFCSystem
             List<HexagonCell> cells = new List<HexagonCell>();
             cells.AddRange(leveledEdgeCells);
 
-            ShuffleCells(cells);
+            HexCellUtil.ShuffleCells(cells);
 
             List<HexagonCell> rampCells = new List<HexagonCell>();
 
@@ -1525,449 +1378,6 @@ namespace WFCSystem
             }
             return rampCells.OrderByDescending(x => x._neighbors.Count).ToList();
         }
-
-        public static (Dictionary<int, List<HexagonCell>>, Dictionary<int, List<HexagonCell>>) GetRandomGridPathsForLevels(Dictionary<int, List<HexagonCell>> cellsByLevel, Vector3 position, int max, bool ignoreEdgeCells, int maxEntryCellsPerLevel = 2)
-        {
-            Dictionary<int, List<HexagonCell>> pathsByLevel = new Dictionary<int, List<HexagonCell>>();
-            Dictionary<int, List<HexagonCell>> rampsByLevel = new Dictionary<int, List<HexagonCell>>();
-
-            int lastLevel = cellsByLevel.Count;
-
-            foreach (var kvp in cellsByLevel)
-            {
-                int level = kvp.Key;
-                List<HexagonCell> levelCells = kvp.Value;
-
-                List<HexagonCell> entryCells = GetRandomEntryCells(levelCells.FindAll(c => c.isEdgeCell), maxEntryCellsPerLevel, false, level);
-                List<HexagonCell> newPaths = GetRandomCellPaths(entryCells, levelCells, position, ignoreEdgeCells);
-
-                if (newPaths.Count > 0)
-                {
-                    pathsByLevel.Add(level, newPaths);
-
-                    if (level < lastLevel)
-                    {
-                        List<HexagonCell> newRamps = GetRandomLevelConnectorCells(newPaths, maxEntryCellsPerLevel);
-                        rampsByLevel.Add(level, newRamps);
-                    }
-                }
-            }
-
-            return (pathsByLevel, rampsByLevel);
-        }
-
-
-        public static Dictionary<int, List<HexagonCell>> OrganizeCellsByLevel(List<HexagonCell> cells)
-        {
-            Dictionary<int, List<HexagonCell>> cellsByLevel = new Dictionary<int, List<HexagonCell>>();
-
-            foreach (HexagonCell cell in cells)
-            {
-                int level = cell.GetGridLayer();
-
-                if (cellsByLevel.ContainsKey(level) == false)
-                {
-                    cellsByLevel.Add(level, new List<HexagonCell>());
-                }
-
-                cellsByLevel[level].Add(cell);
-            }
-            return cellsByLevel;
-        }
-
-        public static HexagonCell[,] CreateRectangularGrid(List<HexagonCell> cellGrid)
-        {
-            float hexagonSize = cellGrid[0].size;
-
-            //Find the minimum and maximum x and z coordinates of the hexagon cells in the grid
-            float minX = cellGrid.Min(cell => cell.transform.position.x);
-            float maxX = cellGrid.Max(cell => cell.transform.position.x);
-            float minZ = cellGrid.Min(cell => cell.transform.position.z);
-            float maxZ = cellGrid.Max(cell => cell.transform.position.z);
-            //Determine the number of rows and columns needed for the rectangular grid
-            int rows = (int)((maxZ - minZ) / hexagonSize) + 1;
-            int cols = (int)((maxX - minX) / (hexagonSize * 0.75f)) + 1;
-
-            //Initialize the rectangular grid with the determined number of rows and columns
-            HexagonCell[,] rectGrid = new HexagonCell[rows, cols];
-
-            //Iterate through each hexagon cell in the cell grid
-            foreach (HexagonCell cell in cellGrid)
-            {
-                //Determine the row and column index of the current cell in the rectangular grid
-                int row = (int)((cell.transform.position.z - minZ) / hexagonSize);
-                int col = (int)((cell.transform.position.x - minX) / (hexagonSize * 0.75f));
-
-                //Assign the current cell to the corresponding position in the rectangular grid
-                rectGrid[row, col] = cell;
-            }
-
-            return rectGrid;
-        }
-
-
-        public static void MapHeightmapValues(float[,] heightmap, HexagonCell[,] cellGrid, bool assign)
-        {
-            //Check that the dimensions of the heightmap match the dimensions of the cell grid
-            // if (heightmap.GetLength(0) != cellGrid.GetLength(0) || heightmap.GetLength(1) != cellGrid.GetLength(1))
-            // {
-            //     Debug.LogError("The dimensions of the heightmap do not match the dimensions of the cell grid.");
-            //     return;
-            // }
-
-            //Iterate through each element of the cell grid
-            for (int row = 0; row < cellGrid.GetLength(0); row++)
-            {
-                for (int col = 0; col < cellGrid.GetLength(1); col++)
-                {
-                    HexagonCell cell = cellGrid[row, col];
-
-                    //Check if there is a HexagonCell at the current element
-                    if (cell != null)
-                    {
-                        //Assign the value of the corresponding element in the heightmap to the HexagonCell's height property
-                        // cellGrid[row, col].height = heightmap[row, col];
-                        // Set cell to path if value within a set range
-                        if (assign)
-                        {
-                            cell.road = (heightmap[row, col] <= 0.2f);
-
-                            if (cell.isEdgeCell == false)
-                            {
-                                cell.SetPathCell(cell.road);
-                            }
-                        }
-                        else
-                        {
-                            cell.road = !cell.isEdgeCell && (heightmap[row, col] <= 0.2f);
-                        }
-
-
-                    }
-                }
-            }
-        }
-
-
-
-        public static void SmoothElevation(List<HexagonCell> pathCells, TerrainVertex[,] vertices)
-        {
-            List<Vector3> modifiedVertices = new List<Vector3>();
-
-            foreach (HexagonCell cell in pathCells)
-            {
-                foreach (int vertexIndex in cell._vertexIndices)
-                {
-                    TerrainVertex vertice = vertices[vertexIndex % vertices.GetLength(0), vertexIndex / vertices.GetLength(0)];
-                    modifiedVertices.Add(new Vector3(vertice.position.x, cell.transform.position.y, vertice.position.z));
-                }
-            }
-
-            int verticeIndex = 0;
-            for (int x = 0; x < vertices.GetLength(0); x++)
-            {
-                for (int z = 0; z < vertices.GetLength(1); z++)
-                {
-                    vertices[x, z].position = modifiedVertices[verticeIndex++];
-                }
-            }
-        }
-
-        public static float SoftenSlope(float y1, float y2, float t)
-        {
-            float mu2 = (1f - Mathf.Cos(t * Mathf.PI)) / 2f;
-            return (y1 * (1f - mu2) + y2 * mu2);
-        }
-
-
-        public static List<TerrainVertex> GetVerticesBetweenPositions(List<TerrainVertex> vertexList, Vector2 minPos, Vector2 maxPos)
-        {
-            List<TerrainVertex> verticesBetweenPositions = new List<TerrainVertex>();
-            Vector2 sortedMinPos = new Vector2(Mathf.Min(minPos.x, maxPos.x), Mathf.Min(minPos.y, maxPos.y));
-            Vector2 sortedMaxPos = new Vector2(Mathf.Max(minPos.x, maxPos.x), Mathf.Max(minPos.y, maxPos.y));
-
-            foreach (TerrainVertex vertex in vertexList)
-            {
-                Vector2 vertexPos = new Vector2(vertex.position.x, vertex.position.z);
-                if (vertexPos.x >= sortedMinPos.x && vertexPos.x <= sortedMaxPos.x && vertexPos.y >= sortedMinPos.y && vertexPos.y <= sortedMaxPos.y)
-                {
-                    verticesBetweenPositions.Add(vertex);
-                }
-            }
-
-            return verticesBetweenPositions;
-        }
-
-
-        public static void SlopeYPositionAlongPath(List<HexagonCell> pathCells, TerrainVertex[,] vertices)
-        {
-            foreach (HexagonCell cell in pathCells)
-            {
-                Vector2 cellPosXZ = new Vector2(cell.transform.position.x, cell.transform.position.z);
-                // Get the vertices of the current cell
-                List<TerrainVertex> currentCellVertexList = new List<TerrainVertex>();
-                foreach (int vertexIndex in cell._vertexIndices)
-                {
-                    currentCellVertexList.Add(vertices[vertexIndex / vertices.GetLength(0), vertexIndex % vertices.GetLength(0)]);
-                }
-
-                List<HexagonCell> pathNeighbors = cell.GetPathNeighbors();
-
-                foreach (HexagonCell neighbor in pathNeighbors)
-                {
-                    float difference = Mathf.Abs(cell.transform.position.y - neighbor.transform.position.y);
-                    if (difference < 0.5f) continue;
-
-                    Vector2 neighborPosXZ = new Vector2(neighbor.transform.position.x, neighbor.transform.position.z);
-
-                    List<TerrainVertex> neighborCellVertexList = new List<TerrainVertex>();
-                    // Get the vertices of the neighbor cell
-                    foreach (int vertexIndex in neighbor._vertexIndices)
-                    {
-                        neighborCellVertexList.Add(vertices[vertexIndex / vertices.GetLength(0), vertexIndex % vertices.GetLength(0)]);
-                    }
-
-                    List<TerrainVertex> btwVertices = new List<TerrainVertex>();
-                    btwVertices.AddRange(currentCellVertexList);
-                    btwVertices.AddRange(neighborCellVertexList);
-                    btwVertices = GetVerticesBetweenPositions(btwVertices, cellPosXZ, neighborPosXZ);
-
-                    // Slope the y position of all vertices based on distance from closest position
-                    Vector3 startPos = cell.transform.position;
-                    Vector3 endPos = neighbor.transform.position;
-
-                    float maxY = Mathf.Max(startPos.y, endPos.y);
-                    float minY = Mathf.Min(startPos.y, endPos.y);
-
-                    foreach (TerrainVertex vertex in btwVertices)
-                    {
-                        Vector2 vertexPosXZ = new Vector2(vertex.position.x, vertex.position.z);
-                        float distanceFromStart = Vector3.Distance(vertexPosXZ, startPos);
-                        float distanceFromEnd = Vector3.Distance(vertexPosXZ, endPos);
-
-                        float closestDistance = Mathf.Min(distanceFromStart, distanceFromEnd);
-                        float slope = Mathf.InverseLerp(0, closestDistance, minY);
-
-                        Vector3 newPos = new Vector3(vertex.position.x, Mathf.Lerp(minY, maxY, slope), vertex.position.z);
-                        vertices[vertex.index / vertices.GetLength(0), vertex.index % vertices.GetLength(0)].position = newPos;
-                    }
-                }
-            }
-        }
-
-        public static void SmoothElevationAlongPath(List<TerrainVertex> vertexList, float maxHeightDifference, float radius, TerrainVertex[,] vertices)
-        {
-            // Create a list of vertices that need to be smoothed
-            List<TerrainVertex> verticesToSmooth = new List<TerrainVertex>();
-            foreach (TerrainVertex vertex in vertexList)
-            {
-                float maxDifference = 0f;
-                foreach (TerrainVertex neighbor in vertexList)
-                {
-                    if (vertex.position != neighbor.position)
-                    {
-                        float difference = Mathf.Abs(vertex.position.y - neighbor.position.y);
-                        if (difference > maxDifference)
-                        {
-                            maxDifference = difference;
-                        }
-                    }
-                }
-                if (maxDifference > maxHeightDifference)
-                {
-                    verticesToSmooth.Add(vertex);
-                }
-            }
-
-            // Smooth the elevation of the vertices within the radius
-            foreach (TerrainVertex vertex in verticesToSmooth)
-            {
-                float lowestY = vertex.position.y;
-                float highestY = vertex.position.y;
-                foreach (TerrainVertex neighbor in vertexList)
-                {
-                    if (Vector3.Distance(vertex.position, neighbor.position) <= radius)
-                    {
-                        if (neighbor.position.y < lowestY)
-                        {
-                            lowestY = neighbor.position.y;
-                        }
-                        if (neighbor.position.y > highestY)
-                        {
-                            highestY = neighbor.position.y;
-                        }
-                    }
-                }
-                foreach (TerrainVertex neighbor in vertexList)
-                {
-                    if (Vector3.Distance(vertex.position, neighbor.position) <= radius)
-                    {
-                        float newY = Mathf.Lerp(lowestY, highestY, Vector3.Distance(neighbor.position, vertex.position) / radius);
-                        vertices[neighbor.index / vertices.GetLength(0), neighbor.index % vertices.GetLength(0)].position = new Vector3(neighbor.position.x, newY, neighbor.position.z);
-                    }
-                }
-            }
-        }
-
-
-        public static void SmoothElevationAlongPath(List<TerrainVertex> vertexList, float maxHeightDifference, TerrainVertex[,] vertices)
-        {
-            for (int i = 0; i < vertexList.Count - 1; i++)
-            {
-                TerrainVertex currentVertex = vertexList[i];
-                TerrainVertex nextVertex = vertexList[i + 1];
-                float heightDifference = nextVertex.position.y - currentVertex.position.y;
-
-                if (Mathf.Abs(heightDifference) > maxHeightDifference)
-                {
-                    float step = heightDifference / (nextVertex.index - currentVertex.index);
-
-                    for (int j = currentVertex.index + 1; j < nextVertex.index; j++)
-                    {
-                        if (j >= 0 && j < vertexList.Count)
-                        {
-                            Vector3 newPos = new Vector3(vertexList[j].position.x, vertexList[j].position.y, vertexList[j].position.z);
-                            newPos.y += step * (j - currentVertex.index);
-                            vertices[vertexList[j].index / vertices.GetLength(0), vertexList[j].index % vertices.GetLength(0)].position = newPos;
-                        }
-                    }
-                }
-            }
-        }
-
-
-        static float DistanceXZ(Vector3 a, Vector3 b)
-        {
-            Vector2 aXZ = new Vector2(a.x, a.z);
-            Vector2 bXZ = new Vector2(b.x, b.z);
-            return Vector2.Distance(a, b);
-        }
-        public static void SmoothElevationAlongPathNeighbors(List<HexagonCell> pathCells, TerrainVertex[,] vertices)
-        {
-            // Get the side vertices and neighbor relative side vertices 
-            foreach (HexagonCell cell in pathCells)
-            {
-                for (int i = 0; i < cell.neighborsBySide.Length; i++)
-                {
-                    HexagonCell neighbor = cell.neighborsBySide[i];
-                    if (neighbor == null) continue;
-                    if (neighbor.isPathCell) continue;
-
-                    int side = cell.GetNeighborsRelativeSide((HexagonSide)i);
-                    Vector3 neighborSidePoint = neighbor._sides[side];
-
-                    List<TerrainVertex> vertexList = new List<TerrainVertex>();
-                    foreach (int vertexIndex in cell._vertexIndicesBySide[i])
-                    {
-                        vertexList.Add(vertices[vertexIndex / vertices.GetLength(0), vertexIndex % vertices.GetLength(0)]);
-                    }
-
-                    vertexList.Sort((a, b) => DistanceXZ(a.position, neighborSidePoint).CompareTo(DistanceXZ(b.position, neighborSidePoint)));
-
-                    for (int j = 0; j < vertexList.Count - 1; j++)
-                    {
-                        TerrainVertex currVertex = vertexList[i];
-                        Vector2 currentPosXZ = new Vector2(currVertex.position.x, currVertex.position.z);
-                        float slopeY;
-
-                        if (i == 0)
-                        {
-                            TerrainVertex nextVertex = vertexList[i + 1];
-                            slopeY = Mathf.Lerp(neighborSidePoint.y, nextVertex.position.y, 0.03f);
-                        }
-                        else
-                        {
-                            TerrainVertex prevVertex = vertexList[i - 1];
-                            TerrainVertex nextVertex = vertexList[i + 1];
-                            slopeY = Mathf.Lerp(prevVertex.position.y, nextVertex.position.y, 0.03f);
-                        }
-
-                        currVertex.position.y = slopeY;
-
-                        vertexList[i] = currVertex;
-                        vertices[vertexList[i].index / vertices.GetLength(0), vertexList[i].index % vertices.GetLength(0)].position = currVertex.position;
-                    }
-                }
-            }
-        }
-
-
-        public static void SmoothVertexList(List<TerrainVertex> vertexList, TerrainVertex[,] vertices)
-        {
-            vertexList.Sort((v1, v2) =>
-            {
-                int result = v1.position.x.CompareTo(v2.position.x);
-                if (result == 0)
-                    result = v1.position.z.CompareTo(v2.position.z);
-                return result;
-            });
-
-            for (int i = 1; i < vertexList.Count - 1; i++)
-            {
-                TerrainVertex prevVertex = vertexList[i - 1];
-                TerrainVertex currVertex = vertexList[i];
-                TerrainVertex nextVertex = vertexList[i + 1];
-                Vector2 currentPosXZ = new Vector2(currVertex.position.x, currVertex.position.z);
-                Vector2 prevPosXZ = new Vector2(prevVertex.position.x, prevVertex.position.z);
-                Vector2 nextPosXZ = new Vector2(nextVertex.position.x, nextVertex.position.z);
-
-                float slopeY = Mathf.Lerp(prevVertex.position.y, nextVertex.position.y, 0.03f);
-                currVertex.position.y = slopeY;
-
-                vertexList[i] = currVertex;
-                vertices[vertexList[i].index / vertices.GetLength(0), vertexList[i].index % vertices.GetLength(0)].position = currVertex.position;
-                vertices[vertexList[i].index / vertices.GetLength(0), vertexList[i].index % vertices.GetLength(0)].type = VertexType.Road;
-            }
-        }
-
-        public static void SmoothElevationAlongPath(List<HexagonCell> pathCells, TerrainVertex[,] vertices)
-        {
-            List<TerrainVertex> vertexList = new List<TerrainVertex>();
-            foreach (HexagonCell cell in pathCells)
-            {
-                foreach (int vertexIndex in cell._vertexIndices)
-                {
-                    vertexList.Add(vertices[vertexIndex / vertices.GetLength(0), vertexIndex % vertices.GetLength(0)]);
-                }
-            }
-            SmoothVertexList(vertexList, vertices);
-        }
-
-        // public static void SmoothElevationAlongPath(List<HexagonCell> pathCells, TerrainVertex[,] vertices)
-        // {
-        //     List<int> vertexIndices = new List<int>();
-        //     List<TerrainVertex> vertexList = new List<TerrainVertex>();
-        //     foreach (HexagonCell cell in pathCells)
-        //     {
-        //         foreach (int vertexIndex in cell._vertexIndices)
-        //         {
-        //             vertexIndices.Add(vertexIndex);
-        //             vertexList.Add(vertices[vertexIndex / vertices.GetLength(0), vertexIndex % vertices.GetLength(0)]);
-        //         }
-        //     }
-
-        //     vertexList.Sort((v1, v2) => v1.position.x.CompareTo(v2.position.x));
-        //     float minX = vertexList[0].position.x;
-        //     float maxX = vertexList[vertexList.Count - 1].position.x;
-
-        //     vertexList.Sort((v1, v2) => v1.position.z.CompareTo(v2.position.z));
-        //     float minZ = vertexList[0].position.z;
-        //     float maxZ = vertexList[vertexList.Count - 1].position.z;
-
-        //     vertexList.Sort((v1, v2) => v1.position.y.CompareTo(v2.position.y));
-        //     float minY = vertexList[0].position.y;
-        //     float maxY = vertexList[vertexList.Count - 1].position.y;
-
-        //     foreach (int vertexIndex in vertexIndices)
-        //     {
-        //         TerrainVertex vertice = vertices[vertexIndex / vertices.GetLength(0), vertexIndex % vertices.GetLength(0)];
-        //         float xNormalized = (vertice.position.x - minX) / (maxX - minX);
-        //         float zNormalized = (vertice.position.z - minZ) / (maxZ - minZ);
-        //         vertice.position.y = Mathf.Lerp(minY, maxY, Mathf.PerlinNoise(xNormalized, zNormalized));
-        //         vertices[vertexIndex / vertices.GetLength(0), vertexIndex % vertices.GetLength(0)].position = vertice.position;
-        //     }
-        // }
-
 
 
         // public static void SmoothElevationAlongPath(List<HexagonCell> pathCells, TerrainVertex[,] vertices)
@@ -2051,415 +1461,6 @@ namespace WFCSystem
         // }
 
 
-        // public static void SmoothPathElevation(List<HexagonCell> pathCells, TerrainVertex[,] vertices)
-        // {
-        //     foreach (HexagonCell cell in pathCells)
-        //     {
-        //         float avgElevation = 0f;
-        //         foreach (int vertexIndex in cell._vertexIndices)
-        //         {
-        //             avgElevation += vertices[vertexIndex / vertices.GetLength(0), vertexIndex % vertices.GetLength(0)].position.y;
-        //             // avgElevation += vertices[vertexIndex / vertices.GetLength(1), vertexIndex % vertices.GetLength(1)].position.y;
-        //         }
-        //         avgElevation /= cell._vertexIndices.Count;
-
-        //         foreach (int vertexIndex in cell._vertexIndices)
-        //         {
-        //             vertices[vertexIndex / vertices.GetLength(0), vertexIndex % vertices.GetLength(0)].position.y = 2f;
-        //             // vertices[vertexIndex / vertices.GetLength(1), vertexIndex % vertices.GetLength(1)].position.y = avgElevation;
-        //         }
-        //     }
-        // }
-
-        public static TerrainVertex[,] GenerateVertexGrid(Vector3 centerPosition, int areaSize, float scale, VertexType vertexType = VertexType.Generic)
-        {
-            // Calculate the half size of the grid
-            float halfSize = areaSize / 2.0f;
-
-            // Get the number of steps in each direction using the scale parameter
-            int steps = Mathf.RoundToInt(areaSize / scale);
-            float stepSize = areaSize / steps;
-
-            // Create a 2D array to store the vertices
-            TerrainVertex[,] grid = new TerrainVertex[steps + 1, steps + 1];
-            int index = 0;
-
-            for (int x = 0; x < steps + 1; x++)
-            {
-                for (int z = 0; z < steps + 1; z++)
-                {
-                    float xPos = centerPosition.x - halfSize + x * stepSize;
-                    float zPos = centerPosition.z - halfSize + z * stepSize;
-                    grid[x, z] = new TerrainVertex
-                    {
-                        position = new Vector3(xPos, centerPosition.y, zPos),
-                        index = index,
-                        type = VertexType.Generic
-                    };
-                    index++;
-                }
-            }
-            return grid;
-        }
-
-        public static TerrainVertex[,] GenerateVertexGrid(Vector3 centerPosition, int areaSize, VertexType vertexType = VertexType.Generic)
-        {
-            TerrainVertex[,] grid = new TerrainVertex[areaSize, areaSize];
-            int index = 0;
-
-            float halfSize = areaSize / 2.0f;
-
-            for (int x = 0; x < areaSize; x++)
-            {
-                for (int z = 0; z < areaSize; z++)
-                {
-                    grid[x, z] = new TerrainVertex
-                    {
-                        position = new Vector3(centerPosition.x - halfSize + x, centerPosition.y, centerPosition.z - halfSize + z),
-                        index = index,
-                        type = VertexType.Generic
-                    };
-                    index++;
-                }
-            }
-
-            return grid;
-        }
-
-
-        // public static TerrainVertex[,] GenerateVertexGrid(Vector3 centerPosition, int radius, float stepSize = 3f)
-        // {
-        //     int size = (int)(radius / stepSize) * 2 + 1;
-        //     TerrainVertex[,] grid = new TerrainVertex[size, size];
-        //     int index = 0;
-        //     for (float x = -radius; x <= radius; x += stepSize)
-        //     {
-        //         for (float z = -radius; z <= radius; z += stepSize)
-        //         {
-        //             Vector3 point = new Vector3(centerPosition.x + x, centerPosition.y, centerPosition.z + z);
-        //             grid[index / size, index % size] = new TerrainVertex { position = point, index = index };
-        //             index++;
-        //         }
-        //     }
-        //     return grid;
-        // }
-        public static Vector3[,] GenerateVector3Grid(Vector3 centerPosition, int radius, float stepSize = 3f)
-        {
-            int size = (int)(radius / stepSize) * 2 + 1;
-            Vector3[,] grid = new Vector3[size, size];
-            int index = 0;
-            for (float x = -radius; x <= radius; x += stepSize)
-            {
-                for (float z = -radius; z <= radius; z += stepSize)
-                {
-                    Vector3 point = new Vector3(centerPosition.x + x, centerPosition.y, centerPosition.z + z);
-                    grid[index / size, index % size] = point;
-                    index++;
-                }
-            }
-            return grid;
-        }
-
-        public static void AssignVerticesToCells(TerrainVertex[,] vertices, List<HexagonCell> cells, float unassignedYOffset = -1f)
-        {
-            foreach (HexagonCell cell in cells)
-            {
-                cell._vertexIndices = new List<int>();
-                cell._vertexIndicesBySide = new List<int>[cell._cornerPoints.Length];
-                for (int i = 0; i < cell._vertexIndicesBySide.Length; i++)
-                {
-                    cell._vertexIndicesBySide[i] = new List<int>();
-                }
-            }
-
-            int verticeIndex = 0;
-            foreach (TerrainVertex vertice in vertices)
-            {
-                float closestDistance = float.MaxValue;
-                HexagonCell closestCell = null;
-                Vector2 vertexPosXZ = new Vector2(vertice.position.x, vertice.position.z);
-
-                foreach (HexagonCell cell in cells)
-                {
-                    Vector2 currentPosXZ = new Vector2(cell.transform.position.x, cell.transform.position.z);
-
-                    float distance = Vector2.Distance(vertexPosXZ, currentPosXZ);
-                    if (distance < closestDistance)
-                    {
-                        Vector3[] cellCorners = cell._cornerPoints;
-                        float xMin = cellCorners[0].x;
-                        float xMax = cellCorners[0].x;
-                        float zMin = cellCorners[0].z;
-                        float zMax = cellCorners[0].z;
-                        for (int i = 1; i < cellCorners.Length; i++)
-                        {
-                            if (cellCorners[i].x < xMin)
-                                xMin = cellCorners[i].x;
-                            if (cellCorners[i].x > xMax)
-                                xMax = cellCorners[i].x;
-                            if (cellCorners[i].z < zMin)
-                                zMin = cellCorners[i].z;
-                            if (cellCorners[i].z > zMax)
-                                zMax = cellCorners[i].z;
-                        }
-
-                        if (vertice.position.x >= xMin && vertice.position.x <= xMax && vertice.position.z >= zMin && vertice.position.z <= zMax)
-                        {
-                            closestDistance = distance;
-                            closestCell = cell;
-                        }
-                    }
-                }
-
-                int indexX = verticeIndex / vertices.GetLength(0);
-                int indexZ = verticeIndex % vertices.GetLength(0);
-
-                if (closestCell != null)
-                {
-                    closestCell._vertexIndices.Add(verticeIndex);
-
-                    bool isCellCenterVertex = false;
-                    if (closestDistance < closestCell.GetSize() * 0.5f)
-                    {
-                        isCellCenterVertex = true;
-                    }
-                    else
-                    {
-                        // Get Closest Corner if not within center radius   
-                        (Vector3 nearestPoint, float nearestDistance, int nearestIndex) = ProceduralTerrainUtility.
-                                                            GetClosestPoint(closestCell._cornerPoints, vertexPosXZ);
-                        if (nearestDistance != float.MaxValue)
-                        {
-                            HexagonSide side = GetSideFromCorner((HexagonCorner)nearestIndex);
-                            closestCell._vertexIndicesBySide[(int)side].Add(verticeIndex);
-                            vertices[verticeIndex / vertices.GetLength(0), verticeIndex % vertices.GetLength(0)].corner = nearestIndex;
-                            vertices[verticeIndex / vertices.GetLength(0), verticeIndex % vertices.GetLength(0)].isCellCornerPoint = true;
-                        }
-                    }
-
-                    float pathCellYOffset = 0f;
-                    if (closestCell.isLeveledRampCell)
-                    {
-                        pathCellYOffset = 2f;
-                    }
-                    else if (closestCell.isPathCell || closestCell.isEntryCell)
-                    {
-                        pathCellYOffset = closestCell.GetGridLayer() == 0 ? 0.3f : -0.8f;
-                    }
-                    vertices[verticeIndex / vertices.GetLength(0), verticeIndex % vertices.GetLength(0)].position = new Vector3(vertice.position.x, closestCell.transform.position.y + pathCellYOffset, vertice.position.z);
-                    vertices[verticeIndex / vertices.GetLength(0), verticeIndex % vertices.GetLength(0)].isCellCenterPoint = isCellCenterVertex;
-                    vertices[verticeIndex / vertices.GetLength(0), verticeIndex % vertices.GetLength(0)].type = VertexType.Cell;
-                }
-                else
-                {
-                    vertices[verticeIndex / vertices.GetLength(0), verticeIndex % vertices.GetLength(0)].position = new Vector3(vertice.position.x, vertice.position.y + unassignedYOffset, vertice.position.z);
-                }
-                verticeIndex++;
-            }
-        }
-
-        public static List<Vector3> GetOrderedVertices(List<HexagonCell> cells)
-        {
-            List<Vector3> vertices = new List<Vector3>();
-            foreach (HexagonCell cell in cells)
-            {
-                Vector3[] cornerPoints = cell._cornerPoints;
-                Vector3 transformPos = cell.transform.position;
-
-                for (int i = 0; i < cornerPoints.Length; i++)
-                {
-                    vertices.Add(cell._cornerPoints[i]);
-                }
-            }
-            return vertices;
-        }
-
-        public static void CreateGridMesh(List<Vector3> vertices, MeshFilter meshFilter)
-        {
-            Dictionary<int, List<int>> pointConnections = new Dictionary<int, List<int>>();
-            List<int> triangles = new List<int>();
-
-            for (int i = 0; i < vertices.Count; i++)
-            {
-                pointConnections[i] = new List<int>();
-
-                for (int j = 0; j < vertices.Count; j++)
-                {
-                    if (i == j) continue;
-
-                    // Check if the distance between the two vertices is close enough
-                    if (Vector3.Distance(vertices[i], vertices[j]) <= 100.0f)
-                    {
-                        // Check if the triangle between the two vertices is not already in the list
-                        bool isDuplicate = false;
-                        for (int k = 0; k < triangles.Count; k += 3)
-                        {
-                            if ((triangles[k] == i && triangles[k + 1] == j) || (triangles[k + 1] == i && triangles[k + 2] == j) || (triangles[k + 2] == i && triangles[k] == j))
-                            {
-                                isDuplicate = true;
-                                break;
-                            }
-                        }
-
-                        if (!isDuplicate)
-                        {
-                            triangles.Add(i);
-                            triangles.Add(j);
-                            triangles.Add(i);
-                            pointConnections[i].Add(j);
-                        }
-                    }
-                }
-            }
-
-            // Set the mesh data
-            Mesh mesh = new Mesh();
-            mesh.Clear();
-            mesh.SetVertices(vertices);
-            mesh.SetTriangles(triangles, 0);
-            mesh.RecalculateNormals();
-
-            meshFilter.mesh = mesh;
-        }
-
-        // public static void CreateGridMesh(List<Vector3> vertices, MeshFilter meshFilter)
-        // {
-        //     List<int> triangles = new List<int>();
-
-        //     for (int i = 0; i < vertices.Count; i++)
-        //     {
-        //         for (int j = i + 1; j < vertices.Count; j++)
-        //         {
-        //             if (Vector3.Distance(vertices[i], vertices[j]) <= 50f)
-        //             {
-        //                 triangles.Add(i);
-        //                 triangles.Add(j);
-        //                 triangles.Add(i);
-        //             }
-        //         }
-        //     }
-
-        //     // Set the mesh data
-        //     Mesh mesh = new Mesh();
-        //     mesh.Clear();
-        //     mesh.SetVertices(vertices);
-        //     mesh.SetTriangles(triangles, 0);
-        //     mesh.RecalculateNormals();
-
-        //     meshFilter.mesh = mesh;
-        // }
-
-        public static void CreateGridMesh(List<HexagonCell> cells, MeshFilter meshFilter)
-        {
-            int vertexIndex = 0;
-            List<Vector3> vertices = new List<Vector3>();
-            List<int> triangles = new List<int>();
-
-            foreach (HexagonCell cell in cells)
-            {
-                for (int i = 0; i < 6; i++)
-                {
-                    vertices.Add(cell._cornerPoints[i]);
-                    // vertices.Add(cell.transform.TransformPoint(cell._cornerPoints[i]));
-                    triangles.Add(vertexIndex + (i + 2) % 6);
-                    triangles.Add(vertexIndex + (i + 1) % 6);
-                    triangles.Add(vertexIndex);
-                }
-
-                vertexIndex += 6;
-            }
-
-            // Set the mesh data
-            Mesh mesh = new Mesh();
-            mesh.Clear();
-            mesh.SetVertices(vertices);
-            mesh.SetTriangles(triangles, 0);
-            mesh.RecalculateNormals();
-
-            meshFilter.mesh = mesh;
-        }
-
-
-        public static void UpdateMesh(List<HexagonCell> cells, MeshFilter meshFilter)
-        {
-            List<Vector3> vertices = new List<Vector3>();
-            List<int> triangles = new List<int>();
-
-            // Add the vertices to the vertices list
-            foreach (var cell in cells)
-            {
-                // Add each of the cell's corner points as a vertex
-                foreach (var cornerPoint in cell._cornerPoints)
-                {
-                    vertices.Add(cornerPoint + cell.transform.position);
-                }
-            }
-
-            // Add the triangles to the triangles list
-            for (int i = 0; i < cells.Count; i++)
-            {
-                var cell = cells[i];
-                int vertexIndex = i * 6;
-
-                triangles.Add(vertexIndex);
-                triangles.Add(vertexIndex + 1);
-                triangles.Add(vertexIndex + 2);
-
-                triangles.Add(vertexIndex + 2);
-                triangles.Add(vertexIndex + 3);
-                triangles.Add(vertexIndex);
-
-                triangles.Add(vertexIndex + 3);
-                triangles.Add(vertexIndex + 4);
-                triangles.Add(vertexIndex);
-
-                triangles.Add(vertexIndex + 4);
-                triangles.Add(vertexIndex + 5);
-                triangles.Add(vertexIndex);
-            }
-
-            // Set the mesh data
-            Mesh mesh = new Mesh();
-            mesh.Clear();
-            mesh.SetVertices(vertices);
-            mesh.SetTriangles(triangles, 0);
-            mesh.RecalculateNormals();
-
-            meshFilter.mesh = mesh;
-        }
-
-        public static (HexagonCell, float) GetClosestCell(List<HexagonCell> cells, Vector2 position)
-        {
-            HexagonCell nearestCell = cells[0];
-            float nearestDistance = float.MaxValue;
-            for (int i = 0; i < cells.Count; i++)
-            {
-                Vector2 posXZ = new Vector2(cells[i].transform.position.x, cells[i].transform.position.z);
-                float dist = Vector2.Distance(position, posXZ);
-                if (dist < nearestDistance)
-                {
-                    nearestDistance = dist;
-                    nearestCell = cells[i];
-                }
-            }
-            return (nearestCell, nearestDistance);
-        }
-
-
-        public static void ShuffleCells(List<HexagonCell> cells)
-        {
-            int n = cells.Count;
-            for (int i = 0; i < n; i++)
-            {
-                // Get a random index from the remaining elements
-                int r = i + UnityEngine.Random.Range(0, n - i);
-                // Swap the current element with the random one
-                HexagonCell temp = cells[r];
-                cells[r] = cells[i];
-                cells[i] = temp;
-            }
-        }
-
 
         // TEMP
 
@@ -2531,93 +1532,8 @@ namespace WFCSystem
             return children;
         }
 
-        public static Vector3 CalulateCenterPositionOfHexagonCells(HexagonCell[] cells)
-        {
-            // Calculate the center point
-            Vector3 center = Vector3.zero;
-            for (int i = 0; i < cells.Length; i++)
-                center += cells[i].transform.position;
-            center /= cells.Length;
 
-            return center;
-        }
-        public static Vector3 CalulateCenterPositionFromPoints(Vector3[] points)
-        {
-            // Calculate the center point
-            Vector3 center = Vector3.zero;
-            for (int i = 0; i < points.Length; i++)
-                center += points[i];
-            center /= points.Length;
 
-            return center;
-        }
-
-        public static List<Vector3> GetCenterPositionsFromCells(List<HexagonCell> cells)
-        {
-            List<Vector3> positions = new List<Vector3>();
-            foreach (var item in cells)
-            {
-                positions.Add(item.transform.position);
-            }
-            return positions;
-        }
-
-        [System.Serializable]
-        public struct NeighborSideCornerSockets
-        {
-            public int[] topCorners;
-            public int[] bottomCorners;
-        }
-
-        [System.Serializable]
-        public struct NeighborLayerCornerSockets
-        {
-            public int[] corners;
-        }
-
-        // public static Dictionary<int, List<HexagonTilePrototype>> GenerateMicroClusterGridProtoypes_V2(HexagonCell parentCell, List<HexagonCell> childCells, int areaSize, int cellLayers, int cellLayerElevation = 4)
-        // {
-        //     Dictionary<int, List<HexagonTilePrototype>> newPrototypesByLayer = null;
-        //     Vector2 gridGenerationCenterPosXZOffeset = new Vector2(-1.18f, 0.35f);
-
-        //     List<HexagonCell> allHostCells = new List<HexagonCell>();
-        //     allHostCells.Add(parentCell);
-        //     allHostCells.AddRange(childCells);
-
-        //     List<Vector3> centerPositions = GetCenterPositionsFromCells(allHostCells);
-
-        //     Vector3 centerPos = HexagonCellCluster.FindClosestPoint(centerPositions.ToArray());
-
-        //     // Vector3 centerPos = CalulateCenterPositionFromPoints(centerPositions.ToArray());
-        //     // Vector3 centerPos = CalulateCenterPositionOfHexagonCells(allHostCells.ToArray());
-
-        //     // Generate grid of protottyes 
-        //     Dictionary<int, List<HexagonTilePrototype>> prototypesByLayer = HexagonCellManager.Generate_HexagonCellPrototypes(centerPos, areaSize, centerPositions, 14, 4, cellLayers, cellLayerElevation, gridGenerationCenterPosXZOffeset, 0);
-
-        //     if (newPrototypesByLayer == null)
-        //     {
-        //         newPrototypesByLayer = prototypesByLayer;
-        //     }
-        //     else
-        //     {
-        //         foreach (var kvp in prototypesByLayer)
-        //         {
-        //             int key = kvp.Key;
-        //             List<HexagonTilePrototype> prototypes = kvp.Value;
-
-        //             if (newPrototypesByLayer.ContainsKey(key) == false)
-        //             {
-        //                 newPrototypesByLayer.Add(key, prototypes);
-        //             }
-        //             else
-        //             {
-        //                 newPrototypesByLayer[key].AddRange(prototypes);
-        //             }
-        //         }
-        //     }
-
-        //     return newPrototypesByLayer;
-        // }
 
     }
 }

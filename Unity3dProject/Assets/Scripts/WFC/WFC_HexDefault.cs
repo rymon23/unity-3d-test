@@ -113,6 +113,7 @@ namespace WFCSystem
 
         public List<HexagonCell> topLevelCells;
 
+
         void Start()
         {
             if (runOnStart) Invoke("ExecuteWFC", 0.2f);
@@ -129,6 +130,7 @@ namespace WFCSystem
 
             if (allCellsByLayer_X4_ByCluster != null)
             {
+                Debug.Log("CreateWFCFromMicroCellGridClusters!");
                 WFCUtilities.CreateWFCFromMicroCellGridClusters(allCellsByLayer_X4_ByCluster, tilePrefabs_ClusterMicroGrid_TEMP, this.transform);
             }
 
@@ -233,7 +235,7 @@ namespace WFCSystem
             int currentLayer = 0;
             do
             {
-                List<HexagonCell> layerEdgeCells = edgeCells_Grid.FindAll(e => e.GetGridLayer() == currentLayer).OrderByDescending(e => e._neighbors.Count).ToList();
+                List<HexagonCell> layerEdgeCells = edgeCells_Grid.FindAll(e => e.GetLayer() == currentLayer).OrderByDescending(e => e._neighbors.Count).ToList();
 
                 foreach (HexagonCell edgeCell in layerEdgeCells)
                 {
@@ -258,18 +260,18 @@ namespace WFCSystem
 
         private void CollapseCellAndPropagate(HexagonCell currentCell)
         {
-            bool assigned = currentCell.IsAssigned() ? true : SelectAndAssignNext(currentCell, currentCell.IsGridEdgeCell() ? tilePrefabs_Edgable : tilePrefabs);
+            bool assigned = currentCell.IsAssigned() ? true : SelectAndAssignNext(currentCell, currentCell.IsGridEdge() ? tilePrefabs_Edgable : tilePrefabs);
 
             if (assigned && collapseOrder_cells == WFCCollapseOrder_Cells.Neighbor_Propogation)
             {
-                int currentCellLayer = currentCell.GetGridLayer();
+                int currentCellLayer = currentCell.GetLayer();
 
                 bool includeLayerNwighbors = (neighborPropagation == WFC_CellNeighborPropagation.Edges_Only_Include_Layers || neighborPropagation == WFC_CellNeighborPropagation.Edges_Inners_Include_Layers);
 
                 // Get Unassigned Neighbors
                 List<HexagonCell> unassignedNeighbors = currentCell._neighbors.FindAll(n => n.IsAssigned() == false
-                        && ((includeLayerNwighbors == false && n.GetGridLayer() == currentCellLayer)
-                        || (includeLayerNwighbors && n.GetGridLayer() >= currentCellLayer)
+                        && ((includeLayerNwighbors == false && n.GetLayer() == currentCellLayer)
+                        || (includeLayerNwighbors && n.GetLayer() >= currentCellLayer)
                         ));
 
                 if (unassignedNeighbors.Count > 0)
@@ -309,7 +311,7 @@ namespace WFCSystem
                 List<HexagonCell> layerCells;
                 List<HexagonCellCluster> layerClusters = new List<HexagonCellCluster>();
 
-                layerCells = HexagonCell.GetAvailableCellsForNextLayer(allCellsByLayer[currentLayer]);
+                layerCells = WFCUtilities.GetAvailableCellsForNextLayer(allCellsByLayer[currentLayer]);
                 layerCells = layerCells.OrderByDescending(e => e._neighbors.Count).ToList();
                 foreach (HexagonCell cell in layerCells)
                 {
@@ -352,8 +354,8 @@ namespace WFCSystem
                 Debug.LogError("No prefab for tilePrefabs_MicroClusterParent!");
                 return;
             }
-            List<HexagonCell> cellsToAssign = edgeCells_Grid.FindAll(c => c.isEntryCell == false && c.isPathCell == false && c.IsGroundCell());
-            // List<HexagonCell> cellsToAssign = edgeCells_Grid.FindAll(c => c.isEntryCell == false && c.GetGridLayer() == 0);
+            List<HexagonCell> cellsToAssign = edgeCells_Grid.FindAll(c => c.isEntryCell == false && c.isPathCell == false && c.IsGround());
+            // List<HexagonCell> cellsToAssign = edgeCells_Grid.FindAll(c => c.isEntryCell == false && c.GetLayer() == 0);
 
             int cellLayers = cluster_CellLayers;
             if (cluster_randomizeCellLayers) cellLayers = UnityEngine.Random.Range(cellLayers, cluster_CellLayersMax);
@@ -444,7 +446,7 @@ namespace WFCSystem
 
                     SelectAndAssignNext(cell, prefabs);
 
-                    if (cell.isPathCell) cell.highlight = true;
+                    if (cell.isPathCell) cell.Highlight(true);
                 }
 
                 foreach (HexagonCell cell in leveledCells)
@@ -504,7 +506,7 @@ namespace WFCSystem
                     {
                         if (useTerrainMeshPath)
                         {
-                            updatedPathCell.SetIgnored(true);
+                            updatedPathCell.SetIgnore(true);
                         }
                         else
                         {
@@ -534,7 +536,7 @@ namespace WFCSystem
 
                                 if (useTerrainMeshPath)
                                 {
-                                    updatedPathCell.SetIgnored(true);
+                                    updatedPathCell.SetIgnore(true);
                                 }
                                 else
                                 {
@@ -555,7 +557,7 @@ namespace WFCSystem
 
                         if (useTerrainMeshPath)
                         {
-                            updatedPathCell.SetIgnored(true);
+                            updatedPathCell.SetIgnore(true);
                         }
                         else
                         {
@@ -644,7 +646,7 @@ namespace WFCSystem
         //         {
         //             if (cell.IsAssigned()) continue;
 
-        //             cell.highlight = true;
+        //             cell.Highlight = true;
 
         //             bool assigned = SelectAndAssignNext(cell, tilePrefabs);
 
@@ -880,6 +882,11 @@ namespace WFCSystem
             tileLookupByid = tileDirectory.CreateHexTileDictionary();
             List<HexagonTileCore> _tilePrefabs = tileLookupByid.Select(x => x.Value).ToList();
 
+            if (_tilePrefabs.Count == 0)
+            {
+                Debug.LogError("Empty tilePrefabs");
+            }
+
             // Check For Nulls
             foreach (HexagonTileCore prefab in _tilePrefabs)
             {
@@ -929,11 +936,21 @@ namespace WFCSystem
 
         private void EvaluateCells()
         {
+            if (allCellsList == null ||
+                allCellsList.Count == 0 ||
+                allCellsByLayer == null ||
+                allCellsByLayer.Count == 0
+            )
+            {
+                Debug.LogError("Empty Cell list for allCellsList or allCellsByLayer");
+            }
+
+
             entryCells = new List<HexagonCell>();
 
-            edgeCells_Grid = allCellsList.FindAll(c => c.IsGridEdgeCell());
+            edgeCells_Grid = allCellsList.FindAll(c => c.IsGridEdge());
             // edgeCells_Inner = HexagonCell.GetEdgeCells(allCellsList.Except(edgeCells_Grid).ToList());
-            edgeCells_Inner = HexagonCell.GetInnerEdges(allCellsList.Except(edgeCells_Grid).ToList(), EdgeCellType.Inner);
+            edgeCells_Inner = HexCellUtil.GetInnerEdges(allCellsList.Except(edgeCells_Grid).ToList(), EdgeCellType.Inner);
             totalEdgeCells = edgeCells_Grid.Count + edgeCells_Inner.Count;
 
             if (minEntrances > 0)
@@ -943,13 +960,13 @@ namespace WFCSystem
             }
 
             // TODO: find a better way to jsut provide this without doing this extra stuff
-            totalLayers = allCellsByLayer.Keys.Count;// .OrderByDescending(c => c.GetGridLayer()).ToList()[0].GetGridLayer() + 1;
+            totalLayers = allCellsByLayer.Keys.Count;// .OrderByDescending(c => c.GetLayer()).ToList()[0].GetLayer() + 1;
 
             // List<HexagonCell> _processedCells = new List<HexagonCell>();
 
             // if (isWalledEdge == false) _processedCells.AddRange(edgeCells);
 
-            // _processedCells.AddRange(allCells.Except(edgeCells).OrderByDescending(c => c.GetGridLayer()));
+            // _processedCells.AddRange(allCells.Except(edgeCells).OrderByDescending(c => c.GetLayer()));
             // allCells = _processedCells;
 
             // allCellsByLayer = HexagonCell.OrganizeCellsByLevel(allCellsList);
@@ -967,22 +984,44 @@ namespace WFCSystem
 
         }
 
-        public void SetCells(Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells)
+
+        public void AssignCells(Dictionary<int, List<HexagonCell>> _allCellsByLayer)
+        {
+            allCellsByLayer = _allCellsByLayer;
+            allCellsList = HexCellUtil.ExtractCellsByLayer(_allCellsByLayer);
+        }
+        public void AssignCells(List<HexagonCell> _allCells)
+        {
+            allCellsList = _allCells;
+            allCellsByLayer = HexCellUtil.OrganizeByLayer(_allCells);
+        }
+        public void AssignCells(Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells)
         {
             allCellsByLayer = _allCellsByLayer;
             allCellsList = _allCells;
         }
-
-        public void SetCells(Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells, Dictionary<HexagonCellCluster, Dictionary<int, List<HexagonCell>>> _allCellsByLayer_X4_ByCluster)
+        public void AssignCells(
+            Dictionary<int, List<HexagonCell>> _allCellsByLayer,
+            List<HexagonCell> _allCells, Dictionary<HexagonCellCluster,
+            Dictionary<int, List<HexagonCell>>> _allCellsByLayer_X4_ByCluster
+        )
         {
-
             allCellsByLayer = _allCellsByLayer;
             allCellsList = _allCells;
             allCellsByLayer_X4_ByCluster = _allCellsByLayer_X4_ByCluster;
         }
-        // public void SetCells(Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells, List<HexagonCellCluster> _allClusters)
-        // {
-        // }
+
+        public void AssignCells(Dictionary<int, List<HexagonCellPrototype>> _allCellsByLayer)
+        {
+        }
+        public void AssignCells(List<HexagonCellPrototype> _allCells)
+        {
+        }
+
+        public void AssignCells(Dictionary<int, List<HexagonCellPrototype>> _allCellsByLayer, List<HexagonCellPrototype> _allCells)
+        {
+        }
+
 
         private void UpdateCompatibilityMatrix()
         {

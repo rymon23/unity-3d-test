@@ -52,8 +52,8 @@ namespace ProceduralBase
             cellManager.GenerateCells(true, true);
             (Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells) = cellManager.GetCells();
             // Add cells to WFC
-            wfc.SetRadius(cellManager.radius);
-            wfc.SetCells(_allCellsByLayer, _allCells);
+            wfc.SetRadius(cellManager.GetRadius());
+            wfc.AssignCells(_allCellsByLayer, _allCells);
 
             // Add cells to WFC
             // wfc.SetRadius(cellManager.radius);

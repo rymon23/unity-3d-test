@@ -6,14 +6,9 @@ using UnityEngine;
 
 namespace WFCSystem
 {
-
-    /// <summary>
-    ///  Structures to Build: 
-    /// 
-    ///     - Guard Tower - for gate
-    ///     - Bridge Pathway
-    /// 
-    /// </summary>
+    public enum CornerSocketSetType { SideBottom, SideTop, Bottom, Top }
+    public enum GridExclusionRule { Unset = 0, EdgeOnly, InnerCellOnly, GridEdgesOnly, InnerGrid_NoEdges, InnerGrid_Any }
+    public enum TileContext { Default = 0, Micro = 1, Meta, }
 
     public enum TileCategory
     {
@@ -95,8 +90,20 @@ namespace WFCSystem
     }
 
 
-    public class HexagonTileUtil : MonoBehaviour
+    public static class HexagonTileUtil
     {
+
+
+        public static HashSet<int> GetTileSizes(List<HexagonTileCore> tiles)
+        {
+            HashSet<int> sizesFound = new HashSet<int>();
+            foreach (var tile in tiles)
+            {
+                sizesFound.Add(tile.GetSize());
+            }
+            return sizesFound;
+        }
+
 
     }
 

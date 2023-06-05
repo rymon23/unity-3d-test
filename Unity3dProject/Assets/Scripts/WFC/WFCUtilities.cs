@@ -11,9 +11,19 @@ namespace WFCSystem
     {
         public void ExecuteWFC();
         public void SetRadius(int value);
-        public void SetCells(Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells);
-        public void SetCells(Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells, Dictionary<HexagonCellCluster, Dictionary<int, List<HexagonCell>>> _allCellsByLayer_X4_ByCluster);
         public void InstantiateAllTiles();
+
+        public void AssignCells(Dictionary<int, List<HexagonCellPrototype>> _allCellsByLayer);
+        public void AssignCells(List<HexagonCellPrototype> _allCells);
+        public void AssignCells(Dictionary<int, List<HexagonCellPrototype>> _allCellsByLayer, List<HexagonCellPrototype> _allCells);
+        public void AssignCells(Dictionary<int, List<HexagonCell>> _allCellsByLayer);
+        public void AssignCells(List<HexagonCell> _allCells);
+        public void AssignCells(Dictionary<int, List<HexagonCell>> _allCellsByLayer, List<HexagonCell> _allCells);
+        public void AssignCells(
+            Dictionary<int, List<HexagonCell>> _allCellsByLayer,
+            List<HexagonCell> _allCells,
+            Dictionary<HexagonCellCluster, Dictionary<int, List<HexagonCell>>> _allCellsByLayer_X4_ByCluster
+        );
     }
 
     public enum WFCCollapseOrder_General
@@ -119,10 +129,57 @@ namespace WFCSystem
             return selectedCells;
         }
 
-        public static bool SelectAndAssignNext(HexagonCell cell, List<HexagonTileCore> prefabsList, TileContext tileContext, HexagonSocketDirectory socketDirectory, bool isWalledEdge, bool logIncompatibilities = false, bool ignoreFailures = true, bool allowInvertedTiles = true)
+        public static List<HexagonCell> GetAvailableCellsForNextLayer(List<HexagonCell> allLayerCells)
+        {
+            List<HexagonCell> available = new List<HexagonCell>();
+
+            foreach (HexagonCell currentCell in allLayerCells)
+            {
+                if (currentCell.IsAssigned() || currentCell.isGroundRamp) continue;
+
+                // if (!currentCell.isLeveledCell && currentCell.layeredNeighbor[0] != null && !currentCell.layeredNeighbor[0].isLeveledRampCell && currentCell.layeredNeighbor[0].isLeveledCell  )
+                // if (currentCell.HasBottomNeighbor() && !currentCell.isLeveledCell && !currentCell.layeredNeighbor[0].isLeveledRampCell)
+                if (!currentCell.isLeveledCell && (currentCell.HasBottomNeighbor() == false || currentCell.GetBottomNeighbor().isLeveledRampCell == false))
+                {
+                    if (available.Contains(currentCell) == false) available.Add(currentCell);
+                }
+            }
+            return available;
+        }
+
+        public static bool SelectAndAssignNext(
+            HexagonCell cell,
+            List<HexagonTileCore> prefabsList,
+            TileContext tileContext,
+            HexagonSocketDirectory socketDirectory,
+            bool isWalledEdge,
+            bool logIncompatibilities = false,
+            bool ignoreFailures = true,
+            bool allowInvertedTiles = true
+        )
+        {
+            // Debug.LogError("prefabsList: " + prefabsList.Count);
+
+            (HexagonTileCore nextTile, List<int[]> rotations) = WFCUtilities.SelectNextTile(cell, prefabsList, allowInvertedTiles, isWalledEdge, TileContext.Micro, socketDirectory, logIncompatibilities);
+            bool assigned = WFCUtilities.AssignTileToCell(cell, nextTile, rotations, ignoreFailures);
+            return assigned;
+        }
+
+        public static bool SelectAndAssignNext(
+            HexagonCell cell,
+            List<HexagonTileCore> prefabsList,
+            List<HexagonCell> allAssignedCellsInOrder,
+            TileContext tileContext,
+            HexagonSocketDirectory socketDirectory,
+            bool isWalledEdge,
+            bool logIncompatibilities = false,
+            bool ignoreFailures = true,
+            bool allowInvertedTiles = true
+        )
         {
             (HexagonTileCore nextTile, List<int[]> rotations) = WFCUtilities.SelectNextTile(cell, prefabsList, allowInvertedTiles, isWalledEdge, TileContext.Micro, socketDirectory, logIncompatibilities);
             bool assigned = WFCUtilities.AssignTileToCell(cell, nextTile, rotations, ignoreFailures);
+            if (assigned) allAssignedCellsInOrder.Add(cell);
             return assigned;
         }
 
@@ -131,14 +188,14 @@ namespace WFCSystem
             bool assigned = currentCell.IsAssigned() ? true : SelectAndAssignNext(currentCell, (currentCell.isEdgeCell ? tilePrefabs_Edgable : tilePrefabs), tileContext, socketDirectory, isWalledEdge, logIncompatibilities, ignoreFailures, allowInvertedTiles);
             if (assigned)
             {
-                int currentCellLayer = currentCell.GetGridLayer();
+                int currentCellLayer = currentCell.GetLayer();
 
                 bool includeLayerNwighbors = (neighborPropagation == WFC_CellNeighborPropagation.Edges_Only_Include_Layers || neighborPropagation == WFC_CellNeighborPropagation.Edges_Inners_Include_Layers);
 
                 // Get Unassigned Neighbors
                 List<HexagonCell> unassignedNeighbors = currentCell._neighbors.FindAll(n => n.IsAssigned() == false
-                        && ((includeLayerNwighbors == false && n.GetGridLayer() == currentCellLayer)
-                        || (includeLayerNwighbors && n.GetGridLayer() >= currentCellLayer)
+                        && ((includeLayerNwighbors == false && n.GetLayer() == currentCellLayer)
+                        || (includeLayerNwighbors && n.GetLayer() >= currentCellLayer)
                         ));
 
                 if (unassignedNeighbors.Count > 0)
@@ -252,7 +309,7 @@ namespace WFCSystem
 
 
             gridWFC.SetRadius(hostRadius);
-            gridWFC.SetCells(_allCellsByLayer, _allCells);
+            gridWFC.AssignCells(_allCellsByLayer, _allCells);
             // Run WFC
             gridWFC.ExecuteWFC();
 
@@ -339,7 +396,7 @@ namespace WFCSystem
         {
             if (ignoreFailures && tile == null)
             {
-                cell.highlight = true;
+                cell.Highlight(true);
                 return false;
             }
             else
@@ -348,26 +405,44 @@ namespace WFCSystem
                 bool shouldInvert = selected[1] == 1;
 
                 cell.SetTile(tile, selected[0], shouldInvert);
-                cell.highlight = false;
+                cell.Highlight(false);
                 return true;
             }
         }
 
-        public static (HexagonTileCore, List<int[]>) SelectNextTile(HexagonCell cell, List<HexagonTileCore> prefabsList, bool allowInvertedTiles, bool isWalledEdge, TileContext tileContext, HexagonSocketDirectory socketDirectory, bool logIncompatibilities)
+        public static (HexagonTileCore, List<int[]>) SelectNextTile(HexagonCell cell,
+            List<HexagonTileCore> prefabsList,
+            bool allowInvertedTiles,
+            bool isWalledEdge,
+            TileContext tileContext,
+            HexagonSocketDirectory socketDirectory,
+            bool logIncompatibilities
+        )
         {
+
+            if (prefabsList == null || prefabsList.Count == 0)
+            {
+                Debug.LogError("prefabsList is empty");
+                return (null, null);
+            }
+
             // Create a list of compatible tiles and their rotations
             List<(HexagonTileCore, List<int[]>)> compatibleTilesAndRotations = new List<(HexagonTileCore, List<int[]>)>();
+
+            // Debug.LogError("prefabsList: " + prefabsList.Count);
 
             // Iterate through all tiles
             for (int i = 0; i < prefabsList.Count; i++)
             {
                 HexagonTileCore currentTile = prefabsList[i];
 
-                if (cell.GetEdgeCellType() == EdgeCellType.Grid && currentTile.IsGridEdgeCompatible() == false) continue;
+                // Debug.LogError("currentTile: " + currentTile.gameObject.name);
+
+                // if (cell.GetEdgeCellType() == EdgeCellType.Default && currentTile.IsGridEdgeCompatible() == false) continue;
+
+                if (cell.IsEntry() && !currentTile.isEntrance) continue;
 
                 if (cell.isPathCell && !currentTile.allowPathPlacement) continue;
-
-                if (cell.isEntryCell && !currentTile.isEntrance) continue;
 
                 if (currentTile.isLeveledTile && !cell.isLeveledCell) continue;
 
@@ -393,24 +468,26 @@ namespace WFCSystem
                     }
                 }
 
-                // if (currentTile.noGroundLayer && (cell.GetGridLayer() == 0 || cell.isLeveledGroundCell)) continue;
+                // if (currentTile.noGroundLayer && (cell.GetLayer() == 0 || cell.isLeveledGroundCell)) continue;
                 // if (IsClusterCell && currentTile.GetInnerClusterSocketCount() != cell.GetNumberofNeighborsInCluster()) continue;
 
                 List<int[]> compatibleTileRotations = WFCUtilities.GetCompatibleTileRotations(cell, currentTile, allowInvertedTiles, isWalledEdge, tileContext, socketDirectory, logIncompatibilities);
 
                 if (compatibleTileRotations.Count > 0) compatibleTilesAndRotations.Add((currentTile, compatibleTileRotations));
-
             }
+
             // If there are no compatible tiles, return null
             if (compatibleTilesAndRotations.Count == 0)
             {
+                Debug.LogError("compatibleTilesAndRotations.Count: " + compatibleTilesAndRotations.Count + ",  logIncompatibilities: " + logIncompatibilities);
+
                 if (logIncompatibilities)
                 {
-                    if (cell.isEntryCell)
+                    if (cell.IsEntry())
                     {
                         Debug.LogError("No compatible tiles for Entry Cell: " + cell.id);
                     }
-                    else if (cell.isEdgeCell)
+                    else if (cell.IsEdge())
                     {
                         Debug.LogError("No compatible tiles for Edge Cell: " + cell.id);
                     }
@@ -420,7 +497,7 @@ namespace WFCSystem
                     }
                     else
                     {
-                        Debug.Log("No compatible tiles for cell: " + cell.id);
+                        Debug.LogError("No compatible tiles for cell: " + cell.id);
                     }
                 }
                 return (null, null);
@@ -471,8 +548,8 @@ namespace WFCSystem
         {
             List<int[]> compatibleRotations = new List<int[]>();
 
-            HexagonCell.NeighborSideCornerSockets[] neighborTileCornerSocketsBySide = tileContext == TileContext.Default ? currentCell.GetSideNeighborTileSockets(isWalledEdge) : currentCell.GetSideNeighborTileSockets(isWalledEdge, true);
-            HexagonCell.NeighborLayerCornerSockets[] layeredNeighborTileCornerSockets = currentCell.GetLayeredNeighborTileSockets(tileContext);
+            NeighborSideCornerSockets[] neighborTileCornerSocketsBySide = tileContext == TileContext.Default ? currentCell.GetSideNeighborTileSockets(isWalledEdge) : currentCell.GetSideNeighborTileSockets(isWalledEdge, true);
+            NeighborLayerCornerSockets[] layeredNeighborTileCornerSockets = currentCell.GetLayeredNeighborTileSockets(tileContext);
 
             bool checkLayerNeighbors = currentCell.IsGroundCell() == false;
             bool[,] compatibilityMatrix = socketDirectory.GetCompatibilityMatrix();
@@ -540,7 +617,7 @@ namespace WFCSystem
         }
 
 
-        public static bool IsTileCompatibleOnSideAndRotation(HexagonCell.NeighborSideCornerSockets[] neighborTileCornerSocketsBySide, HexagonTileCore currentTile, HexagonCell currentCell, int side, int rotation, HexagonTileCore neighborTile, bool inverted, HexagonSocketDirectory socketDirectory, bool logIncompatibilities)
+        public static bool IsTileCompatibleOnSideAndRotation(NeighborSideCornerSockets[] neighborTileCornerSocketsBySide, HexagonTileCore currentTile, HexagonCell currentCell, int side, int rotation, HexagonTileCore neighborTile, bool inverted, HexagonSocketDirectory socketDirectory, bool logIncompatibilities)
         {
             string tileName = currentTile.gameObject.name;
             string neighborTileName = neighborTile?.gameObject.name;
@@ -549,7 +626,7 @@ namespace WFCSystem
 
             bool compatibile = true;
 
-            HexagonCell.NeighborSideCornerSockets neighborSide = neighborTileCornerSocketsBySide[side];
+            NeighborSideCornerSockets neighborSide = neighborTileCornerSocketsBySide[side];
             (int[] currentTileSideBottomSockets, int[] currentTileSideTopSockets) = currentTile.GetRotatedCornerSocketsBySide((HexagonSide)side, rotation, inverted);
 
             // Check Bottom and Top Corners
@@ -599,9 +676,9 @@ namespace WFCSystem
 
             (int[] neighborSideBottomSockets, int[] neighborSideTopSockets) = neighborTile.GetCornerSocketsBySide((HexagonSide)neighborRotatedSide);
 
-            (HexagonCorner currentCornerA, HexagonCorner currentCornerB) = HexagonCell.GetCornersFromSide((HexagonSide)currentRotatedSide);
+            (HexagonCorner currentCornerA, HexagonCorner currentCornerB) = HexCoreUtil.GetCornersFromSide((HexagonSide)currentRotatedSide);
 
-            (HexagonCorner neighborCornerA, HexagonCorner neighborCornerB) = HexagonCell.GetCornersFromSide((HexagonSide)neighborRotatedSide);
+            (HexagonCorner neighborCornerA, HexagonCorner neighborCornerB) = HexCoreUtil.GetCornersFromSide((HexagonSide)neighborRotatedSide);
 
             // Check Bottom Corners
             for (var i = 0; i < 2; i++)
@@ -648,7 +725,7 @@ namespace WFCSystem
 
             bool compatibile = true;
 
-            HexagonCell.NeighborLayerCornerSockets[] layeredNeighborTileCornerSockets = currentCell.GetLayeredNeighborTileSockets(TileContext.Micro);
+            NeighborLayerCornerSockets[] layeredNeighborTileCornerSockets = currentCell.GetLayeredNeighborTileSockets(TileContext.Micro);
 
             // For now just check bottom neighbor's top against current tile's bottom
             int[] currentTileBottomSockets = currentTile.GetRotatedLayerCornerSockets(false, rotation, false);
@@ -679,7 +756,7 @@ namespace WFCSystem
             bool compatibile = true;
 
             // For now just check bottom neighbor's top against current tile's bottom
-            HexagonCell.NeighborLayerCornerSockets neighborTopCornerSockets = new HexagonCell.NeighborLayerCornerSockets();
+            NeighborLayerCornerSockets neighborTopCornerSockets = new NeighborLayerCornerSockets();
             neighborTopCornerSockets.corners = new int[6];
             neighborTopCornerSockets.corners = bottomNeighborTile.GetRotatedLayerCornerSockets(true, bottomNeighborRotation, false);
 

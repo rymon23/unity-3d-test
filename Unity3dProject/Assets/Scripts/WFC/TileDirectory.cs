@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
+using System.Linq;
 
 
 namespace WFCSystem
@@ -41,6 +42,27 @@ namespace WFCSystem
         [SerializeField] private TileContext tileContext;
         [SerializeField] private bool autoFillFromFolder;
 
+
+        [SerializeField] private List<int> tileSizes;
+        public bool HasMicroTiles() => GetTileSizes().Any(s => s < 12);
+        public List<int> GetTileSizes()
+        {
+            tileSizes = GetTileSizes(ExtractHexTiles());
+            return tileSizes;
+        }
+        public static List<int> GetTileSizes(List<HexagonTileCore> tiles)
+        {
+            List<int> sizesFound = new List<int>();
+            foreach (var tile in tiles)
+            {
+                if (sizesFound.Contains(tile.GetSize())) continue;
+                sizesFound.Add(tile.GetSize());
+            }
+            return sizesFound;
+        }
+
+
+
         [Header("Cluster Tile Prefabs")]
         [SerializeField] private TileClusterEntry[] tileClusterEntries;
         [SerializeField] private TileEntry[] tileEntries;
@@ -68,6 +90,16 @@ namespace WFCSystem
                 tileDictionary.Add(microTileEntries[i].id, microTileEntries[i].tilePrefab);
             }
             return tileDictionary;
+        }
+
+        public List<HexagonTileCore> ExtractHexTiles()
+        {
+            List<HexagonTileCore> result = new List<HexagonTileCore>();
+            for (int i = 0; i < microTileEntries.Length; i++)
+            {
+                result.Add(microTileEntries[i].tilePrefab);
+            }
+            return result;
         }
 
         public Dictionary<int, HexagonTileCluster> CreateTileClusterDictionary()
@@ -196,6 +228,7 @@ namespace WFCSystem
         {
             CheckForAssets();
 
+
             if (autoFillFromFolder)
             {
                 autoFillFromFolder = false;
@@ -208,8 +241,9 @@ namespace WFCSystem
                 currentSize = tileEntries.Length;
 
                 EvaluateTiles();
-            }
 
+                GetTileSizes();
+            }
 
         }
 

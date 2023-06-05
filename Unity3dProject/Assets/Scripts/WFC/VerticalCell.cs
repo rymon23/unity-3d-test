@@ -135,7 +135,7 @@ namespace WFCSystem
             if (showEdges)
             {
                 Gizmos.color = Color.magenta;
-                ProceduralTerrainUtility.DrawRectangleInGizmos(_cornerPoints);
+                VectorUtil.DrawRectangleInGizmos(_cornerPoints);
             }
 
             // if (showNeighbors)

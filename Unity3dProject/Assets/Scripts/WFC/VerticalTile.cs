@@ -224,7 +224,7 @@ namespace WFCSystem
             if (showEdges)
             {
                 Gizmos.color = Color.magenta;
-                ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(_corners);
+                VectorUtil.DrawHexagonPointLinesInGizmos(_corners);
             }
 
             // if (tileSocketDirectory != null && tileLabelGroup != null)

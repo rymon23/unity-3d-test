@@ -501,7 +501,7 @@ namespace WFCSystem
         {
             EvaluateRotatedCornerSockets();
 
-            (HexagonCorner cornerA, HexagonCorner cornerB) = HexagonCell.GetCornersFromSide(side);
+            (HexagonCorner cornerA, HexagonCorner cornerB) = HexCoreUtil.GetCornersFromSide(side);
 
             int[] top = new int[2];
             int[] bottom = new int[2];
@@ -607,7 +607,7 @@ namespace WFCSystem
 
         private void RecalculateEdgePoints()
         {
-            _corners = ProceduralTerrainUtility.GenerateHexagonPoints(transform.position, size);
+            _corners = HexCoreUtil.GenerateHexagonPoints(transform.position, size);
             _sides = HexagonGenerator.GenerateHexagonSidePoints(_corners);
             EvaluateRotatedCornerSockets();
         }
@@ -800,7 +800,7 @@ namespace WFCSystem
             if (showEdges)
             {
                 Gizmos.color = Color.magenta;
-                ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(_corners);
+                VectorUtil.DrawHexagonPointLinesInGizmos(_corners);
             }
 
             if (socketTextDisplay == null || socketTextDisplay.Length == 0) return;
