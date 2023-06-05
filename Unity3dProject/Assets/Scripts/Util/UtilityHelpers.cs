@@ -10,6 +10,75 @@ using System.Linq;
 static class UtilityHelpers
 {
 
+    public static List<Vector2> SelectRandomKeys(Dictionary<Vector2, Vector2> dictionary, int count)
+    {
+        // Convert the dictionary keys to a list
+        List<Vector2> keys = new List<Vector2>(dictionary.Keys);
+
+        // Create a random number generator
+        System.Random random = new System.Random();
+
+        // Shuffle the keys using Fisher-Yates algorithm
+        for (int i = keys.Count - 1; i > 0; i--)
+        {
+            int j = random.Next(i + 1);
+            Vector2 temp = keys[i];
+            keys[i] = keys[j];
+            keys[j] = temp;
+        }
+
+        // Take the specified number of keys from the shuffled list
+        List<Vector2> selectedKeys = keys.Take(count).ToList();
+        return selectedKeys;
+    }
+
+    public static float RoundHeightToNearestElevation(float height, int elevationStep)
+    {
+        int roundedHeight = Mathf.RoundToInt(height / elevationStep) * elevationStep;
+        return roundedHeight;
+    }
+
+    public static bool IsValueWithinRange(float value, Vector2 rangeMinMax) => (value < rangeMinMax.y && value > rangeMinMax.x);
+    public static int Find_IndexOfFirstRangeContainingValue(float value, List<Vector2> rangeList)
+    {
+        int index = -1;
+        for (int i = 0; i < rangeList.Count; i++)
+        {
+            if (IsValueWithinRange(value, rangeList[i]))
+            {
+                index = i;
+                break;
+            }
+        }
+        return index;
+    }
+
+    public static List<Vector2> Evaluate_NoiseRangeChunks(float rangeMin, float rangeMax, int chunks, float weightMult)
+    {
+        List<Vector2> chunkRanges = new List<Vector2>();
+
+        float chunkSize = (rangeMax - rangeMin) / chunks;
+
+        float currentMin = rangeMin;
+        for (int i = 0; i < chunks; i++)
+        {
+            float chunkWeight = Mathf.Pow(weightMult, i);
+            float chunkRangeMin = currentMin;
+            float chunkRangeMax = currentMin + (chunkSize * chunkWeight);
+
+            // Ensure the chunk range stays within the overall range
+            chunkRangeMin = Mathf.Clamp(chunkRangeMin, rangeMin, rangeMax);
+            chunkRangeMax = Mathf.Clamp(chunkRangeMax, rangeMin, rangeMax);
+
+            Vector2 chunkRange = new Vector2(chunkRangeMin, chunkRangeMax);
+            chunkRanges.Add(chunkRange);
+
+            currentMin = chunkRangeMax;
+        }
+
+        return chunkRanges;
+    }
+
     public static string GenerateUniqueID(GameObject gameObject)
     {
         // Generate a new unique identifier for the object
@@ -24,6 +93,86 @@ static class UtilityHelpers
         Guid guid = Guid.NewGuid();
         string _uid = $"{partial}-{guid}";
         return _uid;
+    }
+
+    public static Dictionary<string, Color> CustomColorDefaults()
+    {
+        Dictionary<string, Color> colors = new Dictionary<string, Color>() {
+                {"brown", new Color(0.4f, 0.2f, 0f) },
+                {"orange",  new Color(1f, 0.5f, 0f) },
+                {"purple", new Color(0.8f, 0.2f, 1f) },
+            };
+
+        return colors;
+    }
+
+    public static List<Color> GenerateUniqueRandomColors(int count)
+    {
+        List<Color> colors = new List<Color>();
+
+        for (int i = 0; i < count; i++)
+        {
+            Color color = UnityEngine.Random.ColorHSV(0f, 1f, 0.5f, 1f, 0.5f, 1f);
+            while (colors.Contains(color))
+            {
+                color = UnityEngine.Random.ColorHSV(0f, 1f, 0.5f, 1f, 0.5f, 1f);
+            }
+            colors.Add(color);
+        }
+
+        return colors;
+    }
+
+    public static bool Vector3HasNaN(Vector3 vector)
+    {
+        return Mathf.Approximately(vector.x, float.NaN) ||
+               Mathf.Approximately(vector.y, float.NaN) ||
+               Mathf.Approximately(vector.z, float.NaN);
+    }
+
+    public static float CalculateSquareMilesFromRadius(float radius)
+    {
+        float area = Mathf.PI * radius * radius;
+        float squareMiles = area / 2589988f; // number of square meters in a square mile
+        return squareMiles;
+    }
+
+    public static float CalculateAverage(float valueA, float valueB)
+    {
+        float average = (valueA + valueB) / 2f;
+        return average;
+    }
+
+    public static float CalculateAverage(List<float> numbers)
+    {
+        if (numbers == null || numbers.Count == 0)
+        {
+            // Return a default value or handle the empty list case
+            // Here, we choose to return float.NaN to indicate an invalid average
+            return float.NaN;
+        }
+
+        float sum = 0f;
+        foreach (float number in numbers)
+        {
+            sum += number;
+        }
+
+        float average = sum / numbers.Count;
+        return average;
+    }
+
+    public static float CalculateAverageOfArray(float[] elevations)
+    {
+        float sum = 0.0f;
+
+        for (int i = 0; i < elevations.Length; i++)
+        {
+            sum += elevations[i];
+        }
+
+        float average = sum / elevations.Length;
+        return average;
     }
 
     public static int ChooseDecision(Dictionary<int, float> decisions)
@@ -42,6 +191,33 @@ static class UtilityHelpers
         }
 
         return -1; // Return -1 if no decision is chosen (this should not happen)
+    }
+
+    public static GameObject FindGameObject(string tag, string name)
+    {
+        GameObject[] taggedObjects = GameObject.FindGameObjectsWithTag(tag);
+
+        foreach (GameObject obj in taggedObjects)
+        {
+            if (obj.name == name)
+            {
+                return obj;
+            }
+        }
+
+        return null;
+    }
+    public static List<GameObject> FindGameObjectsWithTagInChildren(Transform parent, string tag)
+    {
+        List<GameObject> gameObjects = new List<GameObject>();
+        GameObject[] children = parent.GetComponentsInChildren<GameObject>();
+
+        foreach (GameObject child in children)
+        {
+            if (child.CompareTag(tag)) gameObjects.Add(child);
+        }
+
+        return gameObjects;
     }
 
 
@@ -254,13 +430,7 @@ static class UtilityHelpers
         return true;
     }
 
-    public static bool
-    IsInFOVScope(
-        Transform viewer,
-        Vector3 targetPos,
-        float maxAngle,
-        float maxRadius
-    )
+    public static bool IsInFOVScope(Transform viewer, Vector3 targetPos, float maxAngle, float maxRadius)
     {
         float angle = getFOVAngle(viewer, targetPos);
 

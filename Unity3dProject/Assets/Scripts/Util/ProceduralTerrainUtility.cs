@@ -1,6 +1,6 @@
 using System;
 using System.Linq;
-using System.Collections;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using UnityEngine;
 using WFCSystem;
@@ -9,11 +9,321 @@ namespace ProceduralBase
 {
     public static class ProceduralTerrainUtility
     {
+        public static float CalculateAverageDistanceBetweenPoints(List<Vector3> points)
+        {
+            if (points == null || points.Count < 2)
+            {
+                return 0f; // Return 0 if there are less than 2 points
+            }
 
-        public static int[] GenerateTerrainTriangles(TerrainVertex[,] vertexGrid)
+            float totalDistance = 0f;
+            int numPoints = points.Count;
+
+            for (int i = 0; i < numPoints; i++)
+            {
+                for (int j = i + 1; j < numPoints; j++)
+                {
+                    float distance = Vector3.Distance(points[i], points[j]);
+                    totalDistance += distance;
+                }
+            }
+
+            // Calculate the average distance
+            float averageDistance = totalDistance / (numPoints * (numPoints - 1) / 2);
+
+            return averageDistance;
+        }
+
+        public static float CalculateAverageDistanceBetweenPointsXZ(List<Vector3> points)
+        {
+            if (points == null || points.Count < 2)
+            {
+                return 0f; // Return 0 if there are less than 2 points
+            }
+
+            float totalDistance = 0f;
+            int numPoints = points.Count;
+
+            for (int i = 0; i < numPoints; i++)
+            {
+                for (int j = i + 1; j < numPoints; j++)
+                {
+                    Vector2 point1XZ = new Vector2(points[i].x, points[i].z);
+                    Vector2 point2XZ = new Vector2(points[j].x, points[j].z);
+                    float distance = Vector2.Distance(point1XZ, point2XZ);
+                    totalDistance += distance;
+                }
+            }
+
+            // Calculate the average distance
+            float averageDistance = totalDistance / (numPoints * (numPoints - 1) / 2);
+
+            return averageDistance;
+        }
+
+
+        public static int[] GenerateTerrainSurfaceTriangles(int numVertices, HashSet<int> indices)
+        {
+            // Create a list to store the triangle indices
+            List<int> triangles = new List<int>();
+
+            // Convert the HashSet to a list for indexing
+            List<int> indicesList = new List<int>(indices);
+
+            // Iterate over the indices and generate triangles
+            for (int i = 0; i < indicesList.Count; i++)
+            {
+                int vertexIndex = indicesList[i];
+
+                // Check if the current vertex index is valid
+                if (vertexIndex >= 0 && vertexIndex < numVertices * numVertices)
+                {
+                    // Get the next two vertex indices in the indices collection
+                    int nextVertexIndex1 = i + 1 < indicesList.Count ? indicesList[i + 1] : -1;
+                    int nextVertexIndex2 = i + 2 < indicesList.Count ? indicesList[i + 2] : -1;
+
+                    // Check if the next two vertex indices are valid
+                    if (nextVertexIndex1 >= 0 && nextVertexIndex1 < numVertices * numVertices &&
+                        nextVertexIndex2 >= 0 && nextVertexIndex2 < numVertices * numVertices)
+                    {
+                        // Add the triangle indices
+                        triangles.Add(vertexIndex);
+                        triangles.Add(nextVertexIndex2);
+                        triangles.Add(nextVertexIndex1);
+                    }
+                }
+            }
+
+            return triangles.ToArray();
+        }
+
+        public static int[] GenerateTerrainTriangles(Vector2[,] worldspaceVertexKeys, HashSet<Vector2> meshTraingleExcludeList = null)
+        {
+            int numVerticesX = worldspaceVertexKeys.GetLength(0);
+            int numVerticesZ = worldspaceVertexKeys.GetLength(1);
+            // Create an array to store the triangle indices
+            int[] triangles = new int[(numVerticesX - 1) * (numVerticesZ - 1) * 6];
+
+            // Iterate through the grid and create the triangles
+            int index = 0;
+            for (int x = 0; x < numVerticesX - 1; x++)
+            {
+                for (int z = 0; z < numVerticesZ - 1; z++)
+                {
+                    if (meshTraingleExcludeList != null && meshTraingleExcludeList.Contains(worldspaceVertexKeys[x, z]))
+                    {
+                        // Debug.LogError("meshTraingleExcludeList - exclude:  " + worldspaceVertexKeys[x, z]);
+
+                        continue;
+                    }
+                    // if (meshTraingleExcludeList != null && meshTraingleExcludeList.Contains(worldspaceVertexKeys[z, x]))
+                    // {
+                    //     Debug.LogError("meshTraingleExcludeList - exclude:  " + worldspaceVertexKeys[z, x]);
+
+                    //     continue;
+                    // }
+
+                    triangles[index++] = x + z * numVerticesX;
+                    triangles[index++] = x + 1 + z * numVerticesX;
+                    triangles[index++] = x + (z + 1) * numVerticesX;
+
+                    triangles[index++] = x + 1 + z * numVerticesX;
+                    triangles[index++] = x + 1 + (z + 1) * numVerticesX;
+                    triangles[index++] = x + (z + 1) * numVerticesX;
+                }
+            }
+            return triangles;
+        }
+
+
+        // public static int[] GenerateTerrainTriangles(Vector2[,] worldspaceVertexKeys, HashSet<(int, int)> meshTriangleExcludeList = null)
+        // {
+        //     int numVerticesX = worldspaceVertexKeys.GetLength(0);
+        //     int numVerticesZ = worldspaceVertexKeys.GetLength(1);
+        //     int numTriangles = (numVerticesX - 1) * (numVerticesZ - 1) * 6;
+        //     int[] triangles = new int[numTriangles];
+
+        //     int index = 0;
+        //     for (int x = 0; x < numVerticesX - 1; x++)
+        //     {
+        //         for (int z = 0; z < numVerticesZ - 1; z++)
+        //         {
+        //             if (meshTriangleExcludeList != null && meshTriangleExcludeList.Contains((z, x)))
+        //             {
+        //                 continue;
+        //             }
+
+        //             int vertexIndex = x + z * numVerticesX;
+        //             triangles[index++] = vertexIndex;
+        //             triangles[index++] = vertexIndex + 1;
+        //             triangles[index++] = vertexIndex + numVerticesZ;
+
+        //             triangles[index++] = vertexIndex + 1;
+        //             triangles[index++] = vertexIndex + numVerticesX + 1;
+        //             triangles[index++] = vertexIndex + numVerticesX;
+        //         }
+        //     }
+
+        //     return triangles;
+        // }
+
+
+        // public static int[] GenerateTerrainTriangles(Vector2[,] worldspaceVertexKeys, HashSet<(int, int)> meshTraingleExcludeList = null)
+        // {
+        //     int numVerticesX = worldspaceVertexKeys.GetLength(0);
+        //     int numVerticesZ = worldspaceVertexKeys.GetLength(1);
+        //     int numVertices = (numVerticesX - 1) * (numVerticesZ - 1) * 6;
+        //     int[] triangles = new int[numVertices];
+
+        //     int index = 0;
+        //     for (int x = 0; x < numVerticesX - 1; x++)
+        //     {
+        //         for (int z = 0; z < numVerticesZ - 1; z++)
+        //         {
+        //             // if (meshTraingleExcludeList != null && meshTraingleExcludeList.Contains((z, x)))
+        //             // {
+        //             //     continue;
+        //             // }
+
+        //             triangles[index++] = x + z * numVertices;
+        //             triangles[index++] = x + 1 + z * numVertices;
+        //             triangles[index++] = x + (z + 1) * numVertices;
+
+        //             triangles[index++] = x + 1 + z * numVertices;
+        //             triangles[index++] = x + 1 + (z + 1) * numVertices;
+        //             triangles[index++] = x + (z + 1) * numVertices;
+        //         }
+        //     }
+
+        //     return triangles;
+        // }
+
+        // public static int[] GenerateTerrainTriangles(Vector2[,] worldspaceVertexKeys, HashSet<(int, int)> meshTraingleExcludeList = null)
+        // {
+        //     int numVertices = worldspaceVertexKeys.GetLength(0) > worldspaceVertexKeys.GetLength(1) ? worldspaceVertexKeys.GetLength(0) : worldspaceVertexKeys.GetLength(1);
+        //     // Create an array to store the triangle indices
+        //     int[] triangles = new int[(numVertices - 1) * (numVertices - 1) * 6];
+
+        //     // Iterate through the grid and create the triangles
+        //     int index = 0;
+        //     for (int x = 0; x < numVertices - 1; x++)
+        //     {
+        //         for (int z = 0; z < numVertices - 1; z++)
+        //         {
+
+        //             // if (meshTraingleExcludeList != null && meshTraingleExcludeList.Contains((z, x))) continue;
+
+        //             triangles[index++] = x + z * numVertices;
+        //             triangles[index++] = x + 1 + z * numVertices;
+        //             triangles[index++] = x + (z + 1) * numVertices;
+
+        //             triangles[index++] = x + 1 + z * numVertices;
+        //             triangles[index++] = x + 1 + (z + 1) * numVertices;
+        //             triangles[index++] = x + (z + 1) * numVertices;
+        //         }
+        //     }
+        //     return triangles;
+        // }
+
+
+        // public static int[] GenerateTerrainTriangles(TerrainVertex[,] vertexGrid, HashSet<(int, int)> excludeList = null)
+        // {
+        //     int numVerticesX = vertexGrid.GetLength(0);
+        //     int numVerticesZ = vertexGrid.GetLength(1);
+        //     int numTriangles = (numVerticesX - 1) * (numVerticesZ - 1) * 6;
+        //     int[] triangles = new int[numTriangles];
+
+        //     int index = 0;
+        //     for (int x = 0; x < numVerticesX - 1; x++)
+        //     {
+        //         for (int z = 0; z < numVerticesZ - 1; z++)
+        //         {
+        //             if (excludeList != null && excludeList.Contains((z, x)))
+        //             {
+        //                 continue;
+        //             }
+
+        //             int vertexIndex = x + z * numVerticesX;
+        //             triangles[index++] = vertexIndex;
+        //             triangles[index++] = vertexIndex + 1;
+        //             triangles[index++] = vertexIndex + numVerticesZ;
+
+        //             triangles[index++] = vertexIndex + 1;
+        //             triangles[index++] = vertexIndex + numVerticesX + 1;
+        //             triangles[index++] = vertexIndex + numVerticesX;
+        //         }
+        //     }
+
+        //     return triangles;
+        // }
+
+        // public static int[] GenerateTerrainTriangles(TerrainVertex[,] vertexGrid, HashSet<(int, int)> excludeList = null)
+        // {
+        //     int numVerticesX = vertexGrid.GetLength(0);
+        //     int numVerticesZ = vertexGrid.GetLength(1);
+        //     // Create an array to store the triangle indices
+        //     int[] triangles = new int[(numVerticesX - 1) * (numVerticesZ - 1) * 6];
+
+        //     // Iterate through the grid and create the triangles
+        //     int index = 0;
+        //     for (int x = 0; x < numVerticesX - 1; x++)
+        //     {
+        //         for (int z = 0; z < numVerticesZ - 1; z++)
+        //         {
+        //             if (excludeList != null && excludeList.Contains((z, x))) continue;
+
+        //             int topLeftIndex = x + z * numVerticesX;
+        //             int topRightIndex = (x + 1) + z * numVerticesX;
+        //             int bottomLeftIndex = x + (z + 1) * numVerticesX;
+        //             int bottomRightIndex = (x + 1) + (z + 1) * numVerticesX;
+
+        //             triangles[index++] = topLeftIndex;
+        //             triangles[index++] = bottomLeftIndex;
+        //             triangles[index++] = topRightIndex;
+
+        //             triangles[index++] = topRightIndex;
+        //             triangles[index++] = bottomLeftIndex;
+        //             triangles[index++] = bottomRightIndex;
+        //         }
+        //     }
+        //     return triangles;
+        // }
+
+
+
+        public static int[] GenerateTerrainTriangles(TerrainVertex[,] vertexGrid, HashSet<(int, int)> excludeList = null)
+        {
+            int numVerticesX = vertexGrid.GetLength(0);
+            int numVerticesZ = vertexGrid.GetLength(1);
+            int numVertices = numVerticesX >= numVerticesZ ? numVerticesX : numVerticesZ;
+
+            // Create an array to store the triangle indices
+            int[] triangles = new int[(numVertices - 1) * (numVertices - 1) * 6];
+
+            // Iterate through the grid and create the triangles
+            int index = 0;
+            for (int x = 0; x < numVertices - 1; x++)
+            {
+                for (int z = 0; z < numVertices - 1; z++)
+                {
+
+                    if (excludeList.Contains((z, x))) continue;
+
+                    triangles[index++] = x + z * numVertices;
+                    triangles[index++] = x + 1 + z * numVertices;
+                    triangles[index++] = x + (z + 1) * numVertices;
+
+                    triangles[index++] = x + 1 + z * numVertices;
+                    triangles[index++] = x + 1 + (z + 1) * numVertices;
+                    triangles[index++] = x + (z + 1) * numVertices;
+                }
+            }
+            return triangles;
+        }
+
+        public static int[] GenerateTerrainTriangles(Vector3[,] vertexGrid)
         {
             int numVertices = vertexGrid.GetLength(0);
-
             // Create an array to store the triangle indices
             int[] triangles = new int[(numVertices - 1) * (numVertices - 1) * 6];
 
@@ -35,7 +345,55 @@ namespace ProceduralBase
             return triangles;
         }
 
+        public static int[] GenerateTerrainTriangles_MT(TerrainVertex[,] vertexGrid, HashSet<(int, int)> excludeList = null)
+        {
+            int numVertices = vertexGrid.GetLength(0);
+            // Create an array to store the triangle indices
+            int[] triangles = new int[(numVertices - 1) * (numVertices - 1) * 6];
+
+            // Iterate through the grid and create the triangles
+            int index = 0;
+
+            Parallel.For(0, numVertices - 1, x =>
+            {
+                for (int z = 0; z < numVertices - 1; z++)
+                {
+                    if (excludeList != null && excludeList.Contains((z, x))) continue;
+
+                    triangles[index++] = x + z * numVertices;
+                    triangles[index++] = x + 1 + z * numVertices;
+                    triangles[index++] = x + (z + 1) * numVertices;
+
+                    triangles[index++] = x + 1 + z * numVertices;
+                    triangles[index++] = x + 1 + (z + 1) * numVertices;
+                    triangles[index++] = x + (z + 1) * numVertices;
+                }
+            });
+
+            return triangles;
+        }
+
+
         public static Vector2[] GenerateTerrainUVs(TerrainVertex[,] vertexGrid)
+        {
+            // Get the grid size from the vertex grid
+            int gridSizeX = vertexGrid.GetLength(0);
+            int gridSizeZ = vertexGrid.GetLength(1);
+
+            // Create an array to store the UV data
+            Vector2[] uvs = new Vector2[gridSizeX * gridSizeZ];
+
+            // Iterate through the vertices and set the UVs of each vertex
+            for (int x = 0; x < gridSizeX; x++)
+            {
+                for (int z = 0; z < gridSizeZ; z++)
+                {
+                    uvs[x + z * gridSizeX] = new Vector2(x / (float)gridSizeX, z / (float)gridSizeZ);
+                }
+            }
+            return uvs;
+        }
+        public static Vector2[] GenerateTerrainUVs(Vector3[,] vertexGrid)
         {
             // Get the grid size from the vertex grid
             int gridSizeX = vertexGrid.GetLength(0);
@@ -129,39 +487,6 @@ namespace ProceduralBase
             return uvs;
         }
 
-        public static (Vector3, float) GetClosestPoint(Vector3[] points, Vector3 position)
-        {
-            Vector3 nearestPoint = points[0];
-            float nearestDistance = float.MaxValue;
-            for (int i = 0; i < points.Length; i++)
-            {
-                float dist = Vector2.Distance(new Vector2(position.x, position.y), new Vector2(points[i].x, points[i].z));
-                if (dist < nearestDistance)
-                {
-                    nearestDistance = dist;
-                    nearestPoint = points[i];
-                }
-            }
-            return (nearestPoint, nearestDistance);
-        }
-        public static (Vector3, float, int) GetClosestPoint(Vector3[] points, Vector2 position)
-        {
-            Vector3 nearestPoint = points[0];
-            float nearestDistance = float.MaxValue;
-            int nearestIndex = 0;
-
-            for (int i = 0; i < points.Length; i++)
-            {
-                float dist = Vector2.Distance(position, new Vector2(points[i].x, points[i].z));
-                if (dist < nearestDistance)
-                {
-                    nearestDistance = dist;
-                    nearestPoint = points[i];
-                    nearestIndex = i;
-                }
-            }
-            return (nearestPoint, nearestDistance, nearestIndex);
-        }
 
         // Moves all of the points to the position while keeping their relative placement unchanged
         public static void MoveGroupedPointsToPosition(Vector3[] points, Vector3 position)
@@ -669,67 +994,6 @@ namespace ProceduralBase
             return points;
         }
 
-        public static Vector3[] GenerateHexagonPoints(Vector3 center, float radius)
-        {
-            Vector3[] points = new Vector3[6];
-
-            for (int i = 0; i < 6; i++)
-            {
-                float angle = 60f * i;
-                float x = center.x + radius * Mathf.Cos(Mathf.Deg2Rad * angle);
-                float z = center.z + radius * Mathf.Sin(Mathf.Deg2Rad * angle);
-                points[i] = new Vector3(x, center.y, z);
-            }
-            return points;
-        }
-
-        public static Vector3[] GeneratePointsWithinBounds(Vector3[] edgePoints, int numPoints, float distance, float elevation)
-        {
-            // Find the min and max x and z values
-            float minX = edgePoints.Min(p => p.x);
-            float maxX = edgePoints.Max(p => p.x);
-            float minZ = edgePoints.Min(p => p.z);
-            float maxZ = edgePoints.Max(p => p.z);
-
-            // Create a list to store the new points
-            List<Vector3> newPoints = new List<Vector3>();
-
-            // Iterate through the x values
-            for (float x = minX; x <= maxX; x += distance)
-            {
-                // Iterate through the z values
-                for (float z = minZ; z <= maxZ; z += distance)
-                {
-                    Vector3 newPoint = new Vector3(x, elevation, z);
-                    // check if the new point is inside the polygon
-                    if (IsPointInsidePolygon(edgePoints, newPoint))
-                    {
-                        newPoints.Add(newPoint);
-                    }
-                    if (newPoints.Count == numPoints) return newPoints.ToArray();
-                }
-            }
-            return newPoints.ToArray();
-        }
-
-        public static bool IsPointInsidePolygon(Vector3[] polygon, Vector3 point)
-        {
-            bool inside = false;
-            int j = polygon.Length - 1;
-
-            for (int i = 0; i < polygon.Length; i++)
-            {
-                if (polygon[i].z < point.z && polygon[j].z >= point.z || polygon[j].z < point.z && polygon[i].z >= point.z)
-                {
-                    if (polygon[i].x + (point.z - polygon[i].z) / (polygon[j].z - polygon[i].z) * (polygon[j].x - polygon[i].x) < point.x)
-                    {
-                        inside = !inside;
-                    }
-                }
-                j = i;
-            }
-            return inside;
-        }
         public static Vector3[,] GenerateGrid(Vector3[] edgePoints, float gridSpacing, float elevation)
         {
             // Sort the edgePoints by their x and z values
@@ -906,33 +1170,7 @@ namespace ProceduralBase
         //     return grid;
         // }
 
-        public static void DrawRectangleInGizmos(Vector3[] corners)
-        {
 
-            if (corners == null) return;
-
-            // Draw lines connecting the corners
-            Gizmos.color = Color.black;
-            for (int i = 0; i < 4; i++)
-            {
-                Gizmos.DrawLine(corners[i], corners[(i + 1) % 4]);
-                Gizmos.DrawLine(corners[i + 4], corners[((i + 1) % 4) + 4]);
-                Gizmos.DrawLine(corners[i], corners[i + 4]);
-            }
-
-
-            // if (corners == null) return;
-
-            // for (int i = 0; i < corners.Length; i++)
-            // {
-            //     Gizmos.DrawSphere(corners[i], 0.1f);
-            // }
-            // for (int i = 0; i < corners.Length; i++)
-            // {
-            //     int j = (i + 1) % corners.Length;
-            //     Gizmos.DrawLine(corners[i], corners[j]);
-            // }
-        }
 
         public static void DrawGridInGizmos(Vector3[,] grid)
         {
@@ -994,24 +1232,7 @@ namespace ProceduralBase
             }
         }
 
-        public static void DrawHexagonPointLinesInGizmos(Vector3[] corners, Transform transform)
-        {
-            for (int i = 0; i < corners.Length; i++)
-            {
-                Vector3 pointA = transform.TransformPoint(corners[i]);
-                Vector3 pointB = transform.TransformPoint(corners[(i + 1) % corners.Length]);
-                Gizmos.DrawLine(pointA, pointB);
-            }
-        }
-        public static void DrawHexagonPointLinesInGizmos(Vector3[] corners)
-        {
-            for (int i = 0; i < corners.Length; i++)
-            {
-                Vector3 pointA = corners[i];
-                Vector3 pointB = corners[(i + 1) % corners.Length];
-                Gizmos.DrawLine(pointA, pointB);
-            }
-        }
+
 
         public static Vector3[] GeneratePath(Vector3[,] grid)
         {
