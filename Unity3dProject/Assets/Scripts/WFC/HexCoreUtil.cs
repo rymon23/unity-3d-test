@@ -9,6 +9,91 @@ namespace WFCSystem
 {
     public static class HexCoreUtil
     {
+        public static CellStatus Calculate_CellStatusFromNoise(Vector3 centerPosition, float noiseValue, int cellLayerOffset, float seaLevel = 0)
+        {
+            if (noiseValue >= centerPosition.y && noiseValue < (centerPosition.y + cellLayerOffset)) return CellStatus.GenericGround;
+
+            if (noiseValue > (centerPosition.y + cellLayerOffset)) return CellStatus.UnderGround;
+
+            return (centerPosition.y < seaLevel) ? CellStatus.Underwater : CellStatus.AboveGround;
+        }
+        public static void Assign_CellStatusFromNoise(HexagonCellPrototype cell, List<LayeredNoiseOption> layeredNoiseOptions, int cellLayerOffset, float terrainHeight, float globalElevation, float seaLevel = 0)
+        {
+            float[] elevationData = HexCoreUtil.Calculate_ElevationDataFromNoise(cell, layeredNoiseOptions, cellLayerOffset, terrainHeight, globalElevation, seaLevel);
+            // float maxSteepness = elevationData[0];
+            float avgElevation = elevationData[1];
+            // float hightestY = elevationData[2];
+            // float lowestY = elevationData[3];
+
+            if (avgElevation >= cell.center.y && avgElevation < cell.center.y + cellLayerOffset)
+            {
+                cell.SetToGround(false);
+            }
+            else if (avgElevation > cell.center.y + cellLayerOffset)
+            {
+                cell.SetCellStatus(CellStatus.UnderGround);
+            }
+            else cell.SetCellStatus((cell.center.y < seaLevel) ? CellStatus.Underwater : CellStatus.AboveGround);
+        }
+
+        public static float[] Calculate_ElevationDataFromNoise(HexagonCellPrototype cell, List<LayeredNoiseOption> layeredNoiseOptions, int cellLayerOffset, float terrainHeight, float globalElevation, float seaLevel = 0)
+        {
+            int currIX = 0;
+            float lowestY = float.MaxValue;
+            float hightestY = float.MinValue;
+
+            List<Vector3> checkPointsOfCell = new List<Vector3>() {
+                cell.center
+            };
+            checkPointsOfCell.AddRange(cell.cornerPoints);
+            float[] elevations = new float[checkPointsOfCell.Count];
+            foreach (Vector3 point in checkPointsOfCell)
+            {
+                float elevationY = globalElevation + LayerdNoise.Calculate_NoiseHeightForCoordinate((int)point.x, (int)point.z, terrainHeight, layeredNoiseOptions);
+                if (lowestY > elevationY) lowestY = elevationY;
+                if (hightestY < elevationY) hightestY = elevationY;
+
+                currIX++;
+            }
+
+            float avgElevation = UtilityHelpers.CalculateAverageOfArray(elevations);
+            float maxSteepness = 0f;
+            foreach (float elevation in elevations)
+            {
+                float steepness = Mathf.Abs(elevation - avgElevation);
+                if (steepness > maxSteepness) maxSteepness = steepness;
+            }
+
+            float[] data = new float[4];
+            data[0] = maxSteepness;
+            data[1] = avgElevation;
+            data[2] = hightestY;
+            data[3] = lowestY;
+            return data;
+        }
+
+        public static int Calculate_CurrentLayer(int layerOffset, int currentElevation)
+        {
+            int layer = Mathf.FloorToInt(currentElevation / layerOffset);
+            return layer;
+        }
+
+        public static bool IsAnyHexPointWithinPolygon(Vector3 point, int size, Vector3[] polygonCorners)
+        {
+            if (VectorUtil.IsPointWithinPolygon(point, polygonCorners)) return true;
+            return IsAnyHexEdgePointWithinPolygon(point, size, polygonCorners);
+        }
+        public static bool IsAnyHexEdgePointWithinPolygon(Vector3 point, int size, Vector3[] polygonCorners)
+        {
+            Vector3[] hexCorners = HexCoreUtil.GenerateHexagonPoints(point, size);
+            foreach (var item in hexCorners)
+            {
+                if (VectorUtil.IsPointWithinPolygon(item, polygonCorners)) return true;
+            }
+            return false;
+        }
+
+
         public static Vector2 Calculate_CenterLookup(Vector3 position, int size) => Calculate_CenterLookup(new Vector2(position.x, position.z), size);
         public static Vector2 Calculate_CenterLookup(Vector2 position, int size)
         {
@@ -16,14 +101,7 @@ namespace WFCSystem
             {
                 return VectorUtil.ToVector2Int(position);
             }
-            else
-            {
-                return Calculate_CenterLookup_WithDynamicRound(position, size);
-            }
-            // else if (size > 108)
-            // else if (size > 2916)
-            // else if (size > 324)
-            // else return VectorUtil.RoundVector2ToNearest5(position);
+            else return Calculate_CenterLookup_WithDynamicRound(position, size);
         }
 
         public static Vector2 Calculate_CenterLookup_WithDynamicRound(Vector2 position, int size)
@@ -157,74 +235,26 @@ namespace WFCSystem
             return VectorUtil.GetClosestPoint_XZ(sideCenterPoints, position);
         }
 
-
-        public static List<Vector3> Calculate_ClosestHexCenterPoints_X7__V2(Vector3 position, int cellSize, float inRadiusMult = 1f)
-        {
-            return GenerateHexCenterPoints_X7(Calculate_ClosestHexCenter_V2(position, cellSize), cellSize);
-        }
-
         public static List<Vector3> Calculate_ClosestHexCenterPoints_X7(Vector3 position, int cellSize, float inRadiusMult = 1f)
         {
             return GenerateHexCenterPoints_X7(Calculate_ClosestHexCenter_V2(position, cellSize), cellSize);
-
-            // // Calculate the grid coordinates of the given position
-            // float gridSize = cellSize * 1.5f;
-            // float gridX = position.x / gridSize;
-            // float gridZ = position.z / (cellSize * Mathf.Sqrt(3f));
-
-            // // Round the grid coordinates to the nearest integers
-            // int roundedX = Mathf.RoundToInt(gridX);
-            // int roundedZ = Mathf.RoundToInt(gridZ);
-
-            // // Calculate the precise grid position within the hexagon
-            // float preciseGridX = roundedX * gridSize;
-            // float preciseGridZ = roundedZ * (cellSize * Mathf.Sqrt(3f));
-
-            // List<Vector3> centerPoints = GenerateHexCenterPoints_X7(Vector3.zero, cellSize);
-            // Vector2 stepDistance = new Vector2(VectorUtil.DistanceXZ(centerPoints[2], centerPoints[4]), VectorUtil.DistanceXZ(centerPoints[0], centerPoints[3]));
-            // // Calculate the closest center position of the hexagon
-            // Vector2 centerPosition = new Vector2(preciseGridX, preciseGridZ);
-            // Vector2 closestCenterPosition = FindClosestGridPoint(centerPosition, stepDistance);
-            // Vector3 closestCenter = new Vector3(closestCenterPosition.x, 0f, closestCenterPosition.y);
-
-            // float distance = VectorUtil.DistanceXZ(position, closestCenter);
-            // if (distance > (cellSize * inRadiusMult))
-            // {
-            //     closestCenter = Calculate_ClosestNeighborHexCenterPoint(position, closestCenter, cellSize);
-            // }
-            // return GenerateHexCenterPoints_X7(closestCenter, cellSize);
         }
-
 
         public static List<Vector3> Calculate_ClosestHexCenterPoints_X13(Vector3 position, int cellSize, float inRadiusMult = 1f)
         {
             return GenerateHexCenterPoints_X13(Calculate_ClosestHexCenter_V2(position, cellSize), cellSize);
-            // // Calculate the grid coordinates of the given position
-            // float gridSize = cellSize * 1.5f;
-            // float gridX = position.x / gridSize;
-            // float gridZ = position.z / (cellSize * Mathf.Sqrt(3f));
+        }
 
-            // // Round the grid coordinates to the nearest integers
-            // int roundedX = Mathf.RoundToInt(gridX);
-            // int roundedZ = Mathf.RoundToInt(gridZ);
+        public static Dictionary<int, List<Vector3>> Calculate_ClosestHexCenterPoints_X13(Vector3 position, int[] cellSizes, float inRadiusMult = 1f)
+        {
+            Dictionary<int, List<Vector3>> resultsbySize = new Dictionary<int, List<Vector3>>();
 
-            // // Calculate the precise grid position within the hexagon
-            // float preciseGridX = roundedX * gridSize;
-            // float preciseGridZ = roundedZ * (cellSize * Mathf.Sqrt(3f));
-
-            // List<Vector3> centerPoints = GenerateHexCenterPoints_X7(Vector3.zero, cellSize);
-            // Vector2 stepDistance = new Vector2(VectorUtil.DistanceXZ(centerPoints[2], centerPoints[4]), VectorUtil.DistanceXZ(centerPoints[0], centerPoints[3]));
-            // // Calculate the closest center position of the hexagon
-            // Vector2 centerPosition = new Vector2(preciseGridX, preciseGridZ);
-            // Vector2 closestCenterPosition = FindClosestGridPoint(centerPosition, stepDistance);
-            // Vector3 closestCenter = new Vector3(closestCenterPosition.x, 0f, closestCenterPosition.y);
-
-            // float distance = VectorUtil.DistanceXZ(position, closestCenter);
-            // if (distance > (cellSize * inRadiusMult))
-            // {
-            //     closestCenter = Calculate_ClosestNeighborHexCenterPoint(position, closestCenter, cellSize);
-            // }
-            // return GenerateHexCenterPoints_X13(closestCenter, cellSize);
+            foreach (var cellSize in cellSizes)
+            {
+                List<Vector3> newCenterPoints = GenerateHexCenterPoints_X13(Calculate_ClosestHexCenter_V2(position, cellSize), cellSize);
+                resultsbySize.Add(cellSize, newCenterPoints);
+            }
+            return resultsbySize;
         }
 
         // public static Vector3 Calculate_ClosestHexCenter(Vector3 position, int hexSize)
@@ -367,6 +397,42 @@ namespace WFCSystem
             return (nearestCell, nearestDistance);
         }
 
+        public static (HexagonCellPrototype, float) GetCloseestCellLookupInDictionary_withDistance(
+            Vector3 position,
+            Dictionary<int, List<Vector3>> cellCenterPoints_bySize,
+            Dictionary<Vector2, HexagonCellPrototype> cellLookups
+        )
+        {
+            Vector2 nearestLookup = Vector2.positiveInfinity;
+            HexagonCellPrototype nearestCell = null;
+            float nearestDistance = float.MaxValue;
+
+            foreach (int cellSize in cellCenterPoints_bySize.Keys)
+            {
+                foreach (Vector3 centerPoint in cellCenterPoints_bySize[cellSize])
+                {
+
+                    float dist = VectorUtil.DistanceXZ(position, centerPoint);
+                    if (dist < nearestDistance)
+                    {
+                        Vector2 cellLookup = HexCoreUtil.Calculate_CenterLookup(centerPoint, cellSize);
+                        if (cellLookups.ContainsKey(cellLookup))
+                        {
+                            nearestDistance = dist;
+                            nearestLookup = cellLookup;
+                            nearestCell = cellLookups[cellLookup];
+
+                            bool isin = VectorUtil.IsPositionWithinPolygon(nearestCell.cornerPoints, position);
+                            if (isin || nearestDistance < cellSize * 0.5f) break;
+                        }
+                    }
+
+                }
+            }
+            return (nearestCell, nearestDistance);
+        }
+
+
         public static (int, int) GetCornersFromSide_Condensed(HexagonSide side) // Stays Btw 0 - 6
         {
             int cornerA = Mathf.Abs((int)(side + 1)) % 6;
@@ -379,7 +445,6 @@ namespace WFCSystem
         //     int cornerB = Mathf.Abs((int)(cornerA + 1)) % 12;
         //     return (cornerA, cornerB);
         // }
-
 
         public static (HexagonCorner, HexagonCorner) GetCornersFromSide(HexagonSide side)
         {
@@ -455,6 +520,38 @@ namespace WFCSystem
             return results;
         }
 
+
+        public static List<Vector3> GenerateHexCenterPoints_X12(Vector3 center, int size)
+        {
+            Vector3[] cornerPoints = GenerateHexagonPoints(center, size);
+            List<Vector3> results = new List<Vector3>();
+            for (int i = 0; i < 6; i++)
+            {
+                // Get Side
+                Vector3 sidePoint = Vector3.Lerp(cornerPoints[i], cornerPoints[(i + 1) % 6], 0.5f);
+                Vector3 direction = (sidePoint - center).normalized;
+                float edgeDistance = Vector2.Distance(new Vector2(sidePoint.x, sidePoint.z), new Vector2(center.x, center.z));
+
+                sidePoint = center + direction * (edgeDistance * 2f);
+
+                results.Add(sidePoint);
+
+                // Get Corner
+                float angle = 60f * i;
+                float x = center.x + size * Mathf.Cos(Mathf.Deg2Rad * angle);
+                float z = center.z + size * Mathf.Sin(Mathf.Deg2Rad * angle);
+
+                Vector3 cornerPoint = new Vector3(x, center.y, z);
+                direction = (cornerPoint - center).normalized;
+                edgeDistance = Vector2.Distance(new Vector2(cornerPoint.x, cornerPoint.z), new Vector2(center.x, center.z));
+
+                cornerPoint = center + direction * (edgeDistance * 3f);
+
+                results.Add(cornerPoint);
+            }
+            // Debug.Log("total points: " + results.Count);
+            return results;
+        }
 
         public static List<Vector3> GenerateHexCenterPoints_X13(Vector3 center, int size)
         {

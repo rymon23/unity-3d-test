@@ -12,7 +12,7 @@ namespace WFCSystem
     public enum CellMaterialContext { Unset = 0, Land, Water, Air, Space, Fire }
     public enum TunnelEntryType { Basement = 0, Cave = 1 }
     public enum TunnelStatus { Unset = 0, GenericGround = 1, FlatGround, UnderGround, AboveGround, Underwater }
-    public enum WorldCellStatus { Unset = 0, LandCoast, Land, Ocean }
+    public enum WorldCellStatus { Unset = 0, Land, Ocean, Coast, Water }
 
     [System.Serializable]
     public struct CellWorldData
@@ -104,6 +104,16 @@ namespace WFCSystem
             // this.uid = UtilityHelpers.GenerateUniqueID(idFragment + "");
             if (preAssignGround) SetToGround(true);
         }
+
+        public static HexagonCellPrototype Create_SubCell(Vector3 point, int size, Vector2 worldCoordinate, Vector2 wordlspaceLookup, IHexCell parent = null)
+        {
+            HexagonCellPrototype newSubCell = new HexagonCellPrototype(point, size, parent);
+            newSubCell.SetWorldCoordinate(worldCoordinate);
+            newSubCell.SetWorldSpaceLookup(wordlspaceLookup);
+            if (parent != null) newSubCell.SetParentLookup(parent.GetLookup());
+            return newSubCell;
+        }
+
 
         #region Interface Methods
         public string GetId() => id;
@@ -304,7 +314,8 @@ namespace WFCSystem
         }
 
 
-        #region World Coordinates
+        #region World Data / Coordinates
+        public int objectIndex = -1;
         public WorldCellStatus worldCellStatus;
         public Vector2 worldspaceLookup { get; private set; } = Vector2.positiveInfinity;
         public Vector2 parentLookup { get; private set; } = Vector2.positiveInfinity;

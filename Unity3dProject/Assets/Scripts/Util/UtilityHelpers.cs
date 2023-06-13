@@ -10,6 +10,16 @@ using System.Linq;
 static class UtilityHelpers
 {
 
+    public static void LogTime(DateTime startTime, string str)
+    {
+        TimeSpan duration = DateTime.Now - startTime;
+        if (duration.TotalSeconds < 60)
+        {
+            Debug.LogError($"{str} - Time: {duration.TotalSeconds} seconds");
+        }
+        else Debug.LogError($"{str} - Time: {duration.TotalMinutes} minutes");
+    }
+
     public static List<Vector2> SelectRandomKeys(Dictionary<Vector2, Vector2> dictionary, int count)
     {
         // Convert the dictionary keys to a list
@@ -121,6 +131,10 @@ static class UtilityHelpers
         }
 
         return colors;
+    }
+    public static float RoundToNearestStep(float value, float step)
+    {
+        return Mathf.Round(value / step) * step;
     }
 
     public static bool Vector3HasNaN(Vector3 vector)

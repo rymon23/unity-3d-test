@@ -8,6 +8,38 @@ namespace ProceduralBase
 
     public static class MeshUtil
     {
+        public static float[,] ExtractVertexElevations(Mesh mesh, float steps)
+        {
+            Vector3[] vertices = mesh.vertices;
+            Bounds bounds = mesh.bounds;
+
+            float minX = Mathf.Floor(bounds.min.x / steps) * steps;
+            float minZ = Mathf.Floor(bounds.min.z / steps) * steps;
+
+            // Calculate the number of steps along the x and z axis based on the spacing
+            int xSteps = Mathf.CeilToInt((bounds.max.x - minX) / steps);
+            int zSteps = Mathf.CeilToInt((bounds.max.z - minZ) / steps);
+
+            int gridSizeX = xSteps + 1;
+            int gridSizeZ = zSteps + 1;
+
+            float[,] vertexElevations = new float[gridSizeX, gridSizeZ];
+
+            for (int x = 0; x < gridSizeX; x++)
+            {
+                for (int z = 0; z < gridSizeZ; z++)
+                {
+                    int vertexIndex = x * gridSizeX + z;
+                    // int vertexIndex = x + z * gridSizeX;
+
+                    float vertexElevation = vertices[vertexIndex].y;
+                    vertexElevations[x, z] = vertexElevation;
+                }
+            }
+
+            return vertexElevations;
+        }
+
         public static List<Vector3> GetVerticesWithinRadiusOfPoints(Mesh mesh, List<Vector3> points, float radius)
         {
             List<Vector3> verticesWithinRadius = new List<Vector3>();

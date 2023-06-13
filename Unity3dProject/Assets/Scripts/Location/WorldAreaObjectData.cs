@@ -11,17 +11,19 @@ namespace ProceduralBase
         {
             worldAreaLookup = _worldAreaLookup;
             terrainChunks = new List<GameObject>();
+            worldspaceObjectData = new List<WorldspaceObjectData>();
 
             Evalaute_Folders(_parentFolder);
         }
 
         public Vector2 worldAreaLookup;
         public List<GameObject> terrainChunks = new List<GameObject>();
+        public List<WorldspaceObjectData> worldspaceObjectData = new List<WorldspaceObjectData>();
         public Transform folder_Main { get; private set; } = null;
         public Transform folder_terrain { get; private set; } = null;
         public Transform folder_tunnels { get; private set; } = null;
-        public Transform folder_trees { get; private set; } = null;
         public Transform folder_water { get; private set; } = null;
+
         public Transform MainFolder() => folder_Main;
         public Transform TerrainFolder() => folder_terrain;
 
@@ -46,11 +48,6 @@ namespace ProceduralBase
             {
                 folder_tunnels = new GameObject("Tunnels").transform;
                 folder_tunnels.transform.SetParent(folder_Main);
-            }
-            if (folder_trees == null)
-            {
-                folder_trees = new GameObject("Trees").transform;
-                folder_trees.transform.SetParent(folder_Main);
             }
         }
     }

@@ -180,6 +180,7 @@ namespace ProceduralBase
             int _cluster_TunnelMemberMax,
             int _worldSpacesMin,
             int _worldSpacesMax,
+            int _layersMax,
             Vector2 _elevationRangeMinMax
         )
         {
@@ -197,6 +198,7 @@ namespace ProceduralBase
             cluster_TunnelMemberMax = _cluster_memberMax;
             worldSpacesMin = _worldSpacesMin;
             worldSpacesMax = _worldSpacesMax;
+            layersMax = _layersMax;
             elevationRangeMinMax = _elevationRangeMinMax;
         }
         public LocationType locationType;
@@ -215,13 +217,14 @@ namespace ProceduralBase
         [Header(" ")]
         public int worldSpacesMin;
         public int worldSpacesMax;
+        [Header(" ")]
+        public int layersMax;
 
         [Header(" ")]
         public bool enableTunnels;
         public int cluster_TunnelMemberMin;
         public int cluster_TunnelMemberMax;
         public CellSearchPriority cellSearchPriority;
-
     }
 
 }

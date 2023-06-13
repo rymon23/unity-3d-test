@@ -29,6 +29,13 @@ public static class VectorUtil
         int y = Mathf.RoundToInt(vector.y);
         return new Vector2Int(x, y);
     }
+    public static Vector3 ToVector3IntXZ(this Vector3 vector)
+    {
+        int x = Mathf.RoundToInt(vector.x);
+        int z = Mathf.RoundToInt(vector.z);
+        return new Vector3(x, vector.y, z);
+    }
+
     public static Vector2 RoundVector2ToNearest10(Vector2 value)
     {
         float roundedX = Mathf.RoundToInt(value.x / 10f) * 10f;
@@ -41,16 +48,25 @@ public static class VectorUtil
         float roundedY = Mathf.RoundToInt(value.y / 5f) * 5f;
         return new Vector2(roundedX, roundedY);
     }
+    public static Vector3 RoundVector3ToNearestValue(Vector3 vector, int value)
+    {
+        float round = value;
+        float roundedX = Mathf.RoundToInt(vector.x / round) * round;
+        float roundedZ = Mathf.RoundToInt(vector.z / round) * round;
+        return new Vector3(roundedX, vector.y, roundedZ);
+    }
+    // public static Vector3 RoundVector3ToDyanmicValueXZ(Vector3 position, int size)
+    // {
+    //     int roundAmount = Mathf.RoundToInt((size / 12) / 5f) * 5;
+    //     float roundedX = Mathf.Round(position.x / roundAmount) * roundAmount;
+    //     float roundedZ = Mathf.Round(position.z / roundAmount) * roundAmount;
+    //     return new Vector3(roundedX, position.y, roundedZ);
+    // }
 
     public static Vector2 Calculate_Coordinate(Vector3 position) => new Vector2(position.x, position.z);
     public static Vector2 Calculate_AproximateCoordinate(Vector2 coord) => ToVector2Int(coord);
     public static Vector2 Calculate_AproximateCoordinate(Vector3 position) => ToVector2Int(new Vector2(position.x, position.z));
-    // public static Vector2 CalculateAproximateCoordinate(Vector2 v)
-    // {
-    //     int x = Mathf.RoundToInt(v.x);
-    //     int y = Mathf.RoundToInt(v.y);
-    //     return new Vector2Int(x, y);
-    // }
+
 
     public static float DistanceXZ(Vector3 pointA, Vector3 pointB)
     {

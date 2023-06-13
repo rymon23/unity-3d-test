@@ -16,20 +16,14 @@ namespace ProceduralBase
             int count = 0;
             foreach (LayeredNoiseOption noiseOption in layeredNoiseOptions)
             {
-                // float noiseHeight = Calculate_NoiseHeightForCoordinate(indexX, indexZ, noiseOption.noise.fastNoise, noiseOption.persistence);
                 float noise = Calculate_NoiseHeightForCoordinate(indexX, indexZ, noiseOption.noise.fastNoise, noiseOption.persistence, noiseOption.lacunarity);
 
                 if (noiseOption.clampValue) noise = Mathf.Clamp(noise, noiseOption.clampRange.x, noiseOption.clampRange.y);
-
-                // float basePosY = Mathf.Clamp01(noiseHeight) * terrainHeight;
                 float basePosY = (noise * noiseOption.mult) * terrainHeight;
 
                 if (initialValue == float.MaxValue) initialValue = basePosY;
                 sum += (basePosY * noiseOption.weight);
                 count += (1 * noiseOption.weight);
-
-                // sum += basePosY;
-                // count += 1;
             }
             float average = (sum / count);
 
@@ -37,6 +31,15 @@ namespace ProceduralBase
 
             return finalValue;
         }
+
+        public static float Calculate_NoiseForCoordinate(int indexX, int indexZ, LayeredNoiseOption noiseOption)
+        {
+            float noise = Calculate_NoiseHeightForCoordinate(indexX, indexZ, noiseOption.noise.fastNoise, noiseOption.persistence, noiseOption.lacunarity);
+
+            if (noiseOption.clampValue) noise = Mathf.Clamp(noise, noiseOption.clampRange.x, noiseOption.clampRange.y);
+            return noise;
+        }
+
         public static float Calculate_NoiseForCoordinate(int indexX, int indexZ, List<LayeredNoiseOption> layeredNoiseOptions)
         {
             float initialValue = float.MaxValue;

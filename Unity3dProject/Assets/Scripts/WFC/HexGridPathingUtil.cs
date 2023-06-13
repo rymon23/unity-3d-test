@@ -10,6 +10,221 @@ namespace WFCSystem
 
     public static class HexGridPathingUtil
     {
+
+        public static (Dictionary<int, List<Vector3>>, Vector2Int) GetConsecutiveCellPointsWithintNoiseElevationRange_V2(
+            Vector3 initialCenterPostion,
+            int maxMembers,
+            List<LayeredNoiseOption> layerdNoises_terrain,
+            HexCellSizes cellSize,
+            float globalTerrainHeight,
+            float globalElevation,
+            int cellLayerElevation = 3,
+            int offsetMult = 2,
+            float mutateRangeMult = 3
+        )
+        {
+            int _cellSize = (int)cellSize;
+
+            Vector3 currentHead = initialCenterPostion;
+            Vector2 currentLookup = HexCoreUtil.Calculate_CenterLookup(currentHead, _cellSize);
+
+            Dictionary<int, List<Vector3>> found_bySize = new Dictionary<int, List<Vector3>>() {
+                { _cellSize, new List<Vector3>() },
+            };
+            HashSet<Vector2> visited = new HashSet<Vector2>();
+            List<Vector3> headsToCheck = new List<Vector3>();
+
+            float baseNoiseHeight = LayerdNoise.Calculate_NoiseHeightForCoordinate((int)currentHead.x, (int)currentHead.z, globalTerrainHeight, layerdNoises_terrain);
+            baseNoiseHeight += globalElevation;
+
+            int baseElevation = (int)UtilityHelpers.RoundHeightToNearestElevation(baseNoiseHeight, cellLayerElevation);
+            currentHead.y = baseElevation;
+
+            found_bySize[_cellSize].Add(currentHead);
+            visited.Add(currentLookup);
+            Vector2Int lowestHighestPointHeight = new Vector2Int(baseElevation, baseElevation);
+
+            int attempts = 999;
+
+            while (currentHead != Vector3.positiveInfinity && found_bySize[_cellSize].Count < maxMembers && attempts > 0)
+            {
+                List<Vector3> neighborPoints = HexCoreUtil.GenerateHexCenterPoints_X12(currentHead, _cellSize);
+
+                if (neighborPoints.Count > 0)
+                {
+                    for (int i = 0; i < neighborPoints.Count; i++)
+                    {
+                        if (found_bySize[_cellSize].Count >= maxMembers) break;
+
+                        Vector3 neighbor = neighborPoints[i];
+
+                        currentLookup = HexCoreUtil.Calculate_CenterLookup(neighbor, _cellSize);
+                        if (visited.Contains(currentLookup)) continue;
+
+                        float newNoiseHeight = LayerdNoise.Calculate_NoiseHeightForCoordinate((int)neighbor.x, (int)neighbor.z, globalTerrainHeight, layerdNoises_terrain);
+                        newNoiseHeight += globalElevation;
+
+                        int newElevation = (int)UtilityHelpers.RoundHeightToNearestElevation(newNoiseHeight, cellLayerElevation);
+
+                        int diff = (newElevation > baseElevation) ? (newElevation - baseElevation) : (baseElevation - newElevation);
+
+                        if (diff > (cellLayerElevation * mutateRangeMult))
+                        {
+                            int _subCellSize = _cellSize / 3;
+                            List<Vector3> subPoints = HexCoreUtil.GenerateHexCenterPoints_X12(neighbor, _subCellSize);
+
+                            if (subPoints.Count > 0)
+                            {
+                                if (found_bySize.ContainsKey(_subCellSize) == false) found_bySize.Add(_subCellSize, new List<Vector3>());
+
+                                for (int j = 0; j < subPoints.Count; j++)
+                                {
+                                    Vector3 subPoint = neighborPoints[i];
+
+                                    currentLookup = HexCoreUtil.Calculate_CenterLookup(subPoint, _subCellSize);
+                                    if (visited.Contains(currentLookup)) continue;
+
+                                    newNoiseHeight = LayerdNoise.Calculate_NoiseHeightForCoordinate((int)subPoint.x, (int)subPoint.z, globalTerrainHeight, layerdNoises_terrain);
+                                    newNoiseHeight += globalElevation;
+
+                                    newElevation = (int)UtilityHelpers.RoundHeightToNearestElevation(newNoiseHeight, cellLayerElevation);
+
+                                    diff = (newElevation > baseElevation) ? (newElevation - baseElevation) : (baseElevation - newElevation);
+
+                                    if (diff > (cellLayerElevation * mutateRangeMult)) continue;
+
+                                    int offset = (cellLayerElevation * offsetMult);
+                                    if (diff > offset) newElevation = (newElevation > baseElevation) ? (baseElevation + offset) : (baseElevation - offset);
+
+                                    subPoint.y = newElevation;
+
+                                    found_bySize[_subCellSize].Add(subPoint);
+                                    visited.Add(currentLookup);
+                                }
+                            }
+                            continue;
+                        }
+
+                        int maxOffset = (cellLayerElevation * offsetMult);
+                        if (diff > maxOffset) newElevation = (newElevation > baseElevation) ? (baseElevation + maxOffset) : (baseElevation - maxOffset);
+
+                        neighbor.y = newElevation;
+
+                        headsToCheck.Add(neighbor);
+                        found_bySize[_cellSize].Add(neighbor);
+                        visited.Add(currentLookup);
+
+                        if (lowestHighestPointHeight.x > newElevation)
+                        {
+                            lowestHighestPointHeight.x = newElevation;
+                        }
+                        else if (lowestHighestPointHeight.y < newElevation) lowestHighestPointHeight.y = newElevation;
+                    }
+                }
+
+                if (found_bySize[_cellSize].Count < maxMembers)
+                {
+                    if (headsToCheck.Count > 0)
+                    {
+                        currentHead = headsToCheck[0];
+                        headsToCheck.Remove(currentHead);
+                    }
+                    else break;
+                }
+                attempts--;
+            }
+            return (found_bySize, lowestHighestPointHeight);
+        }
+
+
+        public static (List<Vector3>, Vector2Int) GetConsecutiveCellPointsWithintNoiseElevationRange(
+            Vector3 initialCenterPostion,
+            int maxMembers,
+            List<LayeredNoiseOption> layerdNoises_terrain,
+            HexCellSizes cellSize,
+            float globalTerrainHeight,
+            float globalElevation,
+            int cellLayerElevation = 3,
+            int offsetMult = 2,
+            float mutateRangeMult = 3
+        )
+        {
+            int _cellSize = (int)cellSize;
+
+            Vector3 currentHead = initialCenterPostion;
+            Vector2 currentLookup = HexCoreUtil.Calculate_CenterLookup(currentHead, _cellSize);
+
+            List<Vector3> found = new List<Vector3>();
+            HashSet<Vector2> visited = new HashSet<Vector2>();
+
+            List<Vector3> headsToCheck = new List<Vector3>();
+
+            float baseNoiseHeight = LayerdNoise.Calculate_NoiseHeightForCoordinate((int)currentHead.x, (int)currentHead.z, globalTerrainHeight, layerdNoises_terrain);
+            baseNoiseHeight += globalElevation;
+            int baseElevation = (int)UtilityHelpers.RoundHeightToNearestElevation(baseNoiseHeight, cellLayerElevation);
+
+            currentHead.y = baseElevation;
+            found.Add(currentHead);
+            visited.Add(currentLookup);
+            Vector2Int lowestHighestPointHeight = new Vector2Int(baseElevation, baseElevation);
+
+            int attempts = 999;
+
+            while (currentHead != Vector3.positiveInfinity && found.Count < maxMembers && attempts > 0)
+            {
+                List<Vector3> neighborPoints = HexCoreUtil.GenerateHexCenterPoints_X12(currentHead, _cellSize);
+
+                if (neighborPoints.Count > 0)
+                {
+                    for (int i = 0; i < neighborPoints.Count; i++)
+                    {
+                        if (found.Count >= maxMembers) break;
+
+                        Vector3 neighbor = neighborPoints[i];
+
+                        currentLookup = HexCoreUtil.Calculate_CenterLookup(neighbor, _cellSize);
+                        if (visited.Contains(currentLookup)) continue;
+
+                        float newNoiseHeight = LayerdNoise.Calculate_NoiseHeightForCoordinate((int)neighbor.x, (int)neighbor.z, globalTerrainHeight, layerdNoises_terrain);
+                        newNoiseHeight += globalElevation;
+
+                        int newElevation = (int)UtilityHelpers.RoundHeightToNearestElevation(newNoiseHeight, cellLayerElevation);
+
+                        int diff = (newElevation > baseElevation) ? newElevation - baseElevation : baseElevation - newElevation;
+
+                        if (diff > (cellLayerElevation * mutateRangeMult)) continue;
+
+                        int maxOffset = (cellLayerElevation * offsetMult);
+                        if (diff > maxOffset) newElevation = (newElevation > baseElevation) ? (baseElevation + maxOffset) : (baseElevation - maxOffset);
+
+                        neighbor.y = newElevation;
+
+                        headsToCheck.Add(neighbor);
+                        found.Add(neighbor);
+                        visited.Add(currentLookup);
+
+                        if (lowestHighestPointHeight.x > newElevation)
+                        {
+                            lowestHighestPointHeight.x = newElevation;
+                        }
+                        else if (lowestHighestPointHeight.y < newElevation) lowestHighestPointHeight.y = newElevation;
+                    }
+                }
+
+                if (found.Count < maxMembers)
+                {
+                    if (headsToCheck.Count > 0)
+                    {
+                        currentHead = headsToCheck[0];
+                        headsToCheck.Remove(currentHead);
+                    }
+                    else break;
+                }
+                attempts--;
+            }
+            return (found, lowestHighestPointHeight);
+        }
+
         public static void Rehydrate_CellNeighbors(
             Vector2 cellLookup,
             Dictionary<Vector2, HexagonCellPrototype> cells_ByLookup,
@@ -56,6 +271,100 @@ namespace WFCSystem
                         cells_ByParentLookup[parentLookup][cellLookup].neighbors.Add(neighborCell);
                         if (propagateToNeighbors) Rehydrate_CellNeighbors(neighborParentLookup, neighborLookup, cells_ByParentLookup, false);
                     }
+                }
+            }
+        }
+
+        public static void Evaluate_SubCellNeighbors(
+            List<HexagonCellPrototype> neighborsToEvaluate,
+            HexagonCellPrototype worldspaceCell,
+            Dictionary<Vector2, Dictionary<int, Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>>>> cellLookup_ByLayer_BySize_ByWorldSpace,
+            int cellLayerOffset,
+            bool enableLog = false
+        )
+        {
+            if (neighborsToEvaluate.Count > 2)
+            {
+                List<Vector2> worldspaceNeighborLookups = HexagonCellPrototype.GenerateNeighborLookupCoordinates(worldspaceCell.center, worldspaceCell.size);
+
+                foreach (HexagonCellPrototype cell in neighborsToEvaluate)
+                {
+                    int currentLayer = HexCoreUtil.Calculate_CurrentLayer(cellLayerOffset, (int)cell.center.y);
+                    int currentSize = cell.size;
+
+                    Vector2 worldspaceLookup = cell.GetWorldSpaceLookup();
+                    List<Vector2> neighborLookups = HexagonCellPrototype.GenerateNeighborLookupCoordinates(cell.center, currentSize);
+                    HashSet<string> foundUids = new HashSet<string>();
+                    int neighborsFound = 0;
+
+                    if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup].ContainsKey(currentSize) == false)
+                    {
+                        // Debug.LogError("currentSize not found: " + currentSize);
+                        continue;
+                    }
+                    else if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize].ContainsKey(currentLayer) == false)
+                    {
+                        // Debug.LogError("currentLayer not found: " + currentLayer + ", cell.center.y: " + (int)cell.center.y);
+                        continue;
+                    }
+
+                    foreach (var neighborLookup in neighborLookups)
+                    {
+
+                        HexagonCellPrototype neighbor = cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][currentLayer].ContainsKey(neighborLookup)
+                                                                ? cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][currentLayer][neighborLookup]
+                                                                : null;
+
+                        if (neighbor != null && neighbor.uid != cell.uid && foundUids.Contains(neighbor.uid) == false)
+                        {
+                            if (cell.neighbors.Contains(neighbor) == false) cell.neighbors.Add(neighbor);
+                            if (neighbor.neighbors.Contains(cell) == false) neighbor.neighbors.Add(cell);
+                            foundUids.Add(neighbor.uid);
+
+                            neighborsFound++;
+                            continue;
+                        }
+
+                        // try
+                        // {
+                        foreach (Vector2 worldspaceNeighborLookup in worldspaceNeighborLookups)
+                        {
+                            if (cellLookup_ByLayer_BySize_ByWorldSpace.ContainsKey(worldspaceNeighborLookup) == false) continue;
+                            if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceNeighborLookup].ContainsKey(currentSize) == false)
+                            {
+                                continue;
+                            }
+                            else if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceNeighborLookup][currentSize].ContainsKey(currentLayer) == false)
+                            {
+                                continue;
+                            }
+
+                            neighbor = cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceNeighborLookup][currentSize][currentLayer].ContainsKey(neighborLookup)
+                                                                   ? cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceNeighborLookup][currentSize][currentLayer][neighborLookup]
+                                                                   : null;
+
+                            if (neighbor != null && neighbor.uid != cell.uid && foundUids.Contains(neighbor.uid) == false)
+                            {
+                                if (cell.neighbors.Contains(neighbor) == false) cell.neighbors.Add(neighbor);
+                                if (neighbor.neighbors.Contains(cell) == false) neighbor.neighbors.Add(cell);
+                                foundUids.Add(neighbor.uid);
+
+                                neighborsFound++;
+                                continue;
+                            }
+                        }
+                        // }
+                        // catch (System.Exception)
+                        // {
+                        //     Debug.LogError("cell - currentlayer: " + currentLayer + ", size: " + currentSize);
+                        //     throw;
+                        // }
+
+                    }
+                    HexagonCellPrototype.EvaluateForEdge(cell, EdgeCellType.Default, true);
+
+                    if (neighborsFound == 0 || neighborsFound > 8) Debug.LogError("cell neighbors found: " + neighborsFound);
+                    if (enableLog) Debug.Log("cell neighbors found: " + neighborsFound);
                 }
             }
         }

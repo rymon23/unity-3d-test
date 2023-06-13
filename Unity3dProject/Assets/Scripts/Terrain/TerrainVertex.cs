@@ -2008,7 +2008,7 @@ namespace ProceduralBase
 
                     Vector2Int noiseCoordinate = new Vector2Int((int)worldCoord.x, (int)worldCoord.z);
 
-                    float baseNoiseHeight = WorldAreaManager.CalculateNoiseHeightForVertex(noiseCoordinate.x, noiseCoordinate.y, terrainHeight, fastNoiseUnity.fastNoise, persistence, octaves, lacunarity);
+                    float baseNoiseHeight = WorldManagerUtil.CalculateNoiseHeightForVertex(noiseCoordinate.x, noiseCoordinate.y, terrainHeight, fastNoiseUnity.fastNoise, persistence, octaves, lacunarity);
                     baseNoiseHeight += transform.position.y;
                     position.y = baseNoiseHeight;
 
