@@ -8,11 +8,12 @@ namespace ProceduralBase
     [System.Serializable]
     public class TerrainChunkData
     {
-        public TerrainChunkData(Vector2 _chunkLookup, Vector3 _chunkCenter, Vector2 _worldAreaLookup)
+        public TerrainChunkData(Vector2 _chunkLookup, Vector3 _chunkCenter, Vector2 _worldAreaLookup, int _objectIndex)
         {
             chunkLookup = _chunkLookup;
             chunkCoordinate = new Vector2(_chunkCenter.x, _chunkCenter.z);
             worldAreaLookup = _worldAreaLookup;
+            objectIndex = _objectIndex;
         }
         public TerrainChunkData(TerrainChunkJsonData jsonData)
         {
@@ -22,10 +23,6 @@ namespace ProceduralBase
             objectIndex = jsonData.objectIndex;
         }
 
-        // public Vector2 worldAreaLookup;
-        // public Vector2 chunkLookup;
-        // public Vector2 chunkCoordinate;
-        // public int objectIndex = -1;
         public Vector2 chunkLookup { get; private set; }
         public Vector2 chunkCoordinate { get; private set; }
         public Vector2 worldAreaLookup { get; private set; }
@@ -38,15 +35,16 @@ namespace ProceduralBase
         public TerrainChunkJsonData ConvertToJson() => ConvertToJson(this);
         public static Vector2 CalculateTerrainChunkLookup(Vector2 chunkCoord) => VectorUtil.RoundVector2ToNearest5(chunkCoord);
         public static Vector2 CalculateTerrainChunkLookup(Vector3 chunkPosition) => VectorUtil.RoundVector2ToNearest5(new Vector2(chunkPosition.x, chunkPosition.z));
-        public static bool Generate_WorldspaceChunkData(HexagonCellPrototype worldspaceCell, Dictionary<Vector2, TerrainChunkData> terrainChunkData_ByLookup)
+        public static int Generate_WorldspaceChunkData(HexagonCellPrototype worldspaceCell, Dictionary<Vector2, TerrainChunkData> terrainChunkData_ByLookup, int startChunkIX)
         {
             if (terrainChunkData_ByLookup == null)
             {
                 Debug.LogError("terrainChunkData_ByLookup is null");
-                return false;
+                return 0;
             }
-
             int created = 0;
+            int currentChunkIX = startChunkIX;
+
             for (var side = 1; side < worldspaceCell.sidePoints.Length; side++)
             {
                 if (side == 0 || side == 3) continue;
@@ -56,11 +54,12 @@ namespace ProceduralBase
 
                 if (terrainChunkData_ByLookup.ContainsKey(new_ChunkLookup) == false)
                 {
-                    terrainChunkData_ByLookup.Add(new_ChunkLookup, new TerrainChunkData(new_ChunkLookup, new_chunkCenter, worldspaceCell.GetParentLookup()));
+                    terrainChunkData_ByLookup.Add(new_ChunkLookup, new TerrainChunkData(new_ChunkLookup, new_chunkCenter, worldspaceCell.GetParentLookup(), currentChunkIX));
+                    currentChunkIX++;
                     created++;
                 }
             }
-            return (created > 0);
+            return created;
         }
         // public static TerrainChunkJsonData ConvertToJson(TerrainChunkData chunkData) => new TerrainChunkJsonData(chunkData);
         public static TerrainChunkJsonData ConvertToJson(TerrainChunkData chunkData)

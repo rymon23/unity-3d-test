@@ -481,7 +481,6 @@ namespace ProceduralBase
 
 
             // HexagonCellPrototype.GroundPrototypesToTerrainVertexElevation(cellManager.cellPrototypesByLayer_V2, vertexGrid);
-
             // cellManager.GenerateMicroGridFromHosts(path, 4, 3);
 
             cellManager.GenerateMicroGridFromClusters(3, true);

@@ -9,6 +9,16 @@ using System.Linq;
 
 static class UtilityHelpers
 {
+    public static void ExpandListToFitIndex(int index, List<GameObject> objects)
+    {
+        int currentCount = objects.Count;
+        int desiredLength = index + 1;
+        if (currentCount < desiredLength)
+        {
+            int elementsToAdd = desiredLength - currentCount;
+            objects.AddRange(new GameObject[elementsToAdd]);
+        }
+    }
 
     public static void LogTime(DateTime startTime, string str)
     {

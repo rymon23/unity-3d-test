@@ -65,8 +65,7 @@ namespace ProceduralBase
             this.bounds = cluster.CalculateBounds();
             this.radius = cluster.radius;
             // this.radius = VectorUtil.CalculateBoundingSphereRadius(this.bounds);
-
-            Debug.Log("New Location: " + locationType + ", radius: " + radius);
+            // Debug.Log("New Location: " + locationType + ", radius: " + radius);
         }
 
         public static LocationData GenerateLocationDataFromCluster(HexagonCellCluster cluster, LocationType locationType, LocationMarkerPrefabOption prefabSettings)

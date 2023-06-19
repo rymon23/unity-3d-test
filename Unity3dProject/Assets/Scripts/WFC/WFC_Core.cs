@@ -1,8 +1,9 @@
-
+using System;
+using System.Linq;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using ProceduralBase;
-using System.Linq;
 
 namespace WFCSystem
 {
@@ -111,14 +112,33 @@ namespace WFCSystem
 
         private bool hasMicroTiles = false;
 
+        DateTime _buildStartTime;
+
+        private void StartTimeLog()
+        {
+            _buildStartTime = DateTime.Now;
+        }
+        private void TimeLog(string str)
+        {
+            UtilityHelpers.LogTime(_buildStartTime, str);
+        }
 
         public void ExecuteWFC()
         {
             UpdateCompatibilityMatrix();
             compatibilityMatrix = socketDirectory.GetCompatibilityMatrix();
 
+            StartTimeLog();
+
             EvaluateCells();
+
+            TimeLog("EvaluateCells - Time");
+            StartTimeLog();
+
             EvaluateTiles();
+
+            TimeLog("EvaluateTiles - Time");
+            StartTimeLog();
 
             if (logIncompatibilities) Debug.Log("Executing WFC - Location Type: " + locationSettings.locationType + ", Tile Context: " + tileContext);
 
@@ -136,18 +156,24 @@ namespace WFCSystem
             }
 
             CollapseEdgeCells();
+            TimeLog("CollapseEdgeCells - Time");
 
 
             remainingAttempts = 1;//maxAttempts;
 
-            do
-            {
-                CollapseRemainingCellsByLayer();
+            // do
+            // {
+            CollapseRemainingCellsByLayer();
 
-                remainingAttempts--;
-            } while (remainingAttempts > 0 && WFCUtilities_V2.HasUnassignedCells(allCells));
+            remainingAttempts--;
+            // } while (remainingAttempts > 0 && WFCUtilities_V2.HasUnassignedCells(allCells));
+
+            TimeLog("CollapseRemainingCellsByLayer - Time");
+            StartTimeLog();
 
             InstantiateAllTiles();
+
+            TimeLog("InstantiateAllTiles - Time");
 
             if (logIncompatibilities) Debug.Log("Execution of WFC Complete");
         }

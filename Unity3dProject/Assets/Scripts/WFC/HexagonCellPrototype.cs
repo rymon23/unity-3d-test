@@ -55,6 +55,7 @@ namespace WFCSystem
             this.center = center;
             this.size = size;
             RecalculateEdgePoints();
+            this.worldCoordinate = new Vector2(center.x, center.z);
 
             bool hasParent = parentCell != null;
 
@@ -63,8 +64,6 @@ namespace WFCSystem
 
             string baseID = "x" + size + "-" + center;
             string parentHeader = "";
-
-            this.worldCoordinate = new Vector2(center.x, center.z);
 
             if (hasParent)
             {
@@ -80,11 +79,7 @@ namespace WFCSystem
                 {
                     if (layer == parentCell.GetLayer()) this.cellStatus = parentCell.GetCellStatus();
                 }
-                else
-                {
-                    this.cellStatus = parentCell.GetCellStatus();
-                }
-
+                else this.cellStatus = parentCell.GetCellStatus();
             }
             else
             {
@@ -93,15 +88,12 @@ namespace WFCSystem
             }
 
             this.id = parentHeader + baseID;
+            this.uid = UtilityHelpers.GenerateUniqueID(baseID);
+
             this.layerStackId = layerStackId != null ? layerStackId : this.id;
 
             this.name = "prototype-" + this.id;
             if (layer > 0) this.name += "[L_" + layer + "]";
-            // int idFragment = Mathf.Abs((int)(center.z + center.x + center.y));
-            // this.id += "X" + size + "-(" + idFragment + appendToId + ")";
-            this.uid = UtilityHelpers.GenerateUniqueID(baseID);
-
-            // this.uid = UtilityHelpers.GenerateUniqueID(idFragment + "");
             if (preAssignGround) SetToGround(true);
         }
 
@@ -2120,6 +2112,8 @@ namespace WFCSystem
 
             if (sideNeighborCount < 6)
             {
+                if (prototype.size == 4) Debug.LogError("sideNeighborCount: " + sideNeighborCount + ", prototype.neighbors: " + prototype.neighbors.Count);
+
                 prototype.SetEdgeCell(true, edgeCellType);
                 isEdge = true;
             }
@@ -3441,6 +3435,25 @@ namespace WFCSystem
             return newPrototype;
         }
 
+        public static HexagonCellPrototype DuplicateCellToNewLayerBelow(HexagonCellPrototype prototype, int layerElevation, int layer, IHexCell parentCell, bool log = false)
+        {
+            Vector3 newCenterPos = new Vector3(prototype.center.x, prototype.center.y - layerElevation, prototype.center.z);
+            HexagonCellPrototype newPrototype = new HexagonCellPrototype(newCenterPos, prototype.size, parentCell, "", layer, prototype.GetLayerStackId());
+
+            newPrototype.bottomNeighborId = prototype.id;
+            newPrototype.SetWorldSpaceLookup(prototype.GetWorldSpaceLookup());
+
+            // Set layer neighbors
+            newPrototype.layerNeighbors[1] = prototype;
+            if (newPrototype.neighbors.Contains(prototype) == false) newPrototype.neighbors.Add(prototype);
+
+            prototype.layerNeighbors[0] = newPrototype;
+            if (prototype.neighbors.Contains(newPrototype) == false) prototype.neighbors.Add(newPrototype);
+
+            if (log) Debug.Log("newPrototype - size: " + newPrototype.size + ", neighbors: " + newPrototype.neighbors.Count);
+            return newPrototype;
+        }
+
         public static List<HexagonCellPrototype> GetPrototypesWithinHexagon(
             List<HexagonCellPrototype> prototypes,
             Vector3 position,
@@ -3633,9 +3646,10 @@ namespace WFCSystem
             bool showAll = filterType == GridFilter_Type.All;
             Vector3 pointPos = cell.center;
 
+            bool show = false;
+
             if (filterType != GridFilter_Type.None)
             {
-                bool show = false;
                 float showRadius = showAll ? 0.8f : 2f;
 
                 if (!showAll)
@@ -3649,7 +3663,6 @@ namespace WFCSystem
                         showRadius = (cell.size / 3f) - 2;
                     }
                 }
-
 
                 if ((showAll || filterType == GridFilter_Type.Entrance) && cell.IsEntry())
                 {
@@ -3702,7 +3715,7 @@ namespace WFCSystem
                     Gizmos.color = colors != null && colors.ContainsKey("brown") ? colors["brown"] : Color.black;
                     show = true;
                 }
-                else if ((showAll || filterType == GridFilter_Type.Cluster) && cell.IsInCluster())
+                else if ((filterType == GridFilter_Type.Cluster) && cell.IsInCluster())
                 {
                     Gizmos.color = Color.cyan;
                     Gizmos.DrawWireSphere(cell.center, cell.size);
@@ -3762,19 +3775,23 @@ namespace WFCSystem
                 if (cellDisplayType != CellDisplay_Type.DrawLines && (showAll || show)) Gizmos.DrawSphere(cell.center, showRadius);
             }
 
-            if (cellDisplayType != CellDisplay_Type.DrawCenter)
+            if (show)
             {
-                Gizmos.color = Color.black;
-                VectorUtil.DrawHexagonPointLinesInGizmos(cell.cornerPoints);
-            }
 
-            if (showCorners)
-            {
-                Gizmos.color = Color.magenta;
-                for (int j = 0; j < cell.cornerPoints.Length; j++)
+                if (cellDisplayType != CellDisplay_Type.DrawCenter)
                 {
-                    pointPos = cell.cornerPoints[j];
-                    Gizmos.DrawSphere(pointPos, 0.25f);
+                    Gizmos.color = Color.black;
+                    VectorUtil.DrawHexagonPointLinesInGizmos(cell.cornerPoints);
+                }
+
+                if (showCorners)
+                {
+                    Gizmos.color = Color.magenta;
+                    for (int j = 0; j < cell.cornerPoints.Length; j++)
+                    {
+                        pointPos = cell.cornerPoints[j];
+                        Gizmos.DrawSphere(pointPos, 0.25f);
+                    }
                 }
             }
 

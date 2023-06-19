@@ -780,14 +780,18 @@ namespace WFCSystem
 
         public static HexagonCellCluster GenerateCluster_UnderGroundTunnel(HexagonCellCluster existingCluster, int maxMembers = 15, CellSearchPriority searchPriority = CellSearchPriority.SideNeighbors)
         {
+            Debug.Log("existingCluster.prototypes: " + existingCluster.prototypes.Count);
+
             List<HexagonCellPrototype> availableGroundStartCells = existingCluster.prototypes.FindAll
                 (c =>
                     c.IsGround() &&
-                    c.GetLayer() >= 1 &&
-                    c.layerNeighbors[0] != null && c.layerNeighbors[0].IsUnderGround() && c.layerNeighbors[0].IsPreAssigned() == false &&
-                    // c.layerNeighbors[0].HasPreassignedNeighbor() == false &&
-                    c.GetGetNeighborsWithStatus(CellStatus.UnderGround).FindAll(n => n.IsPreAssigned() == false).Count > 1
-                ).OrderByDescending(x => x.GetGetNeighborsWithStatus(CellStatus.UnderGround).Count).ToList();
+                    c.layerNeighbors[0] != null &&
+                    c.layerNeighbors[0].IsUnderGround() //&& 
+                                                        // c.GetLayer() >= 1 &&
+                                                        // c.layerNeighbors[0].IsPreAssigned() == false &&
+                                                        // c.layerNeighbors[0].HasPreassignedNeighbor() == false &&
+                                                        // c.GetGetNeighborsWithStatus(CellStatus.UnderGround).FindAll(n => n.IsPreAssigned() == false).Count > 1
+                ); //.OrderByDescending(x => x.GetGetNeighborsWithStatus(CellStatus.UnderGround).Count).ToList();
 
             if (availableGroundStartCells.Count == 0)
             {
@@ -813,6 +817,8 @@ namespace WFCSystem
                     // Debug.LogError("GenerateCellClusters_Cave - NO newTunnelPaths");
                     continue;
                 }
+
+                Debug.LogError("newTunnelPath.Count: " + newTunnelPath.Count + ", maxMembers: " + maxMembers + ",  searchPriority: " + searchPriority);
 
                 HexCellUtil.SetTunnelCells(newTunnelPath);
 
@@ -1212,11 +1218,10 @@ namespace WFCSystem
         }
 
         public static HexagonCellCluster Generate_ClusterSubGridFromPrototypesByLayer(
-            Dictionary<int, List<HexagonCellPrototype>> prototypesByLayer,
+            Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>> prototypesByLayer,
             CellClusterType clusterType,
             bool keepAllPrototypes,
-            List<CellStatus> focusCellsIgnoresStatus = null,
-            HashSet<Vector2> checkGridConnectorByWorldspaceCoords = null
+            List<CellStatus> focusCellsIgnoresStatus = null
         )
         {
             if (prototypesByLayer == null || prototypesByLayer.Count == 0)
@@ -1225,6 +1230,49 @@ namespace WFCSystem
                 return null;
             }
             List<HexagonCellPrototype> finalMembers = new List<HexagonCellPrototype>();
+            if (!keepAllPrototypes && focusCellsIgnoresStatus == null) keepAllPrototypes = true;
+
+            foreach (int currentLayer in prototypesByLayer.Keys)
+            {
+                List<HexagonCellPrototype> layerMembers = new List<HexagonCellPrototype>();
+                foreach (var pair in prototypesByLayer[currentLayer])
+                {
+                    layerMembers.Add(pair.Value);
+                }
+
+                HexagonCellPrototype.ResetNeighbors(layerMembers, EdgeCellType.Default);
+                if (keepAllPrototypes)
+                {
+                    finalMembers.AddRange(layerMembers);
+                }
+                else finalMembers.AddRange(layerMembers.FindAll(p => focusCellsIgnoresStatus.Contains(p.GetCellStatus()) == false));
+            }
+
+            if (finalMembers != null && finalMembers.Count > 1)
+            {
+                return new HexagonCellCluster(
+                        finalMembers[0].GetId(),
+                        finalMembers,
+                        clusterType,
+                        ClusterGroundCellLayerRule.Unset);
+            }
+            else return null;
+        }
+
+        public static HexagonCellCluster Generate_ClusterSubGridFromPrototypesByLayer(
+            Dictionary<int, List<HexagonCellPrototype>> prototypesByLayer,
+            CellClusterType clusterType,
+            bool keepAllPrototypes,
+            List<CellStatus> focusCellsIgnoresStatus = null
+        )
+        {
+            if (prototypesByLayer == null || prototypesByLayer.Count == 0)
+            {
+                Debug.LogError("NO prototypesByLayer");
+                return null;
+            }
+            List<HexagonCellPrototype> finalMembers = new List<HexagonCellPrototype>();
+            if (!keepAllPrototypes && focusCellsIgnoresStatus == null) keepAllPrototypes = true;
 
             foreach (var kvp in prototypesByLayer)
             {

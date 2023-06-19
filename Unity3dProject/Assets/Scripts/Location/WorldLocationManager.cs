@@ -36,6 +36,96 @@ namespace ProceduralBase
         #endregion
 
 
+
+
+        // public static Dictionary<Vector2, > Instantiate_WorldLocationObjects(
+        //     List<LocationData> locationData,
+        //     GameObject locationPrefab,
+        //     Transform parentFolder = null
+        // )
+        // {
+        //     if (locationData == null || locationData.Count == 0)
+        //     {
+        //         Debug.LogError("locationData Null");
+        //         return;
+        //     }
+
+        //     // GetLocationBorderPointsFromGridEdgeVertices(locationData, vertexGrid);
+        //     List<GameObject> newLocationGO = SpawnLocations(locationData, locationPrefab, parentFolder);     
+        //     List<Territory> new_territories = new List<Territory>();
+        //     List<Location> new_locations = new List<Location>();
+
+        //     if (newLocations.Count > 0)
+        //     {
+        //         _locations = new List<Location>();
+        //         _territories = new List<Territory>();
+        //         foreach (var item in newLocations)
+        //         {
+        //             Location newLoc = item.GetComponent<Location>();
+        //             Territory newTerr = item.GetComponent<Territory>();
+        //             if (newLoc != null)
+        //             {
+        //                 newLoc.SetWorldArea(this);
+        //                 newLoc.Revaluate();
+        //                 _locations.Add(newLoc);
+        //             }
+        //             if (newTerr != null) _territories.Add(newTerr);
+        //         }
+        //     }
+
+        //     // Invoke("EvaluateTerritories", 0.6f);
+        // }
+
+        // private static List<GameObject> SpawnLocationObjects(
+        //     List<LocationData> locationData,
+        //     GameObject locationPrefab,
+        //     Transform parentFolder = null
+        // )
+        // {
+        //     // if (locationPrefab == null || locationData == null) return;
+        //     List<GameObject> newLocations = new List<GameObject>();
+
+        //     Transform parent = new GameObject("Locations").transform;
+        //     foreach (LocationData data in locationData)
+        //     {
+        //         GameObject go = Instantiate(locationPrefab, data.centerPosition, Quaternion.identity);
+        //         go.transform.SetParent(parent);
+
+        //         Location location = go.GetComponent<Location>();
+        //         Territory newTerr = item.GetComponent<Territory>();
+
+        //         location.SetLocationData(data);
+        //         // location.Revaluate();
+        //         newLocations.Add(go);
+        //     }
+
+        //     if (parentFolder != null) parent.SetParent(parentFolder);
+
+        //     return newLocations;
+        // }
+
+        // private static GameObject SpawnLocationObject(
+        //     LocationData locationData,
+        //     GameObject locationPrefab
+        // )
+        // {
+        //     GameObject go = Instantiate(locationPrefab, locationData.centerPosition, Quaternion.identity);
+
+        //     Location location = go.GetComponent<Location>();
+        //     Territory territory = go.GetComponent<Territory>();
+        //     location.SetLocationData
+
+        //         location.SetLocationData(data);
+        //     // location.Revaluate();
+        //     newLocations.Add(go);
+
+
+        //     return newLocations;
+        // }
+        // //
+
+
+
         public static (List<LocationPrefab>, List<LocationPrefab>) Evaluate_LocationMarkerPrefabs(List<LocationPrefab> allLocationPrefabs)
         {
             if (allLocationPrefabs == null || allLocationPrefabs.Count == 0) return (allLocationPrefabs, null);

@@ -44,7 +44,7 @@ namespace WFCSystem
 
 
         [SerializeField] private List<int> tileSizes;
-        public bool HasMicroTiles() => GetTileSizes().Any(s => s < 12);
+        public bool HasMicroTiles() => GetTileSizes().Any(s => s < (int)HexCellSizes.Default);
         public List<int> GetTileSizes()
         {
             tileSizes = GetTileSizes(ExtractHexTiles());

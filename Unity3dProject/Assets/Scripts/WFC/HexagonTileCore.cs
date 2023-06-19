@@ -121,6 +121,7 @@ namespace WFCSystem
 
 
         [Header("Tile Compatibility / Probability")]
+        [SerializeField] private CellStatus[] _excludeCellStatusList;
         [SerializeField] private GridExclusionRule _gridExclusionRule;
         public GridExclusionRule GetGridExclusionRule() => _gridExclusionRule;
         public bool IsGridEdgeCompatible() => isEdgeable && (_gridExclusionRule == GridExclusionRule.GridEdgesOnly || _gridExclusionRule == GridExclusionRule.EdgeOnly || _gridExclusionRule == GridExclusionRule.Unset);

@@ -96,4 +96,10 @@ namespace ProceduralBase
             if (this.objectIndex > -1) cell.objectIndex = this.objectIndex;
         }
     }
+
+
+    public class WorldAreaCellData : WorldCellData
+    {
+        public int terrainChunks = -1;
+    }
 }
