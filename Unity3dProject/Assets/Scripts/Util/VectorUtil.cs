@@ -7,10 +7,121 @@ using System.Linq;
 
 public static class VectorUtil
 {
+
+
+
+    public static void Shuffle(List<Vector3> points)
+    {
+        int n = points.Count;
+        for (int i = 0; i < n; i++)
+        {
+            // Get a random index from the remaining elements
+            int r = i + UnityEngine.Random.Range(0, n - i);
+            // Swap the current element with the random one
+            Vector3 temp = points[r];
+            points[r] = points[i];
+            points[i] = temp;
+        }
+    }
+
     public static bool IsPointWithinBounds(Bounds bounds, Vector3 point)
     {
         return point.x >= bounds.min.x && point.x <= bounds.max.x && point.z >= bounds.min.z && point.z <= bounds.max.z;
     }
+
+    public static bool IsPointWithinBounds(List<Bounds> bounds, Vector3 point)
+    {
+        foreach (var item in bounds)
+        {
+            if (IsPointWithinBounds(item, point)) return true;
+        }
+        return false;
+    }
+
+    public static bool IsPointWithinBoundsExcludingBorder(Bounds bounds, Vector3 point)
+    {
+        float epsilon = 0.0001f;
+        if (point.x >= bounds.min.x + epsilon && point.x <= bounds.max.x - epsilon &&
+            point.z >= bounds.min.z + epsilon && point.z <= bounds.max.z - epsilon)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    public static bool AreBoundsInterlocking(Bounds boundsA, Bounds boundsB)
+    {
+        Vector3[] boundsCorners = VectorUtil.GetBoundsCorners_X8(boundsA);
+        foreach (var point in boundsCorners)
+        {
+            if (VectorUtil.IsPointWithinBounds(boundsB, point)) return true;
+        }
+        boundsCorners = VectorUtil.GetBoundsCorners_X8(boundsB);
+        foreach (var point in boundsCorners)
+        {
+            if (VectorUtil.IsPointWithinBounds(boundsA, point)) return true;
+        }
+        return false;
+    }
+
+    public static List<Bounds> FilterInterlockingBounds(List<Bounds> bounds)
+    {
+        HashSet<int> excluded = new HashSet<int>();
+        List<Bounds> filteredBounds = new List<Bounds>();
+
+        for (int i = 0; i < bounds.Count; i++)
+        {
+            if (excluded.Contains(i)) continue;
+            // bool skip = false;
+
+            for (int j = 0; j < bounds.Count; j++)
+            {
+                if (i == j) continue;
+
+                if (excluded.Contains(j)) continue;
+
+                if (AreBoundsInterlocking(bounds[i], bounds[j]))
+                {
+                    // skip = true;
+                    excluded.Add(j);
+                    // break;
+                }
+            }
+            // if (skip == false) filteredBounds.Add(bounds[i]);
+
+            filteredBounds.Add(bounds[i]);
+            // Vector3[] boundsCorners = VectorUtil.GetBoundsCorners_X8(bounds[i]);
+            // foreach (var point in boundsCorners)
+            // {
+            //     bool skip = false;
+            //     for (int j = 0; j < bounds.Count; j++)
+            //     {
+            //         if (i == j) continue;
+
+            //         if (AreBoundsInterlocking(bounds[i], bounds[j]))
+            //         {
+            //             skip = true;
+            //             break;
+            //         }
+            //     }
+            //     if (skip == false) filteredBounds.Add(bounds[i]);
+            // }
+        }
+        return filteredBounds;
+    }
+
+    public static Vector2 PointLookupDefault(Vector2 position) => VectorUtil.ToVector2Int(position);
+    // public static Vector3 PointLookupDefault(Vector3 position) => VectorUtil.ToVector3Int(position);
+    public static Vector3 PointLookupDefault(Vector3 vector)
+    {
+        return new Vector3(
+            Mathf.Round(vector.x * 10f) / 10f,
+            Mathf.Round(vector.y * 10f) / 10f,
+            Mathf.Round(vector.z * 10f) / 10f
+        );
+    }
+
+
     public static Vector3 RoundVector3To1Decimal(Vector3 v)
     {
         return new Vector3(Mathf.Round(v.x * 10f) / 10f, Mathf.Round(v.y * 10f) / 10f, Mathf.Round(v.z * 10f) / 10f);
@@ -28,6 +139,13 @@ public static class VectorUtil
         int x = Mathf.RoundToInt(vector.x);
         int y = Mathf.RoundToInt(vector.y);
         return new Vector2Int(x, y);
+    }
+    public static Vector3Int ToVector3Int(this Vector3 vector)
+    {
+        int x = Mathf.RoundToInt(vector.x);
+        int y = Mathf.RoundToInt(vector.y);
+        int z = Mathf.RoundToInt(vector.z);
+        return new Vector3Int(x, y, z);
     }
     public static Vector3 ToVector3IntXZ(this Vector3 vector)
     {
@@ -48,7 +166,7 @@ public static class VectorUtil
         float roundedY = Mathf.RoundToInt(value.y / 5f) * 5f;
         return new Vector2(roundedX, roundedY);
     }
-    public static Vector3 RoundVector3ToNearestValue(Vector3 vector, int value)
+    public static Vector3 RoundVector3ToNearestValue(Vector3 vector, float value)
     {
         float round = value;
         float roundedX = Mathf.RoundToInt(vector.x / round) * round;
@@ -86,9 +204,27 @@ public static class VectorUtil
         return Vector3.Distance(pointA_XZ, pointB_XZ);
     }
 
-    public static List<Vector3> DuplicatePositionsToNewYPos(List<Vector3> basePositions, float offsetY, int times = 1)
+    public static List<Vector3> DuplicatePositionsToNewYPos(List<Vector3> basePositions, float offsetY, int times = 1, bool includeBasePositions = false)
     {
         List<Vector3> duplicatedPositions = new List<Vector3>();
+        if (includeBasePositions) duplicatedPositions.AddRange(basePositions);
+        int time = 0;
+        do
+        {
+            time++;
+            foreach (Vector3 pos in basePositions)
+            {
+                Vector3 duplicatedPosition = new Vector3(pos.x, pos.y + (offsetY * time), pos.z);
+                duplicatedPositions.Add(duplicatedPosition);
+            }
+        } while (time < times);
+
+        return duplicatedPositions;
+    }
+    public static List<Vector3> DuplicatePositionsToNewYPos_V2(List<Vector3> basePositions, float offsetY, int times = 1, bool includeBasePositions = false)
+    {
+        List<Vector3> duplicatedPositions = new List<Vector3>();
+        if (includeBasePositions) duplicatedPositions.AddRange(basePositions);
         int time = 0;
         do
         {
@@ -166,6 +302,29 @@ public static class VectorUtil
 
         return dottedLinePoints;
     }
+
+    public static void GetLeftAndRightPoints(Vector3 position, float distance, out Vector3 leftPoint, out Vector3 rightPoint)
+    {
+        // Find a perpendicular vector to the forward direction of the position
+        Vector3 forward = position.normalized;
+        Vector3 right = Vector3.Cross(forward, Vector3.up).normalized;
+
+        // Calculate the left and right points at the specified distance
+        leftPoint = position - (distance * right);
+        rightPoint = position + (distance * right);
+    }
+
+    public static Vector3[] InversePointsToArray(List<Vector3> points, Transform transform)
+    {
+        Vector3[] worldPositions = new Vector3[points.Count];
+        for (int i = 0; i < worldPositions.Length; i++)
+        {
+            worldPositions[i] = transform.InverseTransformPoint(points[i]);
+        }
+        return worldPositions;
+    }
+
+
 
     public static Vector3 GetClosestPoint_XZ(Vector3[] points, Vector3 position)
     {
@@ -820,6 +979,16 @@ public static class VectorUtil
     }
 
 
+    public static bool IsCellWithinVerticalBounds(float baseElevation, float height, Vector3 cellCenter, float cellSize)
+    {
+        float cellTop = cellCenter.y + (cellSize * 0.5f);
+        float cellBottom = cellCenter.y - (cellSize * 0.5f);
+        float verticalTop = baseElevation + height;
+        float verticalBottom = baseElevation;
+        return (cellTop <= verticalTop && cellBottom >= verticalBottom);
+    }
+
+
     public static (bool, float) IsPointWithinEdgeBounds_WithDistance(Vector3 point, Vector3 centerPos, List<Vector3> corners, float radius, int lineDensity = 10, float maxEdgeDistance = 0.66f)
     {
         float distance = VectorUtil.DistanceXZ(point, centerPos);
@@ -948,6 +1117,158 @@ public static class VectorUtil
 
         return false;
     }
+
+
+
+    public static List<Vector3> OrderPolygonPoints_GrahamMethod(List<Vector3> points)
+    {
+        // Ensure the list has at least 3 points
+        if (points.Count < 3)
+        {
+            Debug.LogError("Cannot order polygon points. The list must contain at least 3 points.");
+            return points;
+        }
+
+        // Find the bottom-left point (smallest y, and in case of ties, smallest x)
+        Vector3 bottomLeft = points[0];
+        for (int i = 1; i < points.Count; i++)
+        {
+            if (points[i].y < bottomLeft.y || (points[i].y == bottomLeft.y && points[i].x < bottomLeft.x))
+                bottomLeft = points[i];
+        }
+
+        // Sort the points based on their polar angle relative to the bottomLeft point
+        points.Sort((p1, p2) =>
+        {
+            float angle1 = Mathf.Atan2(p1.y - bottomLeft.y, p1.x - bottomLeft.x);
+            float angle2 = Mathf.Atan2(p2.y - bottomLeft.y, p2.x - bottomLeft.x);
+
+            if (angle1 < angle2) return -1;
+            if (angle1 > angle2) return 1;
+
+            // If the points have the same polar angle, sort by distance to the bottomLeft point
+            float dist1 = Vector3.SqrMagnitude(p1 - bottomLeft);
+            float dist2 = Vector3.SqrMagnitude(p2 - bottomLeft);
+
+            if (dist1 < dist2) return -1;
+            if (dist1 > dist2) return 1;
+
+            return 0;
+        });
+
+        return points;
+    }
+
+
+    // public static List<Vector3> OrderPolygonPoints_JarvisMethod(List<Vector3> points)
+    // {
+    //     // Ensure the list has at least 3 points
+    //     if (points.Count < 3)
+    //     {
+    //         Debug.LogError("Cannot order polygon points. The list must contain at least 3 points.");
+    //         return points;
+    //     }
+
+    //     // Find the leftmost point
+    //     Vector3 leftmostPoint = points[0];
+    //     for (int i = 1; i < points.Count; i++)
+    //     {
+    //         if (points[i].x < leftmostPoint.x)
+    //             leftmostPoint = points[i];
+    //     }
+
+    //     // Order the points counterclockwise
+    //     List<Vector3> orderedPoints = new List<Vector3>();
+    //     Vector3 currentPoint = leftmostPoint;
+    //     Vector3 nextPoint;
+    //     Vector3 previousPoint = Vector3.zero;
+
+    //     do
+    //     {
+    //         orderedPoints.Add(currentPoint);
+    //         nextPoint = points[0];
+
+    //         for (int i = 1; i < points.Count; i++)
+    //         {
+    //             if (points[i] == currentPoint || points[i] == previousPoint)
+    //                 continue;
+
+    //             float crossProduct = Vector3.Cross(nextPoint - currentPoint, points[i] - currentPoint).z;
+
+    //             if (nextPoint == currentPoint || crossProduct > 0f)
+    //             {
+    //                 nextPoint = points[i];
+    //             }
+    //         }
+
+    //         previousPoint = currentPoint;
+    //         currentPoint = nextPoint;
+    //     }
+    //     while (currentPoint != leftmostPoint);
+
+    //     return orderedPoints;
+    // }
+
+    public static List<Vector3> OrderPolygonPoints_JarvisMethod(List<Vector3> points, int maxIterationMult = 4)
+    {
+        // Ensure the list has at least 3 points
+        if (points.Count < 3)
+        {
+            Debug.LogError("Cannot order polygon points. The list must contain at least 3 points.");
+            return points;
+        }
+
+        // Find the leftmost point
+        Vector3 leftmostPoint = points[0];
+        for (int i = 1; i < points.Count; i++)
+        {
+            if (points[i].x < leftmostPoint.x || (Mathf.Approximately(points[i].x, leftmostPoint.x) && points[i].z < leftmostPoint.z))
+                leftmostPoint = points[i];
+        }
+
+        // Order the points counterclockwise
+        List<Vector3> orderedPoints = new List<Vector3>();
+        Vector3 currentPoint = leftmostPoint;
+        Vector3 nextPoint;
+        Vector3 previousPoint = Vector3.zero;
+        int iterationCount = 0;
+        int maxIterations = points.Count * maxIterationMult;
+
+        do
+        {
+            orderedPoints.Add(currentPoint);
+            nextPoint = points[0];
+
+            for (int i = 1; i < points.Count; i++)
+            {
+                if (points[i] == currentPoint || points[i] == previousPoint)
+                    continue;
+
+                float crossProduct = Vector3.Cross(nextPoint - currentPoint, points[i] - currentPoint).z;
+
+                if (nextPoint == currentPoint || crossProduct > 0f)
+                {
+                    nextPoint = points[i];
+                }
+            }
+
+            previousPoint = currentPoint;
+            currentPoint = nextPoint;
+            iterationCount++;
+
+            if (iterationCount > maxIterations)
+            {
+                Debug.LogError("Failed to order polygon points. The algorithm may be stuck in an infinite loop.");
+                return points;
+            }
+        }
+        while (currentPoint != leftmostPoint);
+
+        return orderedPoints;
+    }
+
+
+
 
     public static float CalculateRadius(List<Vector3> points)
     {
@@ -1200,6 +1521,54 @@ public static class VectorUtil
         return chunkCorners;
     }
 
+
+    public static List<Vector3[]> GetNonOverlappingBounds(List<Vector3[]> boundCorners)
+    {
+        List<Vector3[]> nonOverlappingBounds = new List<Vector3[]>();
+        foreach (Vector3[] corners in boundCorners)
+        {
+            bool isOverlapping = false;
+
+            foreach (Vector3[] otherCorners in boundCorners)
+            {
+                if (corners != otherCorners && AreCornersWithinBounds(otherCorners, corners))
+                {
+                    isOverlapping = true;
+                    break;
+                }
+            }
+
+            if (!isOverlapping)
+            {
+                nonOverlappingBounds.Add(corners);
+            }
+        }
+
+        return nonOverlappingBounds;
+    }
+
+    private static bool AreCornersWithinBounds(Vector3[] cornersToCheck, Vector3[] boundsCorners)
+    {
+        foreach (Vector3 corner in cornersToCheck)
+        {
+            if (!IsCornerWithinBounds(corner, boundsCorners))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsCornerWithinBounds(Vector3 cornerToCheck, Vector3[] boundsCorners)
+    {
+        Vector3 minBound = boundsCorners[0];
+        Vector3 maxBound = boundsCorners[1];
+
+        return cornerToCheck.x >= minBound.x && cornerToCheck.x <= maxBound.x &&
+               cornerToCheck.y >= minBound.y && cornerToCheck.y <= maxBound.y &&
+               cornerToCheck.z >= minBound.z && cornerToCheck.z <= maxBound.z;
+    }
 
 
     public static float CalculateBoundingSphereRadius(Bounds bounds)
@@ -1604,6 +1973,103 @@ public static class VectorUtil
         return corners;
     }
 
+    public static Vector3[] GetBoundsCorners_X4(Bounds bounds)
+    {
+        Vector3 center = bounds.center;
+        Vector3 extents = bounds.extents;
+
+        Vector3[] corners = new Vector3[4];
+        corners[0] = center + new Vector3(extents.x, 0f, -extents.z); // Top-Left
+        corners[1] = center - new Vector3(extents.x, 0f, extents.z); // Top-Right
+        corners[2] = center + new Vector3(-extents.x, 0f, extents.z); // Bottom-Right
+        corners[3] = center + new Vector3(extents.x, 0f, extents.z); // Bottom-Left
+        return corners;
+    }
+
+    public static List<Vector3> GetBoundsDottedEdge(Bounds bounds, int steps = 2)
+    {
+        Vector3 center = bounds.center;
+        Vector3 extents = bounds.extents;
+
+        Vector3[] corners = new Vector3[4];
+        corners[0] = center + new Vector3(extents.x, 0f, -extents.z); // Top-Left
+        corners[1] = center - new Vector3(extents.x, 0f, extents.z); // Top-Right
+        corners[2] = center + new Vector3(-extents.x, 0f, extents.z); // Bottom-Right
+        corners[3] = center + new Vector3(extents.x, 0f, extents.z); // Bottom-Left
+
+        List<Vector3> dottedLinePoints = new List<Vector3>();
+
+        for (int i = 0; i < corners.Length; i++)
+        {
+            Vector3 startPoint = corners[i];
+            Vector3 endPoint = corners[(i + 1) % corners.Length];
+
+            dottedLinePoints.Add(startPoint);
+
+            Vector3 direction = endPoint - startPoint;
+            float stepSize = direction.magnitude / steps;
+            direction.Normalize();
+
+            for (int j = 0; j <= steps; j++)
+            {
+                Vector3 newPoint = startPoint + (direction * (stepSize * j));
+                dottedLinePoints.Add(newPoint);
+            }
+        }
+        return dottedLinePoints;
+    }
+
+
+    public static Vector3[] GetBoundsCorners_X8(Bounds bounds)
+    {
+        Vector3 center = bounds.center;
+        Vector3 extents = bounds.extents;
+
+        Vector3[] corners = new Vector3[4];
+        corners[0] = center + new Vector3(extents.x, 0f, -extents.z); // Top-Left
+        corners[1] = center - new Vector3(extents.x, 0f, extents.z); // Top-Right
+        corners[2] = center + new Vector3(-extents.x, 0f, extents.z); // Bottom-Right
+        corners[3] = center + new Vector3(extents.x, 0f, extents.z); // Bottom-Left
+
+        Vector3[] sides = new Vector3[4];
+        sides[0] = Vector3.Lerp(corners[0], corners[1], 0.5f); // Top
+        sides[1] = Vector3.Lerp(corners[1], corners[2], 0.5f); // Right
+        sides[2] = Vector3.Lerp(corners[2], corners[3], 0.5f); // Bottom
+        sides[3] = Vector3.Lerp(corners[3], corners[0], 0.5f); // Left
+
+
+        Vector3[] final = new Vector3[8];
+        final[0] = corners[0];
+        final[1] = sides[0];
+
+        final[2] = corners[1];
+        final[3] = sides[1];
+
+        final[4] = corners[2];
+        final[5] = sides[2];
+
+        final[6] = corners[3];
+        final[7] = sides[3];
+        // // Calculate center points between each corner
+        return final;
+    }
+
+    public static Vector3[] GetBoundsCorners_V2(Bounds bounds)
+    {
+        Vector3 center = bounds.center;
+        Vector3 extents = bounds.extents;
+        Vector3[] corners = new Vector3[4];
+        // corners[0] = center + new Vector3(extents.x, 0f, extents.z); // Bottom-right
+        // corners[1] = center - new Vector3(extents.x, 0f, extents.z); // Bottom-left
+        // corners[2] = center + new Vector3(extents.x, 0f, -extents.z); // Top-right
+        // corners[3] = center + new Vector3(-extents.x, 0f, extents.z); // Top-left
+        corners[0] = center + new Vector3(extents.x, 0f, -extents.z); // Top-Left
+        corners[1] = center - new Vector3(extents.x, 0f, extents.z); // Top-Right
+        corners[2] = center + new Vector3(-extents.x, 0f, extents.z); // Bottom-Right
+        corners[3] = center + new Vector3(extents.x, 0f, extents.z); // Bottom-Left
+        return corners;
+    }
+
     public static Vector2[] GetBoundsCornersXZ(Bounds bounds)
     {
         Vector3 min = bounds.min;
@@ -1615,6 +2081,710 @@ public static class VectorUtil
         corners[3] = new Vector2(max.x, min.z); // Bottom-right corner
 
         return corners;
+    }
+
+
+    public static void SortPointsByDistance(List<Vector3> points)
+    {
+        points.Sort((p1, p2) =>
+        {
+            float distance1 = p1.x * p1.x + p1.z * p1.z;
+            float distance2 = p2.x * p2.x + p2.z * p2.z;
+
+            return distance1.CompareTo(distance2);
+        });
+    }
+
+    public static void SortPointsForNonOverlappingBorder(List<Vector3> points)
+    {
+        // Sort the points based on the x-coordinate
+        points.Sort((p1, p2) => p1.x.CompareTo(p2.x));
+
+        // Find the leftmost point (minimum x-coordinate)
+        Vector3 leftmostPoint = points[0];
+
+        // Sort the points based on their angle with respect to the leftmost point
+        points.Sort((p1, p2) =>
+        {
+            // if (VectorUtil.DistanceXZ(p1, p2) > 14) return -1;
+            if (p1 == leftmostPoint) return -1;
+            if (p2 == leftmostPoint) return 1;
+
+            float angle1 = Mathf.Atan2(p1.z - leftmostPoint.z, p1.x - leftmostPoint.x);
+            float angle2 = Mathf.Atan2(p2.z - leftmostPoint.z, p2.x - leftmostPoint.x);
+
+            return angle1.CompareTo(angle2);
+        });
+    }
+
+    public static void SortPointsForNonOverlappingBorder_V2(List<Vector3> points)
+    {
+        // Ensure the list has at least 3 points
+        if (points.Count < 3)
+        {
+            Debug.LogError("Cannot order polygon points. The list must contain at least 3 points.");
+            return;
+        }
+
+        // Sort the points based on the x-coordinate
+        points.Sort((p1, p2) => p1.x.CompareTo(p2.x));
+
+        // Find the leftmost point (minimum x-coordinate)
+        Vector3 leftmostPoint = points[0];
+
+        // Sort the remaining points based on their closest neighbor at a 90 or 180-degree angle
+        for (int i = 0; i < points.Count; i++)
+        {
+            Vector3 currentPoint = points[i];
+            Vector3 nextPoint = FindClosestPerpendicularNeighbor(points, currentPoint, (i + 1) % points.Count);
+
+            if (nextPoint != Vector3.zero)
+            {
+                // Swap the current point with the next point
+                int nextIndex = points.IndexOf(nextPoint);
+                points[(i + 1) % points.Count] = nextPoint;
+                points[nextIndex] = currentPoint;
+            }
+        }
+    }
+
+    private static Vector3 FindClosestPerpendicularNeighbor(List<Vector3> points, Vector3 currentPoint, int startIndex)
+    {
+        Vector3 closestNeighbor = Vector3.zero;
+        float closestDistance = float.MaxValue;
+
+        for (int i = startIndex; i < points.Count; i++)
+        {
+            Vector3 neighbor = points[i];
+
+            // Check if the neighbor is at a 90 or 180-degree angle relative to the current point
+            if (IsPerpendicularNeighbor(currentPoint, neighbor))
+            {
+                // Calculate the distance between the current point and the neighbor
+                float distance = Vector3.Distance(currentPoint, neighbor);
+
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closestNeighbor = neighbor;
+                }
+            }
+        }
+
+        return closestNeighbor;
+    }
+
+    private static bool IsPerpendicularNeighbor(Vector3 pointA, Vector3 pointB)
+    {
+        return Mathf.Approximately(pointA.x, pointB.x) || Mathf.Approximately(pointA.z, pointB.z);
+    }
+
+
+    public static List<Vector3> OrderPointsByClosestNeighbor(List<Vector3> points)
+    {
+        List<Vector3> orderedPoints = new List<Vector3>(points.Count);
+
+        // Start with the first point
+        orderedPoints.Add(points[0]);
+
+        // Iterate over the remaining points
+        for (int i = 1; i < points.Count; i++)
+        {
+            Vector3 currentPoint = orderedPoints[i - 1];
+            Vector3 closestPoint = FindClosestPoint(points, currentPoint, orderedPoints);
+
+            // Add the closest point to the ordered list
+            orderedPoints.Add(closestPoint);
+        }
+
+        return orderedPoints;
+    }
+
+    public static List<Vector3> OrderPointsByClosestNeighbor_V2(List<Vector3> points)
+    {
+        // Ensure the list has at least 3 points
+        if (points.Count < 3)
+        {
+            Debug.LogError("Cannot order points. The list must contain at least 3 points.");
+            return points;
+        }
+
+        List<Vector3> orderedPoints = new List<Vector3>(points.Count);
+        orderedPoints.Add(points[0]); // Start with the first point
+
+        Vector3 currentPoint = points[0];
+
+        while (orderedPoints.Count < points.Count)
+        {
+            Vector3 closestPoint = Vector3.zero;
+            float closestDistance = float.MaxValue;
+
+            foreach (Vector3 point in points)
+            {
+                if (!orderedPoints.Contains(point))
+                {
+                    float distance = Vector3.Distance(currentPoint, point);
+
+                    if (distance < closestDistance)
+                    {
+                        closestDistance = distance;
+                        closestPoint = point;
+                    }
+                }
+            }
+
+            orderedPoints.Add(closestPoint);
+            currentPoint = closestPoint;
+        }
+
+        return orderedPoints;
+    }
+
+    public static List<Vector3> OrderPointsByClosestNeighbor_V3(List<Vector3> points, float roundValue = 0.5f, float maxDistanceThreshhold = 1.5f)
+    {
+        // Ensure the list has at least 3 points
+        if (points.Count < 3)
+        {
+            Debug.LogError("Cannot order points. The list must contain at least 3 points.");
+            return points;
+        }
+
+        List<Vector3> orderedPoints = new List<Vector3>(points.Count);
+        orderedPoints.Add(points[0]); // Start with the first point
+
+        while (orderedPoints.Count < points.Count)
+        {
+            Vector3 currentPoint = orderedPoints[orderedPoints.Count - 1];
+            Vector3 closestPoint = Vector3.zero;
+            float closestDistance = float.MaxValue;
+
+            foreach (Vector3 point in points)
+            {
+                if (!orderedPoints.Contains(point))
+                {
+                    float distance = Vector3.Distance(currentPoint, point);
+                    if (distance < closestDistance) //&& distance < maxDistanceThreshhold)
+                    {
+                        if (HasAngleApproximate(currentPoint, point, 180))
+                        // if (CompareRoundedPositions(currentPoint, point, roundValue))
+                        {
+                            closestDistance = distance;
+                            closestPoint = point;
+                        }
+                    }
+                }
+            }
+
+            orderedPoints.Add(closestPoint);
+        }
+        // return orderedPoints;
+
+        // FilterUnorderedPoints_V2(orderedPoints, roundValue, maxDistanceThreshhold);
+        return FilterUnorderedPoints_V2(orderedPoints, roundValue, maxDistanceThreshhold);
+    }
+
+    public static List<Vector3> OrderPointsByClosestNeighbor_V4(List<Vector3> points, float minDistanceThreshold = 6f)
+    {
+        // Ensure the list has at least 3 points
+        if (points.Count < 3)
+        {
+            Debug.LogError("Cannot order points. The list must contain at least 3 points.");
+            return points;
+        }
+
+        List<Vector3> orderedPoints = new List<Vector3>(points.Count);
+        orderedPoints.Add(points[0]); // Start with the first point
+
+        while (orderedPoints.Count < points.Count)
+        {
+            Vector3 currentPoint = orderedPoints[orderedPoints.Count - 1];
+            Vector3 closestPoint = Vector3.zero;
+            float closestDistance = float.MaxValue;
+
+            foreach (Vector3 point in points)
+            {
+                if (!orderedPoints.Contains(point))
+                {
+                    float distance = Vector3.Distance(currentPoint, point);
+                    if (distance < closestDistance)
+                    {
+                        if (HasAngleApproximate(currentPoint, point, 180))
+                        {
+                            closestDistance = distance;
+                            closestPoint = point;
+                        }
+                    }
+                }
+            }
+
+            orderedPoints.Add(closestPoint);
+        }
+        // return orderedPoints;
+        return FilterPointsByDistance(orderedPoints, minDistanceThreshold);
+    }
+
+
+    public static List<Vector3> FilterPointsByDistance(List<Vector3> points, float minDistanceThreshold)
+    {
+        List<Vector3> filteredPoints = new List<Vector3>();
+
+        for (int i = 0; i < points.Count; i++)
+        {
+            // Get the current point
+            Vector3 currentPoint = points[i];
+
+            // Flag to determine if the current point should be included
+            bool includePoint = true;
+
+            // Check the distance between the current point and all other points
+            for (int j = 0; j < points.Count; j++)
+            {
+                if (i != j)
+                {
+                    // Calculate the distance between the current point and the other point
+                    float distance = Vector3.Distance(currentPoint, points[j]);
+
+                    // Exclude the current point if it is within the min distance threshold
+                    if (distance < minDistanceThreshold)
+                    {
+                        includePoint = false;
+                        break;
+                    }
+                }
+            }
+
+            // Add the current point to the filtered list if it should be included
+            if (includePoint)
+            {
+                filteredPoints.Add(currentPoint);
+            }
+        }
+
+        return filteredPoints;
+    }
+
+
+    // public static List<Vector3> FilterPointsByDistance(List<Vector3> points, float minDistanceThreshold)
+    // {
+    //     List<Vector3> filteredPoints = new List<Vector3>();
+
+    //     for (int i = 0; i < points.Count; i++)
+    //     {
+    //         // Get the current point and the next point
+    //         Vector3 currentPoint = points[i];
+    //         Vector3 nextPoint = points[(i + 1) % points.Count];
+
+    //         // Calculate the distance between the current point and the next point
+    //         float distance = Vector3.Distance(currentPoint, nextPoint);
+
+    //         // Exclude the next point if it is within the max distance threshold
+    //         if (distance > minDistanceThreshold)
+    //         {
+    //             filteredPoints.Add(currentPoint);
+    //         }
+    //     }
+
+    //     return filteredPoints;
+    // }
+
+
+    public static List<Vector3> FilterUnorderedPoints(List<Vector3> points, float roundValue = 0.5f, float maxDistanceThreshhold = 1)
+    {
+        List<Vector3> results = new List<Vector3>() {
+            points[0]
+        };
+
+        for (int i = 1; i < points.Count; i++)
+        {
+            Vector3 lastAdded = results[results.Count - 1];
+            Vector3 point = points[i];
+            Vector3 nextPoint = points[(i + 1) % points.Count];
+
+            // float distance = Vector3.Distance(point, lastAdded);
+            // if (distance > maxDistanceThreshhold || !CompareRoundedPositions(point, lastAdded, roundValue)) continue;
+            // distance = Vector3.Distance(point, nextPoint);
+            // if (distance > maxDistanceThreshhold || !CompareRoundedPositions(point, nextPoint, roundValue)) continue;
+            float distance = Vector3.Distance(point, lastAdded);
+            if (distance > maxDistanceThreshhold || !CheckCollisionOnSides(point, lastAdded)) continue;
+
+            distance = Vector3.Distance(point, nextPoint);
+            if (distance > maxDistanceThreshhold || !CheckCollisionOnSides(point, nextPoint)) continue;
+
+            results.Add(point);
+        }
+        return results;
+    }
+    public static List<Vector3> FilterUnorderedPoints_V2(List<Vector3> points, float roundValue = 0.5f, float maxDistanceThreshhold = 1)
+    {
+        List<Vector3> results = new List<Vector3>() {
+            points[0]
+        };
+
+        for (int i = 1; i < points.Count; i++)
+        {
+            Vector3 lastAdded = results[results.Count - 1];
+            Vector3 point = points[i];
+            Vector3 nextPoint = points[(i + 1) % points.Count];
+
+            float distanceA = Vector3.Distance(point, lastAdded);
+            float distanceB = Vector3.Distance(point, nextPoint);
+            bool invalidA = (distanceA > maxDistanceThreshhold || !HasAngleApproximate(point, lastAdded));
+            bool invalidB = invalidA ? invalidA : (distanceB > maxDistanceThreshhold || !HasAngleApproximate(point, nextPoint));
+
+            if (invalidA || invalidB)
+            {
+                Vector3 closestPoint = Vector3.zero;
+                float closestDistance = float.MaxValue;
+
+                foreach (Vector3 pt in points)
+                {
+                    if (!results.Contains(pt))
+                    {
+                        float distance = Vector3.Distance(lastAdded, pt);
+                        if (distance < closestDistance && distance < maxDistanceThreshhold)
+                        {
+                            if (HasAngleApproximate(lastAdded, pt))
+                            {
+                                closestDistance = distance;
+                                closestPoint = point;
+                            }
+                        }
+                    }
+                }
+
+                if (closestPoint != Vector3.zero)
+                {
+                    results.Add(closestPoint);
+                }
+            }
+            else
+            {
+
+                results.Add(point);
+            }
+        }
+        return results;
+    }
+
+
+    // public static List<Vector3> OrderPointsByClosestNeighbor_V2(List<Vector3> points)
+    // {
+    //     // Ensure the list has at least 3 points
+    //     if (points.Count < 3)
+    //     {
+    //         Debug.LogError("Cannot order points. The list must contain at least 3 points.");
+    //         return points;
+    //     }
+
+    //     points.Sort((p1, p2) => p1.x.CompareTo(p2.x));
+
+    //     List<Vector3> orderedPoints = new List<Vector3>(points.Count);
+    //     orderedPoints.Add(points[0]); // Start with the first point
+
+    //     // Recursive function to find the closest neighbor for each point
+    //     void FindClosestNeighbor(Vector3 currentPoint)
+    //     {
+    //         Vector3 closestNeighbor = Vector3.zero;
+    //         float closestDistance = float.MaxValue;
+
+    //         foreach (Vector3 point in points)
+    //         {
+    //             if (!orderedPoints.Contains(point)) // Skip already ordered points
+    //             {
+    //                 float distance = Vector3.Distance(currentPoint, point);
+
+    //                 if (distance < 14 && IsPerpendicularNeighbor(currentPoint, point))
+    //                 {
+    //                     // Calculate the distance between the current point and the neighbor
+    //                     if (distance < closestDistance)
+    //                     {
+    //                         closestDistance = distance;
+    //                         closestNeighbor = point;
+    //                     }
+    //                 }
+
+
+    //             }
+    //         }
+
+    //         if (closestNeighbor != Vector3.zero)
+    //         {
+    //             orderedPoints.Add(closestNeighbor);
+    //             FindClosestNeighbor(closestNeighbor); // Recursively find the closest neighbor for the next point
+    //         }
+    //     }
+
+    //     FindClosestNeighbor(points[0]); // Start the recursion
+
+    //     return orderedPoints;
+    // }
+
+
+    public static bool HasAngleApproximate(Vector3 point1, Vector3 point2, float angle = 180)
+    {
+        return (CheckCollisionOnSides(point1, point2) || CheckCollisionOnSides(point2, point1));
+    }
+
+    public static bool CheckCollisionOnSides(Vector3 point1, Vector3 point2)
+    {
+        Vector3[] sideDirections = new Vector3[]
+        {
+        Vector3.right,  // Right side
+        // Vector3.left,   // Left side
+        Vector3.forward, // Front side
+        // Vector3.back    // Back side
+        };
+
+        foreach (Vector3 sideDirection in sideDirections)
+        {
+            if (CheckCollisionInDirection(point1, point2, sideDirection, 12))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static bool CheckCollisionInDirection(Vector3 point1, Vector3 point2, Vector3 sideDirection)
+    {
+        // Calculate the direction vector from point1 to point2
+        Vector3 direction = point2 - point1;
+
+        // Check if the dot product of the direction vector and sideDirection is negative
+        // This indicates that the points are moving towards each other along the side direction
+        if (Vector3.Dot(direction, sideDirection) < 0f)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    public static bool CheckCollisionInDirection(Vector3 point1, Vector3 point2, Vector3 sideDirection, float angleOffset)
+    {
+        // Calculate the direction vector from point1 to point2
+        Vector3 direction = point2 - point1;
+        // Calculate the angle between the direction vector and the side direction
+        float angle = Vector3.Angle(direction, sideDirection);
+
+        // Debug.Log("angle: " + (int)angle);
+
+        float angleMin = angle - angleOffset;
+        float angleMax = angle + angleOffset;
+        float desiredAngle = 180;
+
+        // Check if the angle is within the specified offset range
+        if (desiredAngle <= angleMax && desiredAngle >= angleMin)
+        {
+            // Check if the dot product of the direction vector and sideDirection is negative
+            // This indicates that the points are moving towards each other along the side direction
+            if (Vector3.Dot(direction, sideDirection) < 0f)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
+    public static bool CompareRoundedPositions(Vector3 point1, Vector3 point2, float roundValue)
+    {
+        // Round the positions of the points
+        Vector3 roundedPoint1 = new Vector3(
+            Mathf.Round(point1.x / roundValue) * roundValue,
+            Mathf.Round(point1.y / roundValue) * roundValue,
+            Mathf.Round(point1.z / roundValue) * roundValue
+        );
+
+        Vector3 roundedPoint2 = new Vector3(
+            Mathf.Round(point2.x / roundValue) * roundValue,
+            Mathf.Round(point2.y / roundValue) * roundValue,
+            Mathf.Round(point2.z / roundValue) * roundValue
+        );
+
+        // Compare the x and z axis of the rounded points
+        return Mathf.Approximately(roundedPoint1.x, roundedPoint2.x) || Mathf.Approximately(roundedPoint1.z, roundedPoint2.z);
+    }
+
+
+    private static Vector3 FindClosestPoint(List<Vector3> points, Vector3 referencePoint, List<Vector3> excludePoints)
+    {
+        Vector3 closestPoint = Vector3.zero;
+        float closestDistance = Mathf.Infinity;
+
+        foreach (Vector3 point in points)
+        {
+            // Exclude points that are already in the ordered list
+            if (excludePoints.Contains(point))
+                continue;
+
+            float distance = Vector3.Distance(referencePoint, point);
+
+            // Update the closest point if a closer one is found
+            if (distance < closestDistance)
+            {
+                closestPoint = point;
+                closestDistance = distance;
+            }
+        }
+
+        return closestPoint;
+    }
+
+
+
+    // public static bool IsPointBetween(Vector3 point, Vector3 start, Vector3 end, float stepMult)
+    // {
+    //     float roundedStartX = Mathf.Round(start.x / stepMult) * stepMult;
+    //     float roundedStartZ = Mathf.Round(start.z / stepMult) * stepMult;
+
+    //     float roundedEndX = Mathf.Round(end.x / stepMult) * stepMult;
+    //     float roundedEndZ = Mathf.Round(end.z / stepMult) * stepMult;
+
+    //     float roundedPointX = Mathf.Round(point.x / stepMult) * stepMult;
+    //     float roundedPointZ = Mathf.Round(point.z / stepMult) * stepMult;
+
+    //     return (roundedPointX >= roundedStartX && roundedPointX <= roundedEndX && roundedPointZ >= roundedStartZ && roundedPointZ <= roundedEndZ);
+    // }
+
+
+    public static bool IsPointWithinDistanceFromDots(Vector3 point, Vector3 start, Vector3 end, int steps, float distanceThreshold)
+    {
+        float xStep = (end.x - start.x) / steps;
+        float zStep = (end.z - start.z) / steps;
+
+        for (int i = 0; i <= steps; i++)
+        {
+            Vector3 dot = new Vector3(start.x + (i * xStep), start.y, start.z + (i * zStep));
+
+            if (Vector3.Distance(point, dot) <= distanceThreshold)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static bool IsPointBetween(Vector3 point, Vector3 start, Vector3 end, float stepMult)
+    {
+        // Round the start and end points on the x and z axes using the step multiplier
+        Vector3 roundedStart = new Vector3(RoundToStep(start.x, stepMult), 0f, RoundToStep(start.z, stepMult));
+        Vector3 roundedEnd = new Vector3(RoundToStep(end.x, stepMult), 0f, RoundToStep(end.z, stepMult));
+        // Round the point on the x and z axes using the step multiplier
+        Vector3 roundedPoint = new Vector3(RoundToStep(point.x, stepMult), 0f, RoundToStep(point.z, stepMult));
+
+        // Check if the rounded point is between the rounded start and end points on the x and z axes
+        if (roundedPoint.x >= Mathf.Min(roundedStart.x, roundedEnd.x) && roundedPoint.x <= Mathf.Max(roundedStart.x, roundedEnd.x) &&
+            roundedPoint.z >= Mathf.Min(roundedStart.z, roundedEnd.z) && roundedPoint.z <= Mathf.Max(roundedStart.z, roundedEnd.z))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static float RoundToStep(float value, float stepMult) => Mathf.Round(value / stepMult) * stepMult;
+
+    public static List<Vector3> InsertPointsIfDistanceExceeded(List<Vector3> points, float distanceThreshold)
+    {
+        List<Vector3> updatedPoints = new List<Vector3>();
+
+        for (int i = 0; i < points.Count; i++)
+        {
+            updatedPoints.Add(points[i]);
+
+            Vector3 currentPoint = points[i];
+            Vector3 nextPoint = points[(i + 1) % points.Count];
+
+            float distance = Vector3.Distance(currentPoint, nextPoint);
+
+            if (distance > distanceThreshold)
+            {
+                int divisions = Mathf.CeilToInt(distance / distanceThreshold);
+
+                for (int j = 1; j < divisions; j++)
+                {
+                    float lerp = (float)j / divisions;
+                    Vector3 interpolatedPoint = Vector3.Lerp(currentPoint, nextPoint, lerp);
+                    updatedPoints.Add(interpolatedPoint);
+                }
+            }
+        }
+
+        updatedPoints.Add(points[points.Count - 1]); // Add the last point
+
+        return updatedPoints;
+    }
+
+    public static Vector3[] GetIntersectionPoint_WithLinePoints(List<Vector3> points, Vector3 lineStart, Vector3 lineEnd)
+    {
+        Vector3[] intersectionPoint_withLinePoints = new Vector3[3];
+        for (int i = 0; i < points.Count; i++)
+        {
+            Vector3 pointA = points[i];
+            Vector3 pointB = points[(i + 1) % points.Count];
+
+            Vector3 intersectionPoint = FindIntersectionPoint(lineStart, lineEnd, pointA, pointB);
+            if (intersectionPoint != Vector3.zero &&
+                IsPointOnLine(intersectionPoint, lineStart, lineEnd) &&
+                IsPointOnLine(intersectionPoint, pointA, pointB)
+            )
+            {
+                intersectionPoint_withLinePoints[0] = intersectionPoint;
+                intersectionPoint_withLinePoints[1] = pointA;
+                intersectionPoint_withLinePoints[2] = pointB;
+                break;
+            }
+        }
+        return intersectionPoint_withLinePoints;
+    }
+
+    public static List<Vector3> GetIntersectionPoints(List<Vector3> points, Vector3 lineStart, Vector3 lineEnd)
+    {
+        List<Vector3> intersectionPoints = new List<Vector3>();
+        for (int i = 0; i < points.Count; i++)
+        {
+            Vector3 pointA = points[i];
+            Vector3 pointB = points[(i + 1) % points.Count];
+
+            Vector3 intersectionPoint = FindIntersectionPoint(lineStart, lineEnd, pointA, pointB);
+            if (intersectionPoint != Vector3.zero &&
+                IsPointOnLine(intersectionPoint, lineStart, lineEnd) &&
+                IsPointOnLine(intersectionPoint, pointA, pointB)
+            )
+            {
+                intersectionPoints.Add(intersectionPoint);
+            }
+        }
+
+        return intersectionPoints;
+    }
+
+    public static Vector3 FindIntersectionPoint(Vector3 line1Start, Vector3 line1End, Vector3 line2Start, Vector3 line2End)
+    {
+        // Define the two lines as vectors
+        Vector2 line1 = new Vector2(line1End.x - line1Start.x, line1End.z - line1Start.z);
+        Vector2 line2 = new Vector2(line2End.x - line2Start.x, line2End.z - line2Start.z);
+
+        // Calculate the determinant of the coefficient matrix
+        float determinant = (line1.x * line2.y) - (line1.y * line2.x);
+
+        // Check if the lines are parallel or coincident (determinant is close to zero)
+        if (Mathf.Approximately(determinant, 0f))
+        {
+            return Vector3.zero;
+        }
+
+        // Calculate the intersection point
+        float t = ((line2Start.x - line1Start.x) * line2.y - (line2Start.z - line1Start.z) * line2.x) / determinant;
+        float intersectionX = line1Start.x + t * line1.x;
+        float intersectionZ = line1Start.z + t * line1.y;
+        float intersectionY = (line1End.y - line1Start.y) * t + line1Start.y;
+
+        return new Vector3(intersectionX, intersectionY, intersectionZ);
     }
 
     public static Vector3[] GeneratePointsWithinBounds(Vector3[] edgePoints, int numPoints, float distance, float elevation)
@@ -1712,6 +2882,16 @@ public static class VectorUtil
             Gizmos.DrawLine(pointA, pointB);
         }
     }
+    public static void DrawPointLinesInGizmos(List<Vector3> points)
+    {
+        for (int i = 0; i < points.Count; i++)
+        {
+            Vector3 pointA = points[i];
+            Vector3 pointB = points[(i + 1) % points.Count];
+            Gizmos.DrawLine(pointA, pointB);
+        }
+    }
+
     public static void DrawHexagonPointLinesInGizmos(Vector3[] corners)
     {
         for (int i = 0; i < corners.Length; i++)
@@ -1732,4 +2912,273 @@ public static class VectorUtil
             Gizmos.DrawLine(pointA, pointB);
         }
     }
+
+    public static void DrawGridPointsGizmos(Vector3[,,] pointsMatrix, float sphereRadius = 0.3f)
+    {
+        int sizeX = pointsMatrix.GetLength(0);
+        int sizeY = pointsMatrix.GetLength(1);
+        int sizeZ = pointsMatrix.GetLength(2);
+
+        for (int x = 0; x < sizeX; x++)
+        {
+            for (int y = 0; y < sizeY; y++)
+            {
+                for (int z = 0; z < sizeZ; z++)
+                {
+                    Vector3 point = pointsMatrix[x, y, z];
+                    Gizmos.DrawSphere(point, sphereRadius);
+                }
+            }
+        }
+    }
+
+    public static void DrawGridPointsGizmos(Vector3[,,] pointsMatrix, List<Bounds> bounds, float sphereRadius = 0.3f)
+    {
+        int sizeX = pointsMatrix.GetLength(0);
+        int sizeY = pointsMatrix.GetLength(1);
+        int sizeZ = pointsMatrix.GetLength(2);
+
+        for (int x = 0; x < sizeX; x++)
+        {
+            for (int y = 0; y < sizeY; y++)
+            {
+                for (int z = 0; z < sizeZ; z++)
+                {
+                    Vector3 point = pointsMatrix[x, y, z];
+                    if (IsPointWithinBounds(bounds, point)) Gizmos.DrawSphere(point, sphereRadius);
+                }
+            }
+        }
+    }
+
+    public static Vector3[] CreateCube(Vector3 centerPos, float size)
+    {
+        Vector3[] cubePoints = new Vector3[8];
+
+        // Calculate half size for convenience
+        float halfSize = size * 0.5f;
+
+        // Calculate the 8 corner points of the cube
+        cubePoints[0] = centerPos + new Vector3(-halfSize, -halfSize, -halfSize);
+        cubePoints[1] = centerPos + new Vector3(-halfSize, -halfSize, halfSize);
+        cubePoints[2] = centerPos + new Vector3(halfSize, -halfSize, halfSize);
+        cubePoints[3] = centerPos + new Vector3(halfSize, -halfSize, -halfSize);
+        cubePoints[4] = centerPos + new Vector3(-halfSize, halfSize, -halfSize);
+        cubePoints[5] = centerPos + new Vector3(-halfSize, halfSize, halfSize);
+        cubePoints[6] = centerPos + new Vector3(halfSize, halfSize, halfSize);
+        cubePoints[7] = centerPos + new Vector3(halfSize, halfSize, -halfSize);
+
+        return cubePoints;
+    }
+
+
+    public static Vector3[,,] Generate3DGrid(Vector3 origin, int gridSizeX, int gridSizeY, int gridSizeZ, float spacing)
+    {
+        Vector3[,,] grid = new Vector3[gridSizeX, gridSizeY, gridSizeZ];
+
+        // Calculate the total number of points
+        int totalPoints = gridSizeX * gridSizeY * gridSizeZ;
+
+        // Calculate the half-size of the grid
+        float halfSizeX = gridSizeX * spacing * 0.5f;
+        float halfSizeY = gridSizeY * spacing * 0.5f;
+        float halfSizeZ = gridSizeZ * spacing * 0.5f;
+
+        // Calculate the starting position for the grid
+        Vector3 gridStartPosition = origin - new Vector3(halfSizeX, halfSizeY, halfSizeZ);
+
+        // Generate the grid points
+        for (int x = 0; x < gridSizeX; x++)
+        {
+            for (int y = 0; y < gridSizeY; y++)
+            {
+                for (int z = 0; z < gridSizeZ; z++)
+                {
+                    // Calculate the position of the current point
+                    float xPos = gridStartPosition.x + x * spacing;
+                    float yPos = gridStartPosition.y + y * spacing;
+                    float zPos = gridStartPosition.z + z * spacing;
+
+                    // Set the point in the grid matrix
+                    grid[x, y, z] = new Vector3(xPos, yPos, zPos);
+                }
+            }
+        }
+        return grid;
+    }
+
+    public static (Vector3[,,], float) Generate3DGrid(Bounds bounds, float cellSize, float baseElevation, float maxHeight)
+    {
+        int gridSizeX = Mathf.CeilToInt(bounds.size.x / cellSize);
+        int gridSizeZ = Mathf.CeilToInt(bounds.size.z / cellSize);
+
+        float spacingX = bounds.size.x / gridSizeX;
+        float spacingZ = bounds.size.z / gridSizeZ;
+        float spacing = Mathf.Min(spacingX, spacingZ);
+        spacing = UtilityHelpers.RoundToNearestStep(spacing, 0.2f);
+
+        int gridSizeY = Mathf.FloorToInt((maxHeight - baseElevation) / spacing) + 1;
+
+        Vector3[,,] grid = new Vector3[gridSizeX, gridSizeY, gridSizeZ];
+
+        // Calculate the starting y position for the grid
+        float startY = baseElevation + (spacing * 0.5f); // Offset by half the spacing to center the points
+
+        // Generate the grid points
+        for (int x = 0; x < gridSizeX; x++)
+        {
+            for (int y = 0; y < gridSizeY; y++)
+            {
+                for (int z = 0; z < gridSizeZ; z++)
+                {
+                    // Calculate the position of the current point
+                    float xPos = bounds.min.x + (x * spacing) + (spacing * 0.5f); // Offset by half the spacing to center the points
+                    float yPos = startY + (y * spacing);
+                    float zPos = bounds.min.z + (z * spacing) + (spacing * 0.5f); // Offset by half the spacing to center the points
+
+                    // Set the point in the grid matrix
+                    grid[x, y, z] = new Vector3(xPos, yPos, zPos);
+                }
+            }
+        }
+
+        return (grid, spacing);
+    }
+
+
+    // public static (Vector3[,,], float) Generate3DGrid(Bounds bounds, float cellSize, int gridSizeY, float baseElevation)
+    // {
+    //     int gridSizeX = Mathf.CeilToInt(bounds.size.x / cellSize);
+    //     int gridSizeZ = Mathf.CeilToInt(bounds.size.z / cellSize);
+
+    //     float spacingX = bounds.size.x / gridSizeX;
+    //     float spacingZ = bounds.size.z / gridSizeZ;
+    //     float spacing = Mathf.Min(spacingX, spacingZ);
+    //     spacing = UtilityHelpers.RoundToNearestStep(spacing, 0.2f);
+
+    //     Vector3[,,] grid = new Vector3[gridSizeX, gridSizeY, gridSizeZ];
+
+    //     // Debug.Log("spacing: " + spacing + ", spacingX: " + spacingX + ", spacingZ: " + spacingZ);
+
+    //     // Calculate the starting y position for the grid
+    //     float startY = baseElevation + (spacing * 0.5f); // Offset by half the spacing to center the points
+
+    //     // Generate the grid points
+    //     for (int x = 0; x < gridSizeX; x++)
+    //     {
+    //         for (int y = 0; y < gridSizeY; y++)
+    //         {
+    //             for (int z = 0; z < gridSizeZ; z++)
+    //             {
+    //                 // Calculate the position of the current point
+    //                 float xPos = bounds.min.x + (x * spacing) + (spacing * 0.5f); // Offset by half the spacing to center the points
+    //                 float yPos = startY + (y * spacing);
+    //                 float zPos = bounds.min.z + (z * spacing) + (spacing * 0.5f); // Offset by half the spacing to center the points
+
+    //                 // Set the point in the grid matrix
+    //                 grid[x, y, z] = new Vector3(xPos, yPos, zPos);
+    //             }
+    //         }
+    //     }
+
+    //     return (grid, spacing);
+    // }
+
+    // public static (Vector3[,,], float) Generate3DGrid(Bounds bounds, int gridSizeXZ, int gridSizeY, float baseElevation)
+    // {
+    //     Vector3[,,] grid = new Vector3[gridSizeXZ, gridSizeY, gridSizeXZ];
+    //     float spacingX = bounds.size.x / gridSizeXZ;
+    //     float spacingZ = bounds.size.z / gridSizeXZ;
+
+    //     // Calculate the spacing between grid points in each dimension
+    //     float spacing = Mathf.Min(spacingX, spacingZ);
+    //     Debug.Log("spacing: " + spacing + ", spacingX: " + spacingX + ", spacingZ: " + spacingZ);
+
+    //     // Calculate the starting y position for the grid
+    //     float startY = baseElevation + (spacing * 0.5f); // Offset by half the spacing to center the points
+
+    //     // Generate the grid points
+    //     for (int x = 0; x < gridSizeXZ; x++)
+    //     {
+    //         for (int y = 0; y < gridSizeY; y++)
+    //         {
+    //             for (int z = 0; z < gridSizeXZ; z++)
+    //             {
+    //                 // Calculate the position of the current point
+    //                 float xPos = bounds.min.x + (x * spacing) + (spacing * 0.5f); // Offset by half the spacing to center the points
+    //                 float yPos = startY + (y * spacing);
+    //                 float zPos = bounds.min.z + (z * spacing) + (spacing * 0.5f); // Offset by half the spacing to center the points
+
+    //                 // Set the point in the grid matrix
+    //                 grid[x, y, z] = new Vector3(xPos, yPos, zPos);
+    //             }
+    //         }
+    //     }
+    //     return (grid, spacing);
+    // }
+    // public static (Vector3[,,], float) Generate3DGrid(Bounds bounds, int gridSizeXZ, int gridSizeY, float baseElevation, float spacingY = 1)
+    // {
+    //     Vector3[,,] grid = new Vector3[gridSizeXZ, gridSizeY, gridSizeXZ];
+    //     float spacingX = bounds.size.x / gridSizeXZ;
+    //     float spacingZ = bounds.size.z / gridSizeXZ;
+
+    //     // Calculate the spacing between grid points in each dimension
+    //     float spacing = Mathf.Min(spacingX, spacingZ);
+    //     Debug.Log("spacing: " + spacing + ", spacingX: " + spacingX + ", spacingZ: " + spacingZ);
+
+    //     // Calculate the starting y position for the grid
+    //     float startY = baseElevation + (spacingY * 0.5f); // Offset by half the spacing to center the points
+
+    //     // Generate the grid points
+    //     for (int x = 0; x < gridSizeXZ; x++)
+    //     {
+    //         for (int y = 0; y < gridSizeY; y++)
+    //         {
+    //             for (int z = 0; z < gridSizeXZ; z++)
+    //             {
+    //                 // Calculate the position of the current point
+    //                 float xPos = bounds.min.x + (x * spacing) + (spacing * 0.5f); // Offset by half the spacing to center the points
+    //                 float yPos = startY + (y * spacingY);
+    //                 float zPos = bounds.min.z + (z * spacing) + (spacing * 0.5f); // Offset by half the spacing to center the points
+
+    //                 // Set the point in the grid matrix
+    //                 grid[x, y, z] = new Vector3(xPos, yPos, zPos);
+    //             }
+    //         }
+    //     }
+    //     return (grid, spacing);
+    // }
+
+
+    // public static (Vector3[,,], Vector3) Generate3DGrid(Bounds bounds, int gridSizeX, int gridSizeY, int gridSizeZ, float baseElevation, float spacingY = 1)
+    // {
+    //     Vector3[,,] grid = new Vector3[gridSizeX, gridSizeY, gridSizeZ];
+
+    //     // Calculate the spacing between grid points in each dimension
+    //     float spacingX = bounds.size.x / gridSizeX;
+    //     float spacingZ = bounds.size.z / gridSizeZ;
+
+    //     // Calculate the starting y position for the grid
+    //     float startY = baseElevation + (spacingY * 0.5f); // Offset by half the spacing to center the points
+
+    //     // Generate the grid points
+    //     for (int x = 0; x < gridSizeX; x++)
+    //     {
+    //         for (int y = 0; y < gridSizeY; y++)
+    //         {
+    //             for (int z = 0; z < gridSizeZ; z++)
+    //             {
+    //                 // Calculate the position of the current point
+    //                 float xPos = bounds.min.x + (x * spacingX) + (spacingX * 0.5f); // Offset by half the spacing to center the points
+    //                 float yPos = startY + (y * spacingY);
+    //                 float zPos = bounds.min.z + (z * spacingZ) + (spacingZ * 0.5f); // Offset by half the spacing to center the points
+
+    //                 // Set the point in the grid matrix
+    //                 grid[x, y, z] = new Vector3(xPos, yPos, zPos);
+    //             }
+    //         }
+    //     }
+
+    //     return (grid, new Vector3(spacingX, spacingY, spacingZ));
+    // }
 }

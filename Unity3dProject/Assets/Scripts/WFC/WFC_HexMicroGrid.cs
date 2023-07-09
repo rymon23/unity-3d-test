@@ -136,14 +136,14 @@ namespace WFCSystem
 
             if (assigned && collapseOrder_cells == WFCCollapseOrder_Cells.Neighbor_Propogation)
             {
-                int currentCellLayer = currentCell.GetLayer();
+                int currentCellLayer = currentCell.GetGridLayer();
 
                 bool includeLayerNwighbors = (neighborPropagation == WFC_CellNeighborPropagation.Edges_Only_Include_Layers || neighborPropagation == WFC_CellNeighborPropagation.Edges_Inners_Include_Layers);
 
                 // Get Unassigned Neighbors
                 List<HexagonCell> unassignedNeighbors = currentCell._neighbors.FindAll(n => n.IsWFC_Assigned() == false
-                        && ((includeLayerNwighbors == false && n.GetLayer() == currentCellLayer)
-                        || (includeLayerNwighbors && n.GetLayer() >= currentCellLayer)
+                        && ((includeLayerNwighbors == false && n.GetGridLayer() == currentCellLayer)
+                        || (includeLayerNwighbors && n.GetGridLayer() >= currentCellLayer)
                         ));
 
                 if (unassignedNeighbors.Count > 0)
@@ -253,7 +253,7 @@ namespace WFCSystem
                 int currentLayer = kvp.Key;
                 // foreach (int currentLayer in allLayers)
                 // {
-                List<HexagonCell> layerEdgeCells = edgeCells.FindAll(e => e.GetLayer() == currentLayer).OrderByDescending(e => e._neighbors.Count).ToList();
+                List<HexagonCell> layerEdgeCells = edgeCells.FindAll(e => e.GetGridLayer() == currentLayer).OrderByDescending(e => e._neighbors.Count).ToList();
 
                 foreach (HexagonCell edgeCell in layerEdgeCells)
                 {
@@ -289,7 +289,7 @@ namespace WFCSystem
         //     int currentLayer = 0;
         //     do
         //     {
-        //         List<HexagonCell> layerEdgeCells = edgeCells.FindAll(e => e.GetLayer() == currentLayer).OrderByDescending(e => e._neighbors.Count).ToList();
+        //         List<HexagonCell> layerEdgeCells = edgeCells.FindAll(e => e.GetGridLayer() == currentLayer).OrderByDescending(e => e._neighbors.Count).ToList();
 
         //         foreach (HexagonCell edgeCell in layerEdgeCells)
         //         {
@@ -414,7 +414,7 @@ namespace WFCSystem
         private void EvaluateTiles()
         {
             // Get All Tile Prefabs
-            tileLookupByid = tileDirectory.CreateHexTileDictionary();
+            tileLookupByid = tileDirectory.CreateTileDictionary();
             List<HexagonTileCore> _tilePrefabs = tileLookupByid.Select(x => x.Value).ToList();
 
             if (_tilePrefabs.Count == 0)
@@ -443,7 +443,7 @@ namespace WFCSystem
 
             // Extract Inner Tiles
             List<HexagonTileCore> innerTilePrefabs = new List<HexagonTileCore>();
-            innerTilePrefabs.AddRange(tilePrefabs.Except(tilePrefabs.FindAll(x => x.IsExteriorWall() || x.isEntrance || x.isLayerConnector || x.isPath)));
+            innerTilePrefabs.AddRange(tilePrefabs.Except(tilePrefabs.FindAll(x => x.IsExteriorWall() || x.isEntrance || x.isPath)));
 
             tilePrefabs = innerTilePrefabs;
 
@@ -480,7 +480,7 @@ namespace WFCSystem
             }
 
             // TODO: find a better way to jsut provide this without doing this extra stuff
-            totalLayers = edgeCells.OrderByDescending(c => c.GetLayer()).ToList()[0].GetLayer() + 1;
+            totalLayers = edgeCells.OrderByDescending(c => c.GetGridLayer()).ToList()[0].GetGridLayer() + 1;
 
             // allCellsByLayer = HexagonCell.OrganizeCellsByLevel(allCellsList);
         }
@@ -552,7 +552,7 @@ namespace WFCSystem
         //         bool compatibile = true;
 
         //         // Check Layered Neighbors First
-        //         if (currentCell.GetLayer() > 0 && !currentCell.isLeveledGroundCell)
+        //         if (currentCell.GetGridLayer() > 0 && !currentCell.isLeveledGroundCell)
         //         {
         //             // For now just check bottom neighbor's top against current tile's bottom
         //             HexagonCell bottomNeighbor = currentCell.layeredNeighbor[0];

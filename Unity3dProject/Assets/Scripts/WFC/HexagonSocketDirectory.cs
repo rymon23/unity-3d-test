@@ -29,6 +29,8 @@ namespace WFCSystem
     [CreateAssetMenu(fileName = "New Hex Socket Directory", menuName = "Hex Socket Directory")]
     public class HexagonSocketDirectory : ScriptableObject
     {
+        public static TileObjectType _tileObjectType { get; } = TileObjectType.SocketDirectory;
+
         [SerializeField] private string id;
         private void OnEnable()
         {

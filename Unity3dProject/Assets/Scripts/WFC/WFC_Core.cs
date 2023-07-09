@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 using ProceduralBase;
 
@@ -10,15 +9,15 @@ namespace WFCSystem
     public class WFC_Core : IWFCSystem
     {
         public WFC_Core(
-            HexagonSocketDirectory _socketDirectory,
             TileDirectory _tileDirectory,
             Dictionary<int, List<HexagonCellPrototype>> _allCellsByLayer,
             LocationMarkerPrefabOption _locationSettings,
             Transform _tileFolder = null
          )
         {
-            socketDirectory = _socketDirectory;
             tileDirectory = _tileDirectory;
+            socketDirectory = tileDirectory.GetSocketDirectory();
+
             locationSettings = _locationSettings;
 
             tileFolder = _tileFolder;
@@ -27,18 +26,25 @@ namespace WFCSystem
         }
 
         public WFC_Core(
-            HexagonSocketDirectory _socketDirectory,
             TileDirectory _tileDirectory,
-            List<HexagonCellPrototype> _allCells,
+            Dictionary<int, List<HexagonCellPrototype>> _allCellsByLayer,
+            Dictionary<Vector2, Dictionary<int, Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>>>> _cellLookup_ByLayer_BySize_ByWorldSpace,
+            LocationMarkerPrefabOption _locationSettings,
             Transform _tileFolder = null
          )
         {
-            socketDirectory = _socketDirectory;
             tileDirectory = _tileDirectory;
+            socketDirectory = tileDirectory.GetSocketDirectory();
+
+            locationSettings = _locationSettings;
+
+            cellLookup_ByLayer_BySize_ByWorldSpace = _cellLookup_ByLayer_BySize_ByWorldSpace;
+
             tileFolder = _tileFolder;
 
-            AssignCells(_allCells);
+            AssignCells(_allCellsByLayer);
         }
+
 
         private HexagonSocketDirectory socketDirectory;
         private TileDirectory tileDirectory;
@@ -92,12 +98,10 @@ namespace WFCSystem
         [SerializeField] private List<HexagonTileCore> tilePrefabs_Edgable;
         [SerializeField] private List<HexagonTileCore> tilePrefabs_Entrances;
         [SerializeField] private List<HexagonTileCore> tilePrefabs_TopLayer;
-        [SerializeField] private List<HexagonTileCore> tilePrefabs_Leveled;
         [SerializeField] private List<HexagonTileCore> tilePrefabs_Path;
-        [SerializeField] private List<HexagonTileCore> tilePrefabs_ClusterSet;
-        [SerializeField] private List<HexagonTileCluster> tilePrefabs_cluster;
+
         Dictionary<int, HexagonTileCore> tileLookupByid;
-        Dictionary<int, HexagonTileCluster> tileClusterLookupByid;
+        [SerializeField] private List<TileClusterPrefab> tileClusterPrefabs;
 
         [Header("Cell Debug")]
         [SerializeField] private List<HexagonCellPrototype> edgeCells_Grid;
@@ -109,8 +113,7 @@ namespace WFCSystem
         private List<HexagonCellPrototype> allCells;
         public Dictionary<int, List<HexagonCellPrototype>> allCellsByLayer { get; private set; }
         [SerializeField] private List<HexagonCellPrototype> allAssignedCellsInOrder;
-
-        private bool hasMicroTiles = false;
+        Dictionary<Vector2, Dictionary<int, Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>>>> cellLookup_ByLayer_BySize_ByWorldSpace;
 
         DateTime _buildStartTime;
 
@@ -135,25 +138,24 @@ namespace WFCSystem
             TimeLog("EvaluateCells - Time");
             StartTimeLog();
 
-            EvaluateTiles();
+            if (EvaluateTiles() == false) return;
 
             TimeLog("EvaluateTiles - Time");
             StartTimeLog();
 
-            if (logIncompatibilities) Debug.Log("Executing WFC - Location Type: " + locationSettings.locationType + ", Tile Context: " + tileContext);
+            if (logIncompatibilities) Debug.Log("Executing WFC - Location Type: " + locationSettings.locationType + ", Tile Context: " + tileContext + ", tile: " + tileDirectory.name);
 
-            isWalledEdge = true;
+            isWalledEdge = tileContext == TileContext.Micro ? false : true;
 
-
-            if (useEdgeMicroClusters && tilePrefabs_EdgeMicroClusterParent != null)
-            {
-                CollapseEdgeMicroClusters();
-            }
-            else
-            {
-                CollapseEntryCells();
-                // if (isWalledEdge) CollapseEdgeCells();
-            }
+            // if (useEdgeMicroClusters && tilePrefabs_EdgeMicroClusterParent != null)
+            // {
+            //     CollapseEdgeMicroClusters();
+            // }
+            // else
+            // {
+            CollapseEntryCells();
+            // if (isWalledEdge) CollapseEdgeCells();
+            // }
 
             CollapseEdgeCells();
             TimeLog("CollapseEdgeCells - Time");
@@ -161,12 +163,12 @@ namespace WFCSystem
 
             remainingAttempts = 1;//maxAttempts;
 
-            // do
-            // {
-            CollapseRemainingCellsByLayer();
+            do
+            {
+                CollapseRemainingCellsByLayer();
 
-            remainingAttempts--;
-            // } while (remainingAttempts > 0 && WFCUtilities_V2.HasUnassignedCells(allCells));
+                remainingAttempts--;
+            } while (remainingAttempts > 0 && WFCUtilities_V2.HasUnassignedCells(allCells));
 
             TimeLog("CollapseRemainingCellsByLayer - Time");
             StartTimeLog();
@@ -204,28 +206,10 @@ namespace WFCSystem
                     allowInvertedTiles
                 );
             }
-
         }
 
         private void CollapseEdgeCells()
         {
-            // WFCUtilities_V2.CollapseEdgeCells(
-            //     allCellsByLayer,
-            //     edgeCells_Grid,
-            //     tilePrefabs,
-            //     tilePrefabs_Edgable,
-            //     tilePrefabs_TopLayer,
-            //     allAssignedCellsInOrder,
-            //     neighborPropagation,
-            //     tileContext,
-            //     socketDirectory,
-            //     restrictEntryTiles,
-            //     isWalledEdge,
-            //     logIncompatibilities,
-            //     ignoreFailures,
-            //     allowInvertedTiles
-            // );
-
             Debug.Log("Collapsing Edge Cells...");
 
             List<HexagonTileCore> tilePrefabs_Edgable_Formatted = restrictEntryTiles ? tilePrefabs_Edgable.FindAll(t => t.isEntrance == false) : tilePrefabs_Edgable;
@@ -239,7 +223,14 @@ namespace WFCSystem
             foreach (var kvp in allCellsByLayer)
             {
                 int currentLayer = kvp.Key;
-                List<HexagonCellPrototype> layerEdgeCells = edgeCells_Grid.FindAll(e => e.GetLayer() == currentLayer).OrderByDescending(e => e.neighbors.Count).ToList();
+                // Get All Layer Edge Cells and collapse cells with fewest neighbors first
+                List<HexagonCellPrototype> layerEdgeCells = edgeCells_Grid.FindAll(e => e.GetGridLayer() == currentLayer).OrderBy(e => e.neighbors.Count + e.GetEdgeSideNeighborCount()).ToList();
+
+                if (layerEdgeCells == null || layerEdgeCells.Count == 0)
+                {
+                    Debug.LogError("NO Edge Cells on layer: " + currentLayer);
+                    continue;
+                }
 
                 foreach (HexagonCellPrototype edgeCell in layerEdgeCells)
                 {
@@ -265,14 +256,14 @@ namespace WFCSystem
 
             if (assigned && collapseOrder_cells == WFCCollapseOrder_Cells.Neighbor_Propogation)
             {
-                int currentCellLayer = currentCell.GetLayer();
+                int currentCellLayer = currentCell.GetGridLayer();
 
                 bool includeLayerNwighbors = (neighborPropagation == WFC_CellNeighborPropagation.Edges_Only_Include_Layers || neighborPropagation == WFC_CellNeighborPropagation.Edges_Inners_Include_Layers);
 
                 // Get Unassigned Neighbors
                 List<HexagonCellPrototype> unassignedNeighbors = currentCell.neighbors.FindAll(n => n.IsWFC_Assigned() == false
-                        && ((includeLayerNwighbors == false && n.GetLayer() == currentCellLayer)
-                        || (includeLayerNwighbors && n.GetLayer() >= currentCellLayer)
+                        && ((includeLayerNwighbors == false && n.GetGridLayer() == currentCellLayer)
+                        || (includeLayerNwighbors && n.GetGridLayer() >= currentCellLayer)
                         ));
 
                 if (unassignedNeighbors.Count > 0)
@@ -292,7 +283,9 @@ namespace WFCSystem
 
                     if (includeInners)
                     {
-                        List<HexagonCellPrototype> innerNeighbors = unassignedNeighbors.FindAll(n => n.isEdgeCell == false).OrderByDescending(n => n.neighbors.Count).ToList();
+                        List<HexagonCellPrototype> innerNeighbors = unassignedNeighbors.FindAll(n => n.isEdgeCell == false)
+                            .OrderBy(n => n.neighbors.Count)
+                            .OrderByDescending(n => n.GetEdgeSideNeighborCount()).ToList();
 
                         foreach (HexagonCellPrototype neighbor in innerNeighbors)
                         {
@@ -311,17 +304,16 @@ namespace WFCSystem
 
             foreach (var kvp in allCellsByLayer)
             {
-                List<HexagonCellPrototype> layerCells;
-                List<HexagonCellCluster> layerClusters = new List<HexagonCellCluster>();
+                int currentLayer = kvp.Key;
+                List<HexagonCellPrototype> layerCells = kvp.Value;
+                layerCells = layerCells.OrderBy(e => e.neighbors.Count + e.GetEdgeSideNeighborCount()).ToList();
 
-                layerCells = kvp.Value; // WFCUtilities_V2.GetAvailableCellsForNextLayer(kvp.Value);
-                // layerCells = WFCUtilities_V2.GetAvailableCellsForNextLayer(kvp.Value);
-                layerCells = layerCells.OrderByDescending(e => e.neighbors.Count).ToList();
-
-                if (logIncompatibilities) Debug.LogError("currentLayer: " + kvp.Key + ", available layerCells: " + layerCells.Count + ", total: " + kvp.Value.Count);
+                if (logIncompatibilities) Debug.LogError("CollapseRemainingCellsByLayer - currentLayer: " + kvp.Key + ", available layerCells: " + layerCells.Count + ", total: " + kvp.Value.Count);
 
                 foreach (HexagonCellPrototype cell in layerCells)
                 {
+                    if (logIncompatibilities) Debug.LogError("CollapseRemainingCellsByLayer - L: " + kvp.Key + ", cell: " + cell.LogStats());
+
                     CollapseCellAndPropagate(cell);
                 }
             }
@@ -336,7 +328,7 @@ namespace WFCSystem
                 return;
             }
             List<HexagonCellPrototype> cellsToAssign = edgeCells_Grid.FindAll(c => c.isEntryCell == false && c.isPathCell == false && c.IsGround());
-            // List<HexagonCellPrototype> cellsToAssign = edgeCells_Grid.FindAll(c => c.isEntryCell == false && c.GetLayer() == 0);
+            // List<HexagonCellPrototype> cellsToAssign = edgeCells_Grid.FindAll(c => c.isEntryCell == false && c.GetGridLayer() == 0);
 
             int cellLayers = cluster_CellLayers;
             if (cluster_randomizeCellLayers) cellLayers = UnityEngine.Random.Range(cellLayers, cluster_CellLayersMax);
@@ -354,10 +346,53 @@ namespace WFCSystem
             gridArea.Generate();
         }
 
+        // private bool SelectAndAssignNext(HexagonCellPrototype cell, List<HexagonTileCore> prefabsList)
+        // {
+        //     (HexagonTileCore nextTile, List<int[]> rotations) = WFCUtilities_V2.SelectNextTile(cell, prefabsList, allowInvertedTiles, isWalledEdge, tileContext, socketDirectory, logIncompatibilities);
+        //     return WFCUtilities_V2.AssignTileToCell(cell, nextTile, rotations, ignoreFailures);
+        // }
 
         private bool SelectAndAssignNext(HexagonCellPrototype cell, List<HexagonTileCore> prefabsList)
         {
             (HexagonTileCore nextTile, List<int[]> rotations) = WFCUtilities_V2.SelectNextTile(cell, prefabsList, allowInvertedTiles, isWalledEdge, tileContext, socketDirectory, logIncompatibilities);
+
+            if (nextTile != null && nextTile.HasTileClusterPrefab())
+            {
+                if (cellLookup_ByLayer_BySize_ByWorldSpace == null)
+                {
+                    Debug.LogError("cellLookup_ByLayer_BySize_ByWorldSpace is null!");
+                    return false;
+                }
+
+                (Dictionary<int, List<HexagonCellPrototype>> subCellGrid, List<HexagonCellPrototype> hostCells) = HexGridUtil.Assign_TileClusterFromHost(
+                    cell,
+                    nextTile,
+                    cellLookup_ByLayer_BySize_ByWorldSpace,
+                    true
+                );
+
+                int clusterMembers = hostCells.Count;
+                if (clusterMembers == 0 || subCellGrid == null)
+                {
+                    Debug.LogError("No clusterMembers Or subCellGrid!");
+                    return false;
+                }
+
+                TileClusterPrefab tileClusterPrefab = nextTile.GetClusterPrefab();
+
+                WFC_Core wfc = new WFC_Core(
+                    tileClusterPrefab.GetSettings().tileDirectory,
+                    subCellGrid,
+
+                    locationSettings,
+                    tileFolder
+                );
+
+                wfc.ExecuteWFC();
+
+                return true;
+            }
+
             return WFCUtilities_V2.AssignTileToCell(cell, nextTile, rotations, ignoreFailures);
         }
 
@@ -377,69 +412,59 @@ namespace WFCSystem
             foreach (IHexCell cell in allCells)
             {
                 HexagonTileCore prefab = cell.GetCurrentTile();
-                if (prefab == null) continue;
+                if (prefab == null || prefab.HasTileClusterPrefab()) continue;
 
                 WFCUtilities_V2.InstantiateTile(prefab, cell, folder, activeTiles);
             }
         }
 
-        private void EvaluateTiles()
+        private bool EvaluateTiles()
         {
             // Get All Tile Prefabs
-            tileLookupByid = tileDirectory.CreateHexTileDictionary();
+            // tileLookupByid = tileDirectory.CreateTileDictionary();
+            // List<HexagonTileCore> _tilePrefabs = tileLookupByid.Select(x => x.Value).ToList();
 
-            hasMicroTiles = tileDirectory.HasMicroTiles();
+            // tileClusterPrefabLookupByid = tileDirectory.CreateTileClusterPrefabDictionary();
+            // tileClusterPrefabs = tileClusterPrefabLookupByid.Select(x => x.Value).ToList();
 
-            List<HexagonTileCore> _tilePrefabs = tileLookupByid.Select(x => x.Value).ToList();
+            List<HexagonTileCore> allTilePrefabs = tileDirectory.GetTiles(true);
 
-            if (_tilePrefabs.Count == 0)
+            if (allTilePrefabs.Count == 0)
             {
-                Debug.LogError("Empty tilePrefabs");
+                Debug.LogError("NO tilePrefabs, tileDirectory: " + tileDirectory.name);
+                return false;
             }
+            Debug.Log("tilePrefabs detected: " + allTilePrefabs.Count + ", tileDirectory: " + tileDirectory.name);
 
-            // Check For Nulls
-            foreach (HexagonTileCore prefab in _tilePrefabs)
-            {
-                int id = prefab.GetId();
-            }
-
-            // Get All Cluster Prefabs
-            tileClusterLookupByid = tileDirectory.CreateTileClusterDictionary();
-            tilePrefabs_cluster = tileClusterLookupByid.Select(x => x.Value).ToList();
-
-            // Get All Cluster Sets
-            tilePrefabs_ClusterSet = HexagonTileCore.ExtractClusterSetTiles(_tilePrefabs);
-
-            tilePrefabs = new List<HexagonTileCore>();
-            tilePrefabs.AddRange(_tilePrefabs.Except(tilePrefabs_ClusterSet));
-
-            tilePrefabs_ClusterSet = tilePrefabs_ClusterSet.FindAll(x => x.isClusterCenterTile == false);
+            tilePrefabs = allTilePrefabs;
 
             // Extract Edge Tiles
             tilePrefabs_Edgable = tilePrefabs.FindAll(x => x.isEdgeable).ToList();
+            Debug.Log("tilePrefabs_Edgable: " + tilePrefabs_Edgable.Count);
 
             // Extract Entrance Tiles
             tilePrefabs_Entrances = tilePrefabs.FindAll(x => x.isEdgeable && x.isEntrance).ToList();
+            Debug.Log("tilePrefabs_Entrances: " + tilePrefabs_Edgable.Count);
 
             // Extract Top Layer tiles
             tilePrefabs_TopLayer = tilePrefabs.FindAll(x => x.GetExcludeLayerState() == HexagonTileCore.ExcludeLayerState.TopLayerOnly || x.IsRoofable()).ToList();
 
-            // Extract Leveled Tiles
-            tilePrefabs_Leveled = tilePrefabs.FindAll(x => x.isLeveledTile).ToList();
-
             // Extract Path Tiles
-            tilePrefabs_Path = tilePrefabs.FindAll(x => x.isPath).ToList();
+            // tilePrefabs_Path = tilePrefabs.FindAll(x => x.isPath).ToList();
 
             // Extract Inner Tiles
             List<HexagonTileCore> innerTilePrefabs = new List<HexagonTileCore>();
-            innerTilePrefabs.AddRange(tilePrefabs.Except(tilePrefabs.FindAll(x => x.IsExteriorWall() || x.isEntrance || x.isLayerConnector || x.isPath)));
+            innerTilePrefabs.AddRange(tilePrefabs.Except(tilePrefabs.FindAll(x => x.IsExteriorWall() || x.isEntrance || x.isPath)));
 
             tilePrefabs = innerTilePrefabs;
 
+            Debug.Log("processed tilePrefabs: " + tilePrefabs.Count);
+
             // Shuffle the prefabs
             WFCUtilities_V2.ShuffleTiles(tilePrefabs);
-            WFCUtilities_V2.ShuffleTiles(tilePrefabs_cluster);
+            return true;
         }
+
 
         private void EvaluateCells()
         {
@@ -452,7 +477,7 @@ namespace WFCSystem
                 Debug.LogError("Empty Cell list for allCells or allCellsByLayer");
             }
 
-            tileContext = allCells[0].GetSize() < 12 ? TileContext.Micro : TileContext.Default;
+            tileContext = allCells[0].GetSize() == (int)HexCellSizes.X_4 ? TileContext.Micro : TileContext.Default;
 
             edgeCells_Grid = allCells.FindAll(c => c.IsGridEdge());
 
@@ -464,6 +489,7 @@ namespace WFCSystem
             allCellsByLayer = _allCellsByLayer;
             allCells = HexCellUtil.ExtractCellsByLayer(_allCellsByLayer);
         }
+
         public void AssignCells(List<HexagonCellPrototype> _allCells)
         {
             allCells = _allCells;

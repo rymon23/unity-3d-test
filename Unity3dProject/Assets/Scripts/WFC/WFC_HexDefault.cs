@@ -83,7 +83,7 @@ namespace WFCSystem
         [SerializeField] private List<HexagonTileCore> tilePrefabs_Edgable;
         [SerializeField] private List<HexagonTileCore> tilePrefabs_Entrances;
         [SerializeField] private List<HexagonTileCore> tilePrefabs_TopLayer;
-        [SerializeField] private List<HexagonTileCore> tilePrefabs_LayerConnector;
+        // [SerializeField] private List<HexagonTileCore> tilePrefabs_LayerConnector;
         [SerializeField] private List<HexagonTileCore> tilePrefabs_Leveled;
         [SerializeField] private List<HexagonTileCore> tilePrefabs_Path;
         [SerializeField] private List<HexagonTileCore> tilePrefabs_ClusterSet;
@@ -235,7 +235,7 @@ namespace WFCSystem
             int currentLayer = 0;
             do
             {
-                List<HexagonCell> layerEdgeCells = edgeCells_Grid.FindAll(e => e.GetLayer() == currentLayer).OrderByDescending(e => e._neighbors.Count).ToList();
+                List<HexagonCell> layerEdgeCells = edgeCells_Grid.FindAll(e => e.GetGridLayer() == currentLayer).OrderByDescending(e => e._neighbors.Count).ToList();
 
                 foreach (HexagonCell edgeCell in layerEdgeCells)
                 {
@@ -264,14 +264,14 @@ namespace WFCSystem
 
             if (assigned && collapseOrder_cells == WFCCollapseOrder_Cells.Neighbor_Propogation)
             {
-                int currentCellLayer = currentCell.GetLayer();
+                int currentCellLayer = currentCell.GetGridLayer();
 
                 bool includeLayerNwighbors = (neighborPropagation == WFC_CellNeighborPropagation.Edges_Only_Include_Layers || neighborPropagation == WFC_CellNeighborPropagation.Edges_Inners_Include_Layers);
 
                 // Get Unassigned Neighbors
                 List<HexagonCell> unassignedNeighbors = currentCell._neighbors.FindAll(n => n.IsAssigned() == false
-                        && ((includeLayerNwighbors == false && n.GetLayer() == currentCellLayer)
-                        || (includeLayerNwighbors && n.GetLayer() >= currentCellLayer)
+                        && ((includeLayerNwighbors == false && n.GetGridLayer() == currentCellLayer)
+                        || (includeLayerNwighbors && n.GetGridLayer() >= currentCellLayer)
                         ));
 
                 if (unassignedNeighbors.Count > 0)
@@ -355,7 +355,7 @@ namespace WFCSystem
                 return;
             }
             List<HexagonCell> cellsToAssign = edgeCells_Grid.FindAll(c => c.isEntryCell == false && c.isPathCell == false && c.IsGround());
-            // List<HexagonCell> cellsToAssign = edgeCells_Grid.FindAll(c => c.isEntryCell == false && c.GetLayer() == 0);
+            // List<HexagonCell> cellsToAssign = edgeCells_Grid.FindAll(c => c.isEntryCell == false && c.GetGridLayer() == 0);
 
             int cellLayers = cluster_CellLayers;
             if (cluster_randomizeCellLayers) cellLayers = UnityEngine.Random.Range(cellLayers, cluster_CellLayersMax);
@@ -422,153 +422,135 @@ namespace WFCSystem
 
 
 
-        private void CollapseLeveledCells()
-        {
-            if (allLevelCellsByLayer == null) return;
+        // private void CollapseLeveledCells()
+        // {
+        //     if (allLevelCellsByLayer == null) return;
 
-            List<HexagonTileCore> tilePrefabs_LeveledRamp = tilePrefabs_Leveled.FindAll(c => c.isLeveledRamp);
-            List<HexagonTileCore> tilePrefabs_LeveledNoRamp = tilePrefabs_Leveled.FindAll(c => c.isLeveledRamp == false);
+        //     List<HexagonTileCore> tilePrefabs_LeveledRamp = tilePrefabs_Leveled.FindAll(c => c.isLeveledRamp);
+        //     List<HexagonTileCore> tilePrefabs_LeveledNoRamp = tilePrefabs_Leveled.FindAll(c => c.isLeveledRamp == false);
 
-            foreach (var kvp in allLevelCellsByLayer)
-            {
-                int layer = kvp.Key;
-                List<HexagonCell> leveledCells = kvp.Value;
+        //     foreach (var kvp in allLevelCellsByLayer)
+        //     {
+        //         int layer = kvp.Key;
+        //         List<HexagonCell> leveledCells = kvp.Value;
 
-                topLevelCells = leveledCells;
+        //         topLevelCells = leveledCells;
 
-                List<HexagonCell> leveledEdgeCells = leveledCells.FindAll(c => c.isLeveledEdge);
-                foreach (HexagonCell cell in leveledEdgeCells)
-                {
+        //         List<HexagonCell> leveledEdgeCells = leveledCells.FindAll(c => c.isLeveledEdge);
+        //         foreach (HexagonCell cell in leveledEdgeCells)
+        //         {
 
-                    if (cell.IsAssigned()) continue;
+        //             if (cell.IsAssigned()) continue;
 
-                    List<HexagonTileCore> prefabs = (cell.isLeveledRampCell && !useTerrainMeshPath) ? tilePrefabs_LeveledRamp : tilePrefabs_LeveledNoRamp;
+        //             List<HexagonTileCore> prefabs = (cell.isLeveledRampCell && !useTerrainMeshPath) ? tilePrefabs_LeveledRamp : tilePrefabs_LeveledNoRamp;
 
-                    SelectAndAssignNext(cell, prefabs);
+        //             SelectAndAssignNext(cell, prefabs);
 
-                    if (cell.isPathCell) cell.Highlight(true);
-                }
+        //             if (cell.isPathCell) cell.Highlight(true);
+        //         }
 
-                foreach (HexagonCell cell in leveledCells)
-                {
-                    if (cell.IsAssigned()) continue;
+        //         foreach (HexagonCell cell in leveledCells)
+        //         {
+        //             if (cell.IsAssigned()) continue;
 
-                    SelectAndAssignNext(cell, tilePrefabs_Leveled);
-                }
-            }
+        //             SelectAndAssignNext(cell, tilePrefabs_Leveled);
+        //         }
+        //     }
+        // }
 
-            // foreach (var kvp in allCellsByLayer)
-            // {
-            //     int layer = kvp.Key;
-            //     List<HexagonCell> layerCells = kvp.Value;
+        // private void CollapsePathCells()
+        // {
+        //     Debug.Log("topLevelCells: " + topLevelCells.Count);
+        //     allPathingCells = new List<HexagonCell>();
 
-            //     if (layer == 0) continue;
+        //     // allPathCells = HexagonCell.GenerateRandomCellPaths(entryCells,
+        //     //         allCellsByLayer,
+        //     //         transform.position);
 
-            //     foreach (HexagonCell cell in layerCells)
-            //     {
-            //         if (cell.IsAssigned()) continue;
+        //     allPathCells = new Dictionary<int, List<HexagonCell>>();
+        //     allPathCells.Add(0,
+        //         HexagonCell.GenerateRandomCellPath(entryCells,
+        //             allCellsByLayer,
+        //             transform.position)
 
-            //         if (!cell.isLeveledGroundCell) continue;
+        //     );
 
+        //     foreach (var kvp in allPathCells)
+        //     {
+        //         int key = kvp.Key;
+        //         List<HexagonCell> pathCells = kvp.Value;
 
-            //         SelectAndAssignNext(cell, tilePrefabs);
-            //     }
-            // }
-        }
+        //         foreach (HexagonCell item in pathCells)
+        //         {
 
-        private void CollapsePathCells()
-        {
-            Debug.Log("topLevelCells: " + topLevelCells.Count);
-            allPathingCells = new List<HexagonCell>();
-
-            // allPathCells = HexagonCell.GenerateRandomCellPaths(entryCells,
-            //         allCellsByLayer,
-            //         transform.position);
-
-            allPathCells = new Dictionary<int, List<HexagonCell>>();
-            allPathCells.Add(0,
-                HexagonCell.GenerateRandomCellPath(entryCells,
-                    allCellsByLayer,
-                    transform.position)
-
-            );
-
-            foreach (var kvp in allPathCells)
-            {
-                int key = kvp.Key;
-                List<HexagonCell> pathCells = kvp.Value;
-
-                foreach (HexagonCell item in pathCells)
-                {
-
-                    HexagonCell updatedPathCell = HexagonCell.EvaluateLevelGroundPath(item);
-                    if (updatedPathCell != item)
-                    {
-                        if (useTerrainMeshPath)
-                        {
-                            updatedPathCell.SetIgnore(true);
-                        }
-                        else
-                        {
-                            AssignTileToCell(updatedPathCell, updatedPathCell.isEdgeCell ? tilePrefabs_Leveled.FindAll(t => t.isLeveledRamp)[0] : tilePrefabs_Path[0], 0);
-                        }
-                    }
-                    else
-                    {
-                        if (item.isLeveledCell)
-                        {
-                            // Check if a neighbor is a leveled ramp, if not set as ramp
-                            List<HexagonCell> layerNeighbors = item.GetLayerNeighbors();
-                            bool hasRampAsNeighbor = false;
-                            foreach (var neighbor in layerNeighbors)
-                            {
-                                if (neighbor.isLeveledRampCell && neighbor.isPathCell)
-                                {
-                                    hasRampAsNeighbor = true;
-                                    break;
-                                }
-                            }
-                            if (hasRampAsNeighbor == false)
-                            {
-                                item.SetLeveledRampCell(true);
-                                item.ClearTile();
+        //             HexagonCell updatedPathCell = HexagonCell.EvaluateLevelGroundPath(item);
+        //             if (updatedPathCell != item)
+        //             {
+        //                 if (useTerrainMeshPath)
+        //                 {
+        //                     updatedPathCell.SetIgnore(true);
+        //                 }
+        //                 else
+        //                 {
+        //                     AssignTileToCell(updatedPathCell, updatedPathCell.isEdgeCell ? tilePrefabs_Leveled.FindAll(t => t.isLeveledRamp)[0] : tilePrefabs_Path[0], 0);
+        //                 }
+        //             }
+        //             else
+        //             {
+        //                 if (item.isLeveledCell)
+        //                 {
+        //                     // Check if a neighbor is a leveled ramp, if not set as ramp
+        //                     List<HexagonCell> layerNeighbors = item.GetLayerNeighbors();
+        //                     bool hasRampAsNeighbor = false;
+        //                     foreach (var neighbor in layerNeighbors)
+        //                     {
+        //                         if (neighbor.isLeveledRampCell && neighbor.isPathCell)
+        //                         {
+        //                             hasRampAsNeighbor = true;
+        //                             break;
+        //                         }
+        //                     }
+        //                     if (hasRampAsNeighbor == false)
+        //                     {
+        //                         item.SetLeveledRampCell(true);
+        //                         item.ClearTile();
 
 
-                                if (useTerrainMeshPath)
-                                {
-                                    updatedPathCell.SetIgnore(true);
-                                }
-                                else
-                                {
+        //                         if (useTerrainMeshPath)
+        //                         {
+        //                             updatedPathCell.SetIgnore(true);
+        //                         }
+        //                         else
+        //                         {
 
-                                    SelectAndAssignNext(item, tilePrefabs_Leveled.FindAll(t => t.isLeveledRamp));
-                                }
-                            }
-                            else
-                            {
-                                item.SetPathCell(false);
-                                continue;
-                            }
-                        }
+        //                             SelectAndAssignNext(item, tilePrefabs_Leveled.FindAll(t => t.isLeveledRamp));
+        //                         }
+        //                     }
+        //                     else
+        //                     {
+        //                         item.SetPathCell(false);
+        //                         continue;
+        //                     }
+        //                 }
 
-                        item.SetPathCell(true);
+        //                 item.SetPathCell(true);
 
-                        allPathingCells.Add(item);
+        //                 allPathingCells.Add(item);
 
-                        if (useTerrainMeshPath)
-                        {
-                            updatedPathCell.SetIgnore(true);
-                        }
-                        else
-                        {
-                            if (item.IsAssigned()) continue;
+        //                 if (useTerrainMeshPath)
+        //                 {
+        //                     updatedPathCell.SetIgnore(true);
+        //                 }
+        //                 else
+        //                 {
+        //                     if (item.IsAssigned()) continue;
 
-                            SelectAndAssignNext(item, tilePrefabs_Path);
-                        }
-                    }
-                }
-            }
-        }
+        //                     SelectAndAssignNext(item, tilePrefabs_Path);
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
 
         [SerializeField] private HexagonTileCore tilePrefabs_ClusterMicroGrid_TEMP;
@@ -879,59 +861,59 @@ namespace WFCSystem
         private void EvaluateTiles()
         {
             // Get All Tile Prefabs
-            tileLookupByid = tileDirectory.CreateHexTileDictionary();
-            List<HexagonTileCore> _tilePrefabs = tileLookupByid.Select(x => x.Value).ToList();
+            // tileLookupByid = tileDirectory.CreateHexTileDictionary();
+            // List<HexagonTileCore> _tilePrefabs = tileLookupByid.Select(x => x.Value).ToList();
 
-            if (_tilePrefabs.Count == 0)
-            {
-                Debug.LogError("Empty tilePrefabs");
-            }
+            // if (_tilePrefabs.Count == 0)
+            // {
+            //     Debug.LogError("Empty tilePrefabs");
+            // }
 
-            // Check For Nulls
-            foreach (HexagonTileCore prefab in _tilePrefabs)
-            {
-                int id = prefab.GetId();
-            }
+            // // Check For Nulls
+            // foreach (HexagonTileCore prefab in _tilePrefabs)
+            // {
+            //     int id = prefab.GetId();
+            // }
 
-            // Get All Cluster Prefabs
-            tileClusterLookupByid = tileDirectory.CreateTileClusterDictionary();
-            tilePrefabs_cluster = tileClusterLookupByid.Select(x => x.Value).ToList();
+            // // Get All Cluster Prefabs
+            // tileClusterLookupByid = tileDirectory.CreateTileClusterDictionary();
+            // tilePrefabs_cluster = tileClusterLookupByid.Select(x => x.Value).ToList();
 
-            // Get All Cluster Sets
-            tilePrefabs_ClusterSet = HexagonTileCore.ExtractClusterSetTiles(_tilePrefabs);
+            // // Get All Cluster Sets
+            // tilePrefabs_ClusterSet = HexagonTileCore.ExtractClusterSetTiles(_tilePrefabs);
 
-            tilePrefabs = new List<HexagonTileCore>();
-            tilePrefabs.AddRange(_tilePrefabs.Except(tilePrefabs_ClusterSet));
+            // tilePrefabs = new List<HexagonTileCore>();
+            // tilePrefabs.AddRange(_tilePrefabs.Except(tilePrefabs_ClusterSet));
 
-            tilePrefabs_ClusterSet = tilePrefabs_ClusterSet.FindAll(x => x.isClusterCenterTile == false);
+            // tilePrefabs_ClusterSet = tilePrefabs_ClusterSet.FindAll(x => x.isClusterCenterTile == false);
 
-            // Extract Edge Tiles
-            tilePrefabs_Edgable = tilePrefabs.FindAll(x => x.isEdgeable).ToList();
+            // // Extract Edge Tiles
+            // tilePrefabs_Edgable = tilePrefabs.FindAll(x => x.isEdgeable).ToList();
 
-            // Extract Entrance Tiles
-            tilePrefabs_Entrances = tilePrefabs.FindAll(x => x.isEdgeable && x.isEntrance).ToList();
+            // // Extract Entrance Tiles
+            // tilePrefabs_Entrances = tilePrefabs.FindAll(x => x.isEdgeable && x.isEntrance).ToList();
 
-            // Extract Top Layer tiles
-            tilePrefabs_TopLayer = tilePrefabs.FindAll(x => x.GetExcludeLayerState() == HexagonTileCore.ExcludeLayerState.TopLayerOnly || x.IsRoofable()).ToList();
+            // // Extract Top Layer tiles
+            // tilePrefabs_TopLayer = tilePrefabs.FindAll(x => x.GetExcludeLayerState() == HexagonTileCore.ExcludeLayerState.TopLayerOnly || x.IsRoofable()).ToList();
 
-            // Extract Leveled Tiles
-            tilePrefabs_Leveled = tilePrefabs.FindAll(x => x.isLeveledTile).ToList();
+            // // Extract Leveled Tiles
+            // // tilePrefabs_Leveled = tilePrefabs.FindAll(x => x.isLeveledTile).ToList();
 
-            // Extract Layer Connector Tiles
-            tilePrefabs_LayerConnector = tilePrefabs.FindAll(x => x.isLayerConnector).ToList();
+            // // Extract Layer Connector Tiles
+            // // tilePrefabs_LayerConnector = tilePrefabs.FindAll(x => x.isLayerConnector).ToList();
 
-            // Extract Path Tiles
-            tilePrefabs_Path = tilePrefabs.FindAll(x => x.isPath).ToList();
+            // // Extract Path Tiles
+            // tilePrefabs_Path = tilePrefabs.FindAll(x => x.isPath).ToList();
 
-            // Extract Inner Tiles
-            List<HexagonTileCore> innerTilePrefabs = new List<HexagonTileCore>();
-            innerTilePrefabs.AddRange(tilePrefabs.Except(tilePrefabs.FindAll(x => x.IsExteriorWall() || x.isEntrance || x.isLayerConnector || x.isPath)));
+            // // Extract Inner Tiles
+            // List<HexagonTileCore> innerTilePrefabs = new List<HexagonTileCore>();
+            // innerTilePrefabs.AddRange(tilePrefabs.Except(tilePrefabs.FindAll(x => x.IsExteriorWall() || x.isEntrance || x.isPath)));
 
-            tilePrefabs = innerTilePrefabs;
+            // tilePrefabs = innerTilePrefabs;
 
-            // Shuffle the prefabs
-            WFCUtilities.ShuffleTiles(tilePrefabs);
-            WFCUtilities.ShuffleTiles(tilePrefabs_cluster);
+            // // Shuffle the prefabs
+            // WFCUtilities.ShuffleTiles(tilePrefabs);
+            // WFCUtilities.ShuffleTiles(tilePrefabs_cluster);
         }
 
         private void EvaluateCells()
@@ -960,13 +942,13 @@ namespace WFCSystem
             }
 
             // TODO: find a better way to jsut provide this without doing this extra stuff
-            totalLayers = allCellsByLayer.Keys.Count;// .OrderByDescending(c => c.GetLayer()).ToList()[0].GetLayer() + 1;
+            totalLayers = allCellsByLayer.Keys.Count;// .OrderByDescending(c => c.GetGridLayer()).ToList()[0].GetGridLayer() + 1;
 
             // List<HexagonCell> _processedCells = new List<HexagonCell>();
 
             // if (isWalledEdge == false) _processedCells.AddRange(edgeCells);
 
-            // _processedCells.AddRange(allCells.Except(edgeCells).OrderByDescending(c => c.GetLayer()));
+            // _processedCells.AddRange(allCells.Except(edgeCells).OrderByDescending(c => c.GetGridLayer()));
             // allCells = _processedCells;
 
             // allCellsByLayer = HexagonCell.OrganizeCellsByLevel(allCellsList);

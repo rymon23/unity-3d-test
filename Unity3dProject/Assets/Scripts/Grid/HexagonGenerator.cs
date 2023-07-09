@@ -31,20 +31,6 @@ public class HexagonGenerator
         return topAndBottomPoints;
     }
 
-    public Vector3[] GeneratePyramid(float size, float height)
-    {
-        Vector3[] points = new Vector3[5];
-        // Bottom four points
-        points[0] = new Vector3(-size / 2, 0, size / 2);
-        points[1] = new Vector3(size / 2, 0, size / 2);
-        points[2] = new Vector3(size / 2, 0, -size / 2);
-        points[3] = new Vector3(-size / 2, 0, -size / 2);
-        // Top point
-        points[4] = new Vector3(0, height, 0);
-        return points;
-    }
-
-
     public static Vector3[] GenerateHexagonSidePoints(Vector3[] corners)
     {
         Vector3[] hexagonSides = new Vector3[6];
@@ -500,77 +486,6 @@ public class HexagonGenerator
 
         return hexagons;
     }
-
-
-    // public static List<Hexagon> GenerateHexagonGrid(Vector3[] edgePoints, float hexSize)
-    // {
-    //     // Create the list for the hexagons
-    //     List<Hexagon> hexagons = new List<Hexagon>();
-
-    //     // Create a convex hull from the edge points
-    //     List<Vector3> convexHull = ConvexHull.GetConvexHull(edgePoints);
-    //     // Find the rectangle that encompasses the convex hull
-    //     Bounds bounds = GetBounds(convexHull);
-
-    //     // Calculate the number of hexagons that fit in the bounds
-    //     int hexCountX = (int)(bounds.size.x / hexSize);
-    //     int hexCountZ = (int)(bounds.size.z / hexSize);
-    //     // center the grid
-    //     Vector3 center = bounds.center;
-
-    //     // Create the hexagons
-    //     for (int x = 0; x < hexCountX; x++)
-    //     {
-    //         for (int z = 0; z < hexCountZ; z++)
-    //         {
-    //             // calculate the position of the hexagon
-    //             Vector3 position = new Vector3(center.x - bounds.size.x / 2 + x * hexSize + hexSize / 2, 0, center.z - bounds.size.z / 2 + z * hexSize + hexSize / 2);
-    //             // Create the hexagon
-    //             Hexagon hex = new Hexagon(position, hexSize);
-    //             // Add the hexagon to the list
-    //             hexagons.Add(hex);
-    //         }
-    //     }
-
-    //     return hexagons;
-    // }
-
-    // public static List<Hexagon> GenerateHexagonGrid(Vector3[] edgePoints)
-    // {
-    //     //1. Calculate the convex hull of the edge points
-    //     List<Vector3> convexHull = ConvexHull.GetConvexHull(edgePoints);
-
-    //     //2. Create a list to store the triangles
-    //     List<Triangle> triangles = new List<Triangle>();
-
-    //     //3. Iterate through the edges of the convex hull
-    //     for (int i = 0; i < convexHull.Count; i++)
-    //     {
-    //         Vector3 vertex1 = convexHull[i];
-    //         Vector3 vertex2 = convexHull[(i + 1) % convexHull.Count];
-
-    //         //4. Calculate the midpoint of the edge
-    //         Vector3 midpoint = (vertex1 + vertex2) / 2f;
-
-    //         //5. Find the midpoints of the two edges that share the current vertex
-    //         Vector3 midpoint1 = (midpoint + vertex1) / 2f;
-    //         Vector3 midpoint2 = (midpoint + vertex2) / 2f;
-
-    //         //6. Create a new triangle from the vertex, midpoint1, and midpoint2
-    //         triangles.Add(new Triangle(vertex1, midpoint1, midpoint2));
-    //     }
-
-    //     //7. Create a list to store the hexagons
-    //     List<Hexagon> hexagons = new List<Hexagon>();
-
-    //     //8. Iterate through the triangles and group every three adjacent triangles to form a hexagon
-    //     for (int i = 0; i < triangles.Count; i += 3)
-    //     {
-    //         Hexagon hexagon = new Hexagon(triangles[i], triangles[i + 1], triangles[i + 2]);
-    //         hexagons.Add(hexagon);
-    //     }
-    //     return hexagons;
-    // }
 
     public static Vector3 GetPolygonCenter(Vector3[] edgePoints)
     {

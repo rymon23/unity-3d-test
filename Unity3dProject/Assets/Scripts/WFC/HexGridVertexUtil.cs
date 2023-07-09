@@ -1226,7 +1226,7 @@ namespace WFCSystem
             }
 
             Vector3 centerPos = HexagonCellPrototype.CalculateCenterPositionFromGroup(prototypePath);
-            HexagonCellPrototype centerCell = HexagonCellPrototype.GetClosestByCenterPoint(prototypePath, centerPos);
+            HexagonCellPrototype centerCell = HexagonCellPrototype.GetClosestCenter(prototypePath, centerPos);
 
             int inheritedWeight = 3;
 

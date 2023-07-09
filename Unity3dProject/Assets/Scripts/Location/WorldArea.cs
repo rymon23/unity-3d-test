@@ -1589,7 +1589,7 @@ namespace ProceduralBase
 
             if (vertexGrid != null)
             {
-                List<HexagonCell> edgeCells = HexCellUtil.GetEdgeCells(cellManager.GetAllCellsList()).FindAll(c => c.GetLayer() == 0 || c.isLeveledGroundCell);
+                List<HexagonCell> edgeCells = HexCellUtil.GetEdgeCells(cellManager.GetAllCellsList()).FindAll(c => c.GetGridLayer() == 0 || c.isLeveledGroundCell);
 
                 Vector2 centerPos = new Vector2(CenterPosition().x, CenterPosition().z);
                 float smoothRadius = cellManager.GetRadius() * blendRadiusMult;

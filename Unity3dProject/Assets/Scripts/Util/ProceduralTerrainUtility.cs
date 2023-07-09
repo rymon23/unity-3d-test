@@ -939,28 +939,28 @@ namespace ProceduralBase
             return squarePoints;
         }
 
-        public static List<VerticalCellPrototype> GenerateCubeStack(int floors, Vector3 position, float width, float height, float depth)
-        {
-            List<VerticalCellPrototype> cubeStack = new List<VerticalCellPrototype>();
-            for (int i = 0; i < floors; i++)
-            {
-                Vector3 currentPosition = new Vector3(position.x, position.y, position.z);
-                if (i > 0) currentPosition.y += (height * i);
+        // public static List<VerticalCellPrototype> GenerateCubeStack(int floors, Vector3 position, float width, float height, float depth)
+        // {
+        //     List<VerticalCellPrototype> cubeStack = new List<VerticalCellPrototype>();
+        //     for (int i = 0; i < floors; i++)
+        //     {
+        //         Vector3 currentPosition = new Vector3(position.x, position.y, position.z);
+        //         if (i > 0) currentPosition.y += (height * i);
 
-                Vector3[] points = GenerateCubePoints(currentPosition, width, height, depth);
-                VerticalCellPrototype cube = new VerticalCellPrototype
-                {
-                    position = currentPosition,
-                    _cornerPoints = points,
-                    height = (int)height,
-                    width = (int)width,
-                    depth = (int)depth
+        //         Vector3[] points = GenerateCubePoints(currentPosition, width, height, depth);
+        //         VerticalCellPrototype cube = new VerticalCellPrototype
+        //         {
+        //             position = currentPosition,
+        //             _cornerPoints = points,
+        //             height = (int)height,
+        //             width = (int)width,
+        //             depth = (int)depth
 
-                };
-                cubeStack.Add(cube);
-            }
-            return cubeStack;
-        }
+        //         };
+        //         cubeStack.Add(cube);
+        //     }
+        //     return cubeStack;
+        // }
 
         public static Vector3[] GenerateCubePoints(Vector3 center, float width, float height, float depth)
         {

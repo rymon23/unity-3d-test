@@ -154,7 +154,7 @@ namespace WFCSystem
             bool assigned = currentCell.IsWFC_Assigned() ? true : SelectAndAssignNext(currentCell, (currentCell.IsEdge() ? tilePrefabs_Edgable : tilePrefabs), tileContext, socketDirectory, isWalledEdge, logIncompatibilities, ignoreFailures, allowInvertedTiles);
             if (assigned)
             {
-                int currentCellLayer = currentCell.GetLayer();
+                int currentCellLayer = currentCell.GetGridLayer();
 
                 bool includeLayerNwighbors = (neighborPropagation == WFC_CellNeighborPropagation.Edges_Only_Include_Layers || neighborPropagation == WFC_CellNeighborPropagation.Edges_Inners_Include_Layers);
 
@@ -226,7 +226,7 @@ namespace WFCSystem
                 int currentLayer = kvp.Key;
                 // foreach (int currentLayer in allLayers)
                 // {
-                List<HexagonCellPrototype> layerEdgeCells = edgeCells_Grid.FindAll(e => e.GetLayer() == currentLayer).OrderByDescending(e => e.neighbors.Count).ToList();
+                List<HexagonCellPrototype> layerEdgeCells = edgeCells_Grid.FindAll(e => e.GetGridLayer() == currentLayer).OrderByDescending(e => e.neighbors.Count).ToList();
 
                 foreach (HexagonCellPrototype edgeCell in layerEdgeCells)
                 {
@@ -477,19 +477,15 @@ namespace WFCSystem
                 HexagonTileCore currentTile = prefabsList[i];
 
                 // if (cell.GetEdgeCellType() == EdgeCellType.Default && currentTile.IsGridEdgeCompatible() == false) continue;
+                if (currentTile.ShouldExcludeCellStatus(cell.GetCellStatus())) continue;
 
                 if (cell.IsEntry() && !currentTile.isEntrance) continue;
 
                 if (cell.IsPath() && !currentTile.allowPathPlacement) continue;
 
-                if (currentTile.baseLayerOnly && cell.IsGround() == false) continue;
+                // if (currentTile.isLeveledTile && !cell.isLeveledCell) continue;
 
-                if (currentTile.isLeveledTile && !cell.isLeveledCell) continue;
-
-                if (cell.isLeveledRampCell && !currentTile.isLeveledRamp) continue;
-
-
-                if (currentTile.noBaseLayer && cell.IsGround()) continue;
+                // if (cell.isLeveledRampCell && !currentTile.isLeveledRamp) continue;
 
                 if (currentTile.GetExcludeLayerState() != HexagonTileCore.ExcludeLayerState.Unset)
                 {
@@ -519,19 +515,19 @@ namespace WFCSystem
                 {
                     if (cell.IsEntry())
                     {
-                        Debug.LogError("No compatible tiles for Entry Cell: " + cell.id + ", CellStatus: " + cell.GetCellStatus());
+                        Debug.LogError("No compatible tiles for Entry Cell: " + cell.LogStats());
                     }
                     else if (cell.IsEdge())
                     {
-                        Debug.LogError("No compatible tiles for Edge Cell: " + cell.id + ", CellStatus: " + cell.GetCellStatus());
+                        Debug.LogError("No compatible tiles for Edge Cell: " + cell.LogStats());
                     }
                     else if (cell.isLeveledEdge)
                     {
-                        Debug.LogError("No compatible tiles for Leveled Edge Cell: " + cell.id + ", CellStatus: " + cell.GetCellStatus());
+                        Debug.LogError("No compatible tiles for Leveled Edge Cell: " + cell.LogStats());
                     }
                     else
                     {
-                        Debug.Log("No compatible tiles for cell: " + cell.id + ", CellStatus: " + cell.GetCellStatus());
+                        Debug.Log("No compatible tiles for cell: " + cell.LogStats());
                     }
                 }
                 return (null, null);
@@ -578,7 +574,8 @@ namespace WFCSystem
         }
 
 
-        static public List<int[]> CheckTileSocketCompatibility(HexagonCellPrototype currentCell,
+        static public List<int[]> CheckTileSocketCompatibility(
+            HexagonCellPrototype currentCell,
             HexagonTileCore currentTile,
             bool inverted,
             bool isWalledEdge,
@@ -606,6 +603,7 @@ namespace WFCSystem
                 // Check Layered Neighbors First
                 if (checkLayerNeighbors)
                 {
+                    HexagonCellPrototype neighborCell = currentCell.GetBottomNeighbor();
                     HexagonTileCore neighborTile = currentCell.GetBottomNeighbor()?.GetCurrentTile();
 
                     if (neighborTile != null)
@@ -624,13 +622,14 @@ namespace WFCSystem
                             if (logIncompatibilities)
                             {
                                 string tileName = currentTile.gameObject.name;
-                                string neighborTileName = neighborTile?.gameObject.name;
+                                string neighborTileName = (neighborTile != null) ? neighborTile.gameObject.name : "EMPTY";
                                 string[] sockets = socketDirectory.sockets;
 
-                                string currentTileLog = "Incoming Tile: [" + tileName + "], CornerSocket: " + sockets[currentTileBottomSockets[i]] + ", Rotation: " + rotation;
-                                string neighborTileLog = "Bottom Tile: [" + neighborTileName + "], CornerSocket: " + sockets[layeredNeighborTileCornerSockets[0].corners[i]];
+                                string currentTileLog = "Incoming: [" + tileName + "], Socket: " + sockets[currentTileBottomSockets[i]] + ", Rotation: " + rotation + ", current Cell: " + currentCell.LogStats();
+                                string neighborTileLog = "Bottom: [" + neighborTileName + "], Socket: " + sockets[layeredNeighborTileCornerSockets[0].corners[i]] + ", neighbor Cell: " + neighborCell?.LogStats();
 
-                                Debug.LogError("Cell: " + currentCell.id + ", Tile: [" + tileName + "] is INCOMPATIBLE with bottom neighbor [" + neighborTileName + "] \n" + currentTileLog + "\n" + neighborTileLog);
+                                Debug.LogError("Current Tile: [" + tileName + "] is INCOMPATIBLE with bottom neighbor [" + neighborTileName + "] \n" + currentTileLog + "\n" + neighborTileLog);
+                                // Debug.LogError("Cell: " + currentCell.id + ", Tile: [" + tileName + "] is INCOMPATIBLE with bottom neighbor [" + neighborTileName + "] \n" + currentTileLog + "\n" + neighborTileLog);
                                 // Debug.LogError(tileName + " Not compatibile with bottom layer. currentTileBottomSocket: " + currentTileBottomSockets[i] + ", corner: " + (HexagonCorner)i);
                             }
                             compatibile = false;
@@ -644,8 +643,8 @@ namespace WFCSystem
                 {
                     for (int side = 0; side < neighborTileCornerSocketsBySide.Length; side++)
                     {
-                        HexagonTileCore neighborTile = currentCell.neighborsBySide[side]?.GetCurrentTile();
-                        compatibile = IsTileCompatibleOnSideAndRotation(neighborTileCornerSocketsBySide, currentTile, currentCell, side, rotation, neighborTile, inverted, socketDirectory, logIncompatibilities);
+                        HexagonCellPrototype neighborCell = currentCell.neighborsBySide[side];
+                        compatibile = IsTileCompatibleOnSideAndRotation(neighborTileCornerSocketsBySide, currentTile, currentCell, neighborCell, side, rotation, inverted, socketDirectory, logIncompatibilities);
                         if (!compatibile) break;
                     }
                 }
@@ -665,19 +664,21 @@ namespace WFCSystem
             NeighborSideCornerSockets[] neighborTileCornerSocketsBySide,
             HexagonTileCore currentTile,
             HexagonCellPrototype currentCell,
+            HexagonCellPrototype neighborCell,
             int side,
             int rotation,
-            HexagonTileCore neighborTile,
             bool inverted,
             HexagonSocketDirectory socketDirectory,
             bool logIncompatibilities
         )
         {
             string tileName = currentTile.gameObject.name;
-            string neighborTileName = (neighborTile != null) ? neighborTile.gameObject.name : "Empty";
+            HexagonTileCore neighborTile = neighborCell?.GetCurrentTile();
+
+            string neighborCellStats = (neighborCell != null) ? neighborCell.LogStats() : "NULL";
+            string neighborTileName = (neighborTile != null) ? neighborTile.gameObject.name : "EMPTY";
             string[] sockets = socketDirectory.sockets;
             bool[,] compatibilityMatrix = socketDirectory.GetCompatibilityMatrix();
-
             bool compatibile = true;
 
             NeighborSideCornerSockets neighborSide = neighborTileCornerSocketsBySide[side];
@@ -702,20 +703,16 @@ namespace WFCSystem
                     {
                         if (logIncompatibilities)
                         {
-                            string currentTileLog = "Incoming Tile: [" + tileName + "], " + level + " CornerSocket: " + sockets[currentTileCornerSocket] + ", rotation: " + rotation;
-                            string neighborTileLog = "Neighbor Tile: [" + neighborTileName + "], " + level + " CornerSocket: " + sockets[neighborTileCornerSocket];
+                            string currentTileLog = "Incoming: [" + tileName + "], " + level + " Socket: " + sockets[currentTileCornerSocket] + ", Rotation: " + rotation + ", current Cell: " + currentCell.LogStats();
+                            string neighborTileLog = "Neighbor: [" + neighborTileName + "], " + level + " Socket: " + sockets[neighborTileCornerSocket] + ", neighbor Cell: " + neighborCellStats;
 
-                            // string currentCellLog = "Current Cell Stats: [" + neighborTileName + "], " + level + " CornerSocket: " + sockets[neighborTileCornerSocket];
-
-                            Debug.LogError("Cell: " + currentCell.id + ", Tile: [" + tileName + "] is INCOMPATIBLE with [" + neighborTileName + "] on side: " + (HexagonSide)side + ". \n" + currentTileLog + "\n" + neighborTileLog);
+                            Debug.LogError("Current Tile: [" + tileName + "] is INCOMPATIBLE with [" + neighborTileName + "] on Side: " + (HexagonSide)side + ". \n" + currentTileLog + "\n" + neighborTileLog);
                         }
-
                         compatibile = false;
                         return false;
                     }
                 }
             }
-
             return compatibile;
         }
 
@@ -1105,14 +1102,14 @@ namespace WFCSystem
 
         //     if (assigned && collapseOrder_cells == WFCCollapseOrder_Cells.Neighbor_Propogation)
         //     {
-        //         int currentCellLayer = currentCell.GetLayer();
+        //         int currentCellLayer = currentCell.GetGridLayer();
 
         //         bool includeLayerNwighbors = (neighborPropagation == WFC_CellNeighborPropagation.Edges_Only_Include_Layers || neighborPropagation == WFC_CellNeighborPropagation.Edges_Inners_Include_Layers);
 
         //         // Get Unassigned Neighbors
         //         List<HexagonCell> unassignedNeighbors = currentCell._neighbors.FindAll(n => n.IsAssigned() == false
-        //                 && ((includeLayerNwighbors == false && n.GetLayer() == currentCellLayer)
-        //                 || (includeLayerNwighbors && n.GetLayer() >= currentCellLayer)
+        //                 && ((includeLayerNwighbors == false && n.GetGridLayer() == currentCellLayer)
+        //                 || (includeLayerNwighbors && n.GetGridLayer() >= currentCellLayer)
         //                 ));
 
         //         if (unassignedNeighbors.Count > 0)

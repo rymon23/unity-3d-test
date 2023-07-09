@@ -188,14 +188,14 @@ namespace WFCSystem
             bool assigned = currentCell.IsAssigned() ? true : SelectAndAssignNext(currentCell, (currentCell.isEdgeCell ? tilePrefabs_Edgable : tilePrefabs), tileContext, socketDirectory, isWalledEdge, logIncompatibilities, ignoreFailures, allowInvertedTiles);
             if (assigned)
             {
-                int currentCellLayer = currentCell.GetLayer();
+                int currentCellLayer = currentCell.GetGridLayer();
 
                 bool includeLayerNwighbors = (neighborPropagation == WFC_CellNeighborPropagation.Edges_Only_Include_Layers || neighborPropagation == WFC_CellNeighborPropagation.Edges_Inners_Include_Layers);
 
                 // Get Unassigned Neighbors
                 List<HexagonCell> unassignedNeighbors = currentCell._neighbors.FindAll(n => n.IsAssigned() == false
-                        && ((includeLayerNwighbors == false && n.GetLayer() == currentCellLayer)
-                        || (includeLayerNwighbors && n.GetLayer() >= currentCellLayer)
+                        && ((includeLayerNwighbors == false && n.GetGridLayer() == currentCellLayer)
+                        || (includeLayerNwighbors && n.GetGridLayer() >= currentCellLayer)
                         ));
 
                 if (unassignedNeighbors.Count > 0)
@@ -440,17 +440,15 @@ namespace WFCSystem
 
                 // if (cell.GetEdgeCellType() == EdgeCellType.Default && currentTile.IsGridEdgeCompatible() == false) continue;
 
+                if (currentTile.ShouldExcludeCellStatus(cell.GetCellStatus())) continue;
+
                 if (cell.IsEntry() && !currentTile.isEntrance) continue;
 
                 if (cell.isPathCell && !currentTile.allowPathPlacement) continue;
 
-                if (currentTile.isLeveledTile && !cell.isLeveledCell) continue;
+                // if (currentTile.isLeveledTile && !cell.isLeveledCell) continue;
 
-                if (cell.isLeveledRampCell && !currentTile.isLeveledRamp) continue;
-
-                if (currentTile.baseLayerOnly && cell.IsGroundCell() == false) continue;
-
-                if (currentTile.noBaseLayer && cell.IsGroundCell()) continue;
+                // if (cell.isLeveledRampCell && !currentTile.isLeveledRamp) continue;
 
                 if (currentTile.GetExcludeLayerState() != HexagonTileCore.ExcludeLayerState.Unset)
                 {
@@ -468,7 +466,7 @@ namespace WFCSystem
                     }
                 }
 
-                // if (currentTile.noGroundLayer && (cell.GetLayer() == 0 || cell.isLeveledGroundCell)) continue;
+                // if (currentTile.noGroundLayer && (cell.GetGridLayer() == 0 || cell.isLeveledGroundCell)) continue;
                 // if (IsClusterCell && currentTile.GetInnerClusterSocketCount() != cell.GetNumberofNeighborsInCluster()) continue;
 
                 List<int[]> compatibleTileRotations = WFCUtilities.GetCompatibleTileRotations(cell, currentTile, allowInvertedTiles, isWalledEdge, tileContext, socketDirectory, logIncompatibilities);

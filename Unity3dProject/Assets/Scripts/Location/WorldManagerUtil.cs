@@ -89,7 +89,8 @@ namespace ProceduralBase
         private static Dictionary<Vector2, Dictionary<Vector2, HexagonCellPrototype>> Initialize_ParentWorldCells(
              Dictionary<Vector2, Dictionary<Vector2, HexagonCellPrototype>> parentCells_ByParentLookup,
              int amount,
-             int size,
+             int cellSize,
+             int layerOffset,
              Transform transform,
              int radiusMult = 3
          )
@@ -126,6 +127,7 @@ namespace ProceduralBase
             HashSet<string> neighborIDsToEvaluate = new HashSet<string>();
             List<HexagonCellPrototype> neighborsToEvaluate = new List<HexagonCellPrototype>();
 
+            int size = (int)cellSize;
 
             foreach (HexagonCellPrototype parentCell in parentCellsToFill)
             {
@@ -143,14 +145,6 @@ namespace ProceduralBase
                     size,
                     totalBufferRadius
                 );
-
-                // List<Vector3> newCenterPoints = HexGridUtil.GenerateHexGridCenterPoints(
-                //     parentCellCenterPos
-                //     , size
-                //     , radius
-                //     , null
-                //     , transform
-                // );
 
                 int created = 0;
                 foreach (Vector3 point in newCenterPoints.Values)
@@ -175,7 +169,7 @@ namespace ProceduralBase
                     {
                         if (new_cells_ByParentLookup[parentCellLookup].ContainsKey(newLookup) == false)
                         {
-                            HexagonCellPrototype newCell = new HexagonCellPrototype(new Vector3(newCoordinate.x, transform.position.y, newCoordinate.y), size, null);
+                            HexagonCellPrototype newCell = new HexagonCellPrototype(new Vector3(newCoordinate.x, transform.position.y, newCoordinate.y), cellSize, null, layerOffset);
                             newCell.SetWorldCoordinate(newCoordinate);
                             newCell.SetParentLookup(parentCellLookup);
 
@@ -187,7 +181,6 @@ namespace ProceduralBase
                             // {
                             //     if (_worldAreaTerrainChunkArea_ByLookup.ContainsKey(chunkCenterLookup) == false) _worldAreaTerrainChunkArea_ByLookup.Add(chunkCenterLookup, parentLookup);
                             // }
-
                             if (neighborIDsToEvaluate.Contains(newCell.Get_Uid()) == false)
                             {
                                 neighborIDsToEvaluate.Add(newCell.Get_Uid());
@@ -206,7 +199,7 @@ namespace ProceduralBase
             if (neighborsToEvaluate.Count > 1)
             {
                 Debug.Log("Neighbors To evaluate: " + neighborsToEvaluate.Count);
-                HexGridPathingUtil.Evaluate_WorldCellNeighbors(neighborsToEvaluate, new_cells_ByParentLookup, parentCellsToFill[0].size, true);
+                HexCellUtil.Evaluate_WorldCellNeighbors(neighborsToEvaluate, new_cells_ByParentLookup, parentCellsToFill[0].size, true);
             }
 
             Debug.Log("Created " + totalCreated + " new Child World cells across " + new_cells_ByParentLookup.Count + " Parent cells");

@@ -240,7 +240,7 @@ namespace WFCSystem
 
         private void EvaluateTiles()
         {
-            tileLookupByid = tileDirectory.CreateHexTileDictionary();
+            tileLookupByid = tileDirectory.CreateTileDictionary();
             _tilePrefabs = tileLookupByid.Select(x => x.Value).ToList();
         }
 
@@ -779,7 +779,7 @@ namespace WFCSystem
             if (compatibilityCheck == CompatibilityCheck.DirectTile)
             {
 
-                if (currentCell.GetLayer() != evaluatedCell.GetLayer())
+                if (currentCell.GetGridLayer() != evaluatedCell.GetGridLayer())
                 {
                     // HexagonTileCompatibilitySide relativeLayer;
                     // relativeLayer = (currentLayer == 0) ? HexagonTileCompatibilitySide.Top : HexagonTileCompatibilitySide.Bottom;
@@ -814,7 +814,7 @@ namespace WFCSystem
                 {
                     // Debug.Log("socketDirectory - 0");
 
-                    if (currentCell.GetLayer() != evaluatedCell.GetLayer())
+                    if (currentCell.GetGridLayer() != evaluatedCell.GetGridLayer())
                     {
                         if (currentTileNeighborSide == HexagonTileCompatibilitySide.Bottom)
                         {

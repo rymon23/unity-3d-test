@@ -14,7 +14,14 @@ namespace WFCSystem
         Unset = 0,
         TestBuilding_A,
         TestBuilding_B,
+        TestBuilding_D,
         TestBuilding_C,
+        WalledStructureA,
+        WalledStructureB,
+
+        TowerA,
+
+        _Template_
     }
 
     public enum TileVariant
@@ -51,11 +58,21 @@ namespace WFCSystem
         {
             id = _id;
         }
-        [SerializeField] private int size = 12;
-        public int GetSize() => size;
-
+        [SerializeField] private HexCellSizes _cellSize;
+        public HexCellSizes GetSize() => _cellSize;
+        private int size = 12; // depreciated
 
         [Header("Settings")]
+
+        [Header("Series")]
+        [SerializeField] private TileSeries _tileSeries;
+        public TileSeries GetSeries() => _tileSeries;
+
+        [Header("Tile Clustering")]
+        [SerializeField] private TileClusterPrefab tileClusterPrefab;
+        public TileClusterPrefab GetClusterPrefab() => tileClusterPrefab;
+        public bool HasTileClusterPrefab() => tileClusterPrefab != null;
+        [Header(" ")]
 
         #region Model Manipulation
         [SerializeField] private GameObject model;
@@ -73,14 +90,9 @@ namespace WFCSystem
         [SerializeField] private bool isModelInverted;
         public void InvertModel()
         {
-            if (invertedPosition != 0.01f)
-            {
-                WFCUtilities.InvertTile(model, invertedPosition);
-            }
-            else
-            {
-                WFCUtilities.InvertTile(model);
-            }
+            if (invertedPosition != 0.01f) WFCUtilities.InvertTile(model, invertedPosition);
+            else WFCUtilities.InvertTile(model);
+
             isModelInverted = true;
         }
 
@@ -97,6 +109,9 @@ namespace WFCSystem
         [Header("Tile Context")]
         [SerializeField] private TileContext _tileContext;
         public TileContext GetTileContext() => _tileContext;
+
+
+
         [Header("Category & Variant")]
         [SerializeField] private TileCategory _tileCategory;
         public TileCategory GetTileCategory() => _tileCategory;
@@ -107,40 +122,36 @@ namespace WFCSystem
         public TileType GetTileType() => _tileType;
         public bool IsExteriorWall() => _tileCategory == TileCategory.Wall && (_tileType == TileType.ExteriorWallLarge || _tileType == TileType.ExteriorWallSmall);
 
-
         [Header("Layer Settings")]
         [SerializeField] private TileLayeredGroup _layeredGroup;
         public TileLayeredGroup GetLayeredGrouping() => _layeredGroup;
         [SerializeField] private ExcludeLayerState _excludeLayerState;
         public ExcludeLayerState GetExcludeLayerState() => _excludeLayerState;
         public enum ExcludeLayerState { Unset = 0, BaseLayerOnly, TopLayerOnly, NoBaseLayer, NoTopLayer }
-        public bool baseLayerOnly;
-        public bool noBaseLayer;
-        public bool noGroundLayer;
-        public bool isLayerConnector;
-
 
         [Header("Tile Compatibility / Probability")]
-        [SerializeField] private CellStatus[] _excludeCellStatusList;
+        [SerializeField]
+        private CellStatus[] _cellStatusFilter = new CellStatus[3] {
+                CellStatus.FlatGround,
+                CellStatus.AboveGround,
+                CellStatus.UnderGround,
+            };
+        public CellStatus[] GetCellStatusInclusionList() => _cellStatusFilter;
+        public bool ShouldExcludeCellStatus(CellStatus status) => (_cellStatusFilter == null) ? false : _cellStatusFilter.Contains(status) == false;
         [SerializeField] private GridExclusionRule _gridExclusionRule;
         public GridExclusionRule GetGridExclusionRule() => _gridExclusionRule;
         public bool IsGridEdgeCompatible() => isEdgeable && (_gridExclusionRule == GridExclusionRule.GridEdgesOnly || _gridExclusionRule == GridExclusionRule.EdgeOnly || _gridExclusionRule == GridExclusionRule.Unset);
         public bool isEdgeable = true; // can be placed on the edge / border or the grid
+        public bool isEntrance;
         public bool allowPathPlacement;
         public bool isPath;
         public enum PathType { Unset = 0, Road, Stairway, Elevator }
-        public bool isEntrance;
-        public bool isFragment; // Is incomplete by itself, needs neighbor tiles like itself
-        public bool isInClusterSet; // Is part of a set of tiles that make a cluster
-        public bool isClusterCenterTile; // Is the center part of a set of tiles that make a cluster
-        public bool isLeveledTile;
-        public bool isLeveledRamp;
-
-        [Range(0.05f, 1f)] public float probabilityWeight = 0.3f;
 
         [Header("Tile Socket Configuration")]
         [SerializeField] private HexagonSocketDirectory socketDirectory;
         public HexagonSocketDirectory GetSocketDirectory() => socketDirectory;
+        [Header(" ")]
+
         [SerializeField] private TileLabelGroup tileLabelGroup;
         [SerializeField] private bool useSwappableSockets;
         public int[] _swappableSideSocketPair = new int[2];
@@ -164,11 +175,8 @@ namespace WFCSystem
         public int[] bottomCornerSocketIds = new int[12];
         public int[] topCornerSocketIds = new int[12];
         public int[] layerCenterSocketIds = new int[2];
-        // public int[] sideBtmCornerSocketIds { get; private set; } = new int[12];
-        // public int[] sideTopCornerSocketIds { get; private set; } = new int[12];
-        // public int[] bottomCornerSocketIds { get; private set; } = new int[12];
-        // public int[] topCornerSocketIds { get; private set; } = new int[12];
 
+        // Dictionary<string, List<int[]>> _isSocketDataLoaded = null;
         public Dictionary<string, List<int[]>> BundleSocketIdData()
         {
             Dictionary<string, List<int[]>> data = new Dictionary<string, List<int[]>>();
@@ -286,6 +294,16 @@ namespace WFCSystem
 
         #endregion
 
+        // public string LogStats()
+        // {
+        //     string str = "";
+        //     str += "Size: " + this.size;
+        //     str += ", Layer: " + this.layer;
+        //     str += ", Status: " + this.cellStatus;
+        //     str += ", IsEdge: " + this.IsEdge();
+
+        //     return str;
+        // }
         public int GetRotatedSideCornerSocketId(HexagonCorner corner, int rotation, bool top, bool inverted)
         {
             if (inverted)
@@ -446,11 +464,6 @@ namespace WFCSystem
             EvaluateRotatedCornerSockets();
         }
 
-        public static List<HexagonTileCore> ExtractClusterSetTiles(List<HexagonTileCore> tiles)
-        {
-            return tiles.FindAll(t => t.isInClusterSet);
-        }
-
         private void Awake()
         {
             center = transform;
@@ -467,6 +480,13 @@ namespace WFCSystem
 
         void OnValidate()
         {
+            //Temp
+            if (_cellSize != HexCellSizes.X_4 && gameObject.name.Contains("TileX4"))
+            {
+                _cellSize = HexCellSizes.X_4;
+            }
+
+
             if (model == null)
             {
                 if (isInvertable)
@@ -499,9 +519,9 @@ namespace WFCSystem
                 RotateTile(gameObject, changeRotation);
             }
 
-            if (baseLayerOnly) _excludeLayerState = ExcludeLayerState.BaseLayerOnly;
-            if (noBaseLayer) _excludeLayerState = ExcludeLayerState.NoBaseLayer;
-            if (noBaseLayer) baseLayerOnly = false;
+            // if (baseLayerOnly) _excludeLayerState = ExcludeLayerState.BaseLayerOnly;
+            // if (noBaseLayer) _excludeLayerState = ExcludeLayerState.NoBaseLayer;
+            // if (noBaseLayer) baseLayerOnly = false;
 
             if (resetPoints || _position != transform.position || _corners == null || _corners.Length == 0 || _sides == null || _sides.Length == 0)
             {
@@ -801,7 +821,7 @@ namespace WFCSystem
             RectTransform rectB = socketTextDisplay[labelBIX].GetComponent<RectTransform>();
 
             Vector3 leftPoint, rightPoint;
-            GetLeftAndRightPoints(pos, labelXZOffset, out leftPoint, out rightPoint);
+            VectorUtil.GetLeftAndRightPoints(pos, labelXZOffset, out leftPoint, out rightPoint);
 
             leftPoint.y += 0.4f * side;
             rightPoint.y += 0.4f * side;
@@ -820,16 +840,6 @@ namespace WFCSystem
             rect.sizeDelta = new Vector2(48, 48);
         }
 
-        public static void GetLeftAndRightPoints(Vector3 position, float distance, out Vector3 leftPoint, out Vector3 rightPoint)
-        {
-            // Find a perpendicular vector to the forward direction of the position
-            Vector3 forward = position.normalized;
-            Vector3 right = Vector3.Cross(forward, Vector3.up).normalized;
-
-            // Calculate the left and right points at the specified distance
-            leftPoint = position - (distance * right);
-            rightPoint = position + (distance * right);
-        }
 
         private void UpdateSocketLabel(HexagonSide _side, bool top, bool layered, int rotationAmount)
         {

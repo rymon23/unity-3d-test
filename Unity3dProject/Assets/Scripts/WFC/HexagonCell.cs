@@ -21,7 +21,7 @@ namespace WFCSystem
         public string Get_Uid() => null;
         public string GetLayerStackId() => layerStackId;
         public int GetSize() => size;
-        public int GetLayer() => _layer;
+        public int GetGridLayer() => _layer;
 
         public void SetGridLayer(int value)
         {
@@ -129,9 +129,9 @@ namespace WFCSystem
             return count;
         }
 
-        public List<HexagonCell> GetLayerNeighbors() => _neighbors.FindAll(n => n.GetLayer() == GetLayer());
+        public List<HexagonCell> GetLayerNeighbors() => _neighbors.FindAll(n => n.GetGridLayer() == GetGridLayer());
         public bool HasEntryNeighbor() => _neighbors.Find(n => n.isEntryCell);
-        public int GetUnassignedNeighborCount(bool includeLayers) => _neighbors.FindAll(n => n.IsAssigned() == false && n.GetLayer() == GetLayer()).Count;
+        public int GetUnassignedNeighborCount(bool includeLayers) => _neighbors.FindAll(n => n.IsAssigned() == false && n.GetGridLayer() == GetGridLayer()).Count;
 
         public List<HexagonCell> GetPathNeighbors()
         {
@@ -184,7 +184,7 @@ namespace WFCSystem
 
         public int[] GetBottomNeighborTileSockets(bool top)
         {
-            if (GetLayer() == 0) return null;
+            if (GetGridLayer() == 0) return null;
 
             if (layeredNeighbor[0] == null) return null;
 
@@ -864,7 +864,7 @@ namespace WFCSystem
 
                 for (int neighbor = 0; neighbor < _neighbors.Count; neighbor++)
                 {
-                    if (_neighbors[neighbor].GetLayer() != GetLayer() || added.Contains(_neighbors[neighbor].id)) continue;
+                    if (_neighbors[neighbor].GetGridLayer() != GetGridLayer() || added.Contains(_neighbors[neighbor].id)) continue;
 
                     _neighbors[neighbor].RecalculateEdgePoints();
 
@@ -920,7 +920,7 @@ namespace WFCSystem
 
             foreach (HexagonCell cell in layerCells)
             {
-                int neighborCount = cell._neighbors.FindAll(n => layerCells.Contains(n) && n.GetLayer() == cell.GetLayer()).Count;
+                int neighborCount = cell._neighbors.FindAll(n => layerCells.Contains(n) && n.GetGridLayer() == cell.GetGridLayer()).Count;
                 if (neighborCount < 6)
                 {
                     edgeCells.Add(cell);
@@ -934,7 +934,7 @@ namespace WFCSystem
         public static List<HexagonCell> GetRandomEntryCells(List<HexagonCell> edgeCells, int num, bool assign, int gridLayer = 0, bool excludeAdjacentNeighbors = true)
         {
             List<HexagonCell> cells = new List<HexagonCell>();
-            cells.AddRange(gridLayer == -1 ? edgeCells : edgeCells.FindAll(c => c.GetLayer() == gridLayer));
+            cells.AddRange(gridLayer == -1 ? edgeCells : edgeCells.FindAll(c => c.GetGridLayer() == gridLayer));
 
             HexCellUtil.ShuffleCells(cells);
 
@@ -973,7 +973,7 @@ namespace WFCSystem
             {
                 if (edgeCell.cellStatus != CellStatus.GenericGround) continue;
                 int groundNeighborCount = edgeCell._neighbors.FindAll(
-                        n => n.cellStatus == CellStatus.GenericGround && n.GetLayer() == edgeCell.GetLayer()).Count;
+                        n => n.cellStatus == CellStatus.GenericGround && n.GetGridLayer() == edgeCell.GetGridLayer()).Count;
                 if (groundNeighborCount >= 3) possibleCells.Add(edgeCell);
             }
 
@@ -1059,7 +1059,7 @@ namespace WFCSystem
 
             foreach (HexagonCell cell in pathCells)
             {
-                List<HexagonCell> pathNeighbors = cell._neighbors.FindAll(n => pathCells.Contains(n) && cleared.Contains(n) == false && n.GetLayer() == cell.GetLayer());
+                List<HexagonCell> pathNeighbors = cell._neighbors.FindAll(n => pathCells.Contains(n) && cleared.Contains(n) == false && n.GetGridLayer() == cell.GetGridLayer());
 
                 if (pathNeighbors.Count >= 4)
                 {
@@ -1107,7 +1107,7 @@ namespace WFCSystem
             // Get an inner neighbor of endCell if it is on the edge 
             if (ignoreEdgeCells && endCell.isEdgeCell || endCell.isEntryCell)
             {
-                HexagonCell newEndCell = endCell._neighbors.Find(n => n.GetLayer() == endCell.GetLayer() && !n.isEdgeCell && !n.isEntryCell);
+                HexagonCell newEndCell = endCell._neighbors.Find(n => n.GetGridLayer() == endCell.GetGridLayer() && !n.isEdgeCell && !n.isEntryCell);
                 if (newEndCell != null) endCell = newEndCell;
             }
 
@@ -1217,7 +1217,7 @@ namespace WFCSystem
             {
                 if (results.Count == max) break;
 
-                HexagonCell found = item._neighbors.Find(c => !c.isEntryCell && !c.isEdgeCell && !levelPathCells.Contains(c) && c.GetLayer() == item.GetLayer());
+                HexagonCell found = item._neighbors.Find(c => !c.isEntryCell && !c.isEdgeCell && !levelPathCells.Contains(c) && c.GetGridLayer() == item.GetGridLayer());
                 if (found != null && !results.Contains(found)) results.Add(found);
             }
             return results;

@@ -55,7 +55,7 @@ namespace WFCSystem
 
         private void RecalculateEdgePoints()
         {
-            _cornerPoints = ProceduralTerrainUtility.GenerateHexagonPoints(transform.position, size);
+            _cornerPoints = HexCoreUtil.GenerateHexagonPoints(transform.position, size);
             _sides = HexagonGenerator.GenerateHexagonSidePoints(_cornerPoints);
         }
 
@@ -147,7 +147,7 @@ namespace WFCSystem
             if (showEdges)
             {
                 Gizmos.color = Color.magenta;
-                ProceduralTerrainUtility.DrawHexagonPointLinesInGizmos(_cornerPoints);
+                VectorUtil.DrawHexagonPointLinesInGizmos(_cornerPoints);
             }
 
             if (showNeighbors)
@@ -297,40 +297,6 @@ namespace WFCSystem
 
             return results;
         }
-
-        public static void PopulateNeighborsFromCornerPoints(List<HexagonCellPrimitive> cells, float offset = 0.33f)
-        {
-            foreach (HexagonCellPrimitive cell in cells)
-            {
-                //for each edgepoint on the current hexagontile
-                for (int i = 0; i < cell._cornerPoints.Length; i++)
-                {
-                    //loop through all the hexagontile to check for neighbors
-                    for (int j = 0; j < cells.Count; j++)
-                    {
-                        //skip if the hexagontile is the current tile
-                        if (cells[j] == cell)
-                            continue;
-
-                        //loop through the _cornerPoints of the neighboring tile
-                        for (int k = 0; k < cells[j]._cornerPoints.Length; k++)
-                        {
-                            // if (Vector3.Distance(cells[j]._cornerPoints[k], cell._cornerPoints[i]) <= offset)
-                            if (Vector2.Distance(new Vector2(cells[j]._cornerPoints[k].x, cells[j]._cornerPoints[k].z), new Vector2(cell._cornerPoints[i].x, cell._cornerPoints[i].z)) <= offset)
-                            {
-                                if (cell._neighbors.Contains(cells[j]) == false)
-                                {
-                                    cell._neighbors.Add(cells[j]);
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-                cell.SetNeighborsBySide(offset);
-            }
-        }
-
 
         public static void RemovePointsWithinOffset(List<Vector3> points, float offset)
         {

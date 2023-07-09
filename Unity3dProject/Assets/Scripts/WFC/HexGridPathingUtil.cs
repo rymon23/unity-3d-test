@@ -10,6 +10,58 @@ namespace WFCSystem
 
     public static class HexGridPathingUtil
     {
+
+        public static void Rehydrate_CellNeighbors(
+            Vector2 cellLookup,
+            Dictionary<Vector2, HexagonCellPrototype> cells_ByLookup,
+            bool propagateToNeighbors
+        )
+        {
+            if (cells_ByLookup.ContainsKey(cellLookup) && cells_ByLookup[cellLookup].neighborWorldData != null)
+            {
+                foreach (CellWorldData neighborData in cells_ByLookup[cellLookup].neighborWorldData)
+                {
+                    Vector2 neighborLookup = neighborData.lookup;
+                    if (cells_ByLookup.ContainsKey(neighborLookup) == false) continue;
+
+                    HexagonCellPrototype neighborCell = cells_ByLookup[neighborLookup];
+                    if (neighborCell != null && cells_ByLookup[cellLookup].neighbors.Contains(neighborCell) == false)
+                    {
+                        cells_ByLookup[cellLookup].neighbors.Add(neighborCell);
+                        if (propagateToNeighbors) Rehydrate_CellNeighbors(neighborLookup, cells_ByLookup, false);
+                    }
+                }
+            }
+        }
+
+        public static void Rehydrate_CellNeighbors(
+            Vector2 parentLookup,
+            Vector2 cellLookup,
+            Dictionary<Vector2, Dictionary<Vector2, HexagonCellPrototype>> cells_ByParentLookup,
+            bool propagateToNeighbors
+        )
+        {
+            if (cells_ByParentLookup[parentLookup].ContainsKey(cellLookup) && cells_ByParentLookup[parentLookup][cellLookup].neighborWorldData != null)
+            {
+                foreach (CellWorldData neighborData in cells_ByParentLookup[parentLookup][cellLookup].neighborWorldData)
+                {
+                    Vector2 neighborParentLookup = neighborData.parentLookup;
+                    if (cells_ByParentLookup.ContainsKey(neighborParentLookup) == false) continue;
+
+                    Vector2 neighborLookup = neighborData.lookup;
+                    if (cells_ByParentLookup[neighborParentLookup].ContainsKey(neighborLookup) == false) continue;
+
+                    HexagonCellPrototype neighborCell = cells_ByParentLookup[neighborParentLookup][neighborLookup];
+                    if (neighborCell != null && cells_ByParentLookup[parentLookup][cellLookup].neighbors.Contains(neighborCell) == false)
+                    {
+                        cells_ByParentLookup[parentLookup][cellLookup].neighbors.Add(neighborCell);
+                        if (propagateToNeighbors) Rehydrate_CellNeighbors(neighborParentLookup, neighborLookup, cells_ByParentLookup, false);
+                    }
+                }
+            }
+        }
+
+
         public static (Dictionary<int, List<Vector3>>, Dictionary<Vector2, Vector3>, Vector2Int) GetConsecutiveCellPointsWithintNoiseElevationRange_V7(
             Vector3 initialCenterPostion,
             int maxMembers,
@@ -981,289 +1033,35 @@ namespace WFCSystem
             return (found, lowestHighestPointHeight);
         }
 
-        public static void Rehydrate_CellNeighbors(
-            Vector2 cellLookup,
-            Dictionary<Vector2, HexagonCellPrototype> cells_ByLookup,
+
+
+        private static void Rehydrate_WorldSpaceNeighbors(
+            Vector2 areaLookup,
+            Vector2 worldspaceLookup,
+            Dictionary<Vector2, Dictionary<Vector2, HexagonCellPrototype>> worldSpaces_ByArea,
             bool propagateToNeighbors
         )
         {
-            if (cells_ByLookup.ContainsKey(cellLookup) && cells_ByLookup[cellLookup].neighborWorldData != null)
+            if (worldSpaces_ByArea[areaLookup].ContainsKey(worldspaceLookup) && worldSpaces_ByArea[areaLookup][worldspaceLookup].neighborWorldData != null)
             {
-                foreach (CellWorldData neighborData in cells_ByLookup[cellLookup].neighborWorldData)
-                {
-                    Vector2 neighborLookup = neighborData.lookup;
-                    if (cells_ByLookup.ContainsKey(neighborLookup) == false) continue;
-
-                    HexagonCellPrototype neighborCell = cells_ByLookup[neighborLookup];
-                    if (neighborCell != null && cells_ByLookup[cellLookup].neighbors.Contains(neighborCell) == false)
-                    {
-                        cells_ByLookup[cellLookup].neighbors.Add(neighborCell);
-                        if (propagateToNeighbors) Rehydrate_CellNeighbors(neighborLookup, cells_ByLookup, false);
-                    }
-                }
-            }
-        }
-
-        public static void Rehydrate_CellNeighbors(
-            Vector2 parentLookup,
-            Vector2 cellLookup,
-            Dictionary<Vector2, Dictionary<Vector2, HexagonCellPrototype>> cells_ByParentLookup,
-            bool propagateToNeighbors
-        )
-        {
-            if (cells_ByParentLookup[parentLookup].ContainsKey(cellLookup) && cells_ByParentLookup[parentLookup][cellLookup].neighborWorldData != null)
-            {
-                foreach (CellWorldData neighborData in cells_ByParentLookup[parentLookup][cellLookup].neighborWorldData)
+                foreach (CellWorldData neighborData in worldSpaces_ByArea[areaLookup][worldspaceLookup].neighborWorldData)
                 {
                     Vector2 neighborParentLookup = neighborData.parentLookup;
-                    if (cells_ByParentLookup.ContainsKey(neighborParentLookup) == false) continue;
-
                     Vector2 neighborLookup = neighborData.lookup;
-                    if (cells_ByParentLookup[neighborParentLookup].ContainsKey(neighborLookup) == false) continue;
+                    if (worldSpaces_ByArea.ContainsKey(neighborParentLookup) == false) continue;
 
-                    HexagonCellPrototype neighborCell = cells_ByParentLookup[neighborParentLookup][neighborLookup];
-                    if (neighborCell != null && cells_ByParentLookup[parentLookup][cellLookup].neighbors.Contains(neighborCell) == false)
+                    if (worldSpaces_ByArea[neighborParentLookup].ContainsKey(neighborLookup) == false) continue;
+
+                    HexagonCellPrototype neighborCell = worldSpaces_ByArea[neighborParentLookup][neighborLookup];
+                    if (neighborCell != null && worldSpaces_ByArea[areaLookup][worldspaceLookup].neighbors.Contains(neighborCell) == false)
                     {
-                        cells_ByParentLookup[parentLookup][cellLookup].neighbors.Add(neighborCell);
-                        if (propagateToNeighbors) Rehydrate_CellNeighbors(neighborParentLookup, neighborLookup, cells_ByParentLookup, false);
+                        worldSpaces_ByArea[areaLookup][worldspaceLookup].neighbors.Add(neighborCell);
+                        if (propagateToNeighbors) Rehydrate_WorldSpaceNeighbors(neighborParentLookup, neighborLookup, worldSpaces_ByArea, false);
                     }
                 }
             }
         }
 
-        public static void Evaluate_SubCellNeighbors(
-            List<HexagonCellPrototype> neighborsToEvaluate,
-            HexagonCellPrototype worldspaceCell,
-            Dictionary<Vector2, Dictionary<int, Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>>>> cellLookup_ByLayer_BySize_ByWorldSpace,
-            int cellLayerOffset,
-            bool enableLog = false
-        )
-        {
-            if (neighborsToEvaluate.Count > 2)
-            {
-                List<Vector2> worldspaceNeighborLookups = HexagonCellPrototype.GenerateNeighborLookupCoordinates(worldspaceCell.center, worldspaceCell.size);
-
-                foreach (HexagonCellPrototype cell in neighborsToEvaluate)
-                {
-                    int currentLayer = HexCoreUtil.Calculate_CurrentLayer(cellLayerOffset, (int)cell.center.y);
-                    int currentSize = cell.size;
-
-                    Vector2 worldspaceLookup = cell.GetWorldSpaceLookup();
-                    List<Vector2> neighborLookups = HexagonCellPrototype.GenerateNeighborLookupCoordinates(cell.center, currentSize);
-                    HashSet<string> foundUids = new HashSet<string>();
-                    int sideNeighborsFound = 0;
-
-                    if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup].ContainsKey(currentSize) == false)
-                    {
-                        // Debug.LogError("currentSize not found: " + currentSize);
-                        continue;
-                    }
-                    else if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize].ContainsKey(currentLayer) == false)
-                    {
-                        // Debug.LogError("currentLayer not found: " + currentLayer + ", cell.center.y: " + (int)cell.center.y);
-                        continue;
-                    }
-
-                    foreach (var neighborLookup in neighborLookups)
-                    {
-                        HexagonCellPrototype neighbor = cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][currentLayer].ContainsKey(neighborLookup)
-                                                                ? cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][currentLayer][neighborLookup]
-                                                                : null;
-
-                        if (neighbor != null && neighbor.uid != cell.uid && foundUids.Contains(neighbor.uid) == false)
-                        {
-                            if (cell.neighbors.Contains(neighbor) == false) cell.neighbors.Add(neighbor);
-                            if (neighbor.neighbors.Contains(cell) == false) neighbor.neighbors.Add(cell);
-                            foundUids.Add(neighbor.uid);
-
-                            sideNeighborsFound++;
-                            continue;
-                        }
-
-                        // try
-                        // {
-                        foreach (Vector2 worldspaceNeighborLookup in worldspaceNeighborLookups)
-                        {
-                            if (cellLookup_ByLayer_BySize_ByWorldSpace.ContainsKey(worldspaceNeighborLookup) == false) continue;
-                            if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceNeighborLookup].ContainsKey(currentSize) == false)
-                            {
-                                continue;
-                            }
-                            else if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceNeighborLookup][currentSize].ContainsKey(currentLayer) == false)
-                            {
-                                continue;
-                            }
-
-                            neighbor = cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceNeighborLookup][currentSize][currentLayer].ContainsKey(neighborLookup)
-                                                                   ? cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceNeighborLookup][currentSize][currentLayer][neighborLookup]
-                                                                   : null;
-
-                            if (neighbor != null && neighbor.uid != cell.uid && foundUids.Contains(neighbor.uid) == false)
-                            {
-                                if (cell.neighbors.Contains(neighbor) == false) cell.neighbors.Add(neighbor);
-                                if (neighbor.neighbors.Contains(cell) == false) neighbor.neighbors.Add(cell);
-                                foundUids.Add(neighbor.uid);
-
-                                sideNeighborsFound++;
-                                continue;
-                            }
-                        }
-                        // }
-                        // catch (System.Exception)
-                        // {
-                        //     Debug.LogError("cell - currentlayer: " + currentLayer + ", size: " + currentSize);
-                        //     throw;
-                        // }
-
-                    }
-
-                    if (sideNeighborsFound < 6)
-                    {
-                        cell.SetEdgeCell(true, EdgeCellType.Default);
-                        // HexagonCellPrototype.EvaluateForEdge(cell, EdgeCellType.Default, true);
-                    }
-
-                    if (sideNeighborsFound == 0 || sideNeighborsFound > 8) Debug.LogError("cell neighbors found: " + sideNeighborsFound);
-                    if (enableLog) Debug.Log("cell neighbors found: " + sideNeighborsFound + ", isEdge: " + cell.IsEdge());
-                }
-            }
-        }
-
-        public static void Evaluate_WorldCellNeighbors(
-            List<HexagonCellPrototype> neighborsToEvaluate,
-            Dictionary<Vector2, Dictionary<Vector2, HexagonCellPrototype>> cellLookups_ByParentCell,
-            int parentCellSize,
-            bool enableLog = false
-        )
-        {
-            if (neighborsToEvaluate.Count > 2)
-            {
-                foreach (HexagonCellPrototype cell in neighborsToEvaluate)
-                {
-                    int neighborsFound = 0;
-                    Vector2 cellParentLookup = cell.GetParentLookup();
-                    List<Vector2> parentNeighborLookups = HexagonCellPrototype.GenerateNeighborLookupCoordinates(new Vector3(cellParentLookup.x, 0, cellParentLookup.y), parentCellSize);
-                    List<Vector2> neighborLookups = HexagonCellPrototype.GenerateNeighborLookupCoordinates(cell.center, cell.size);
-                    HashSet<string> foundUids = new HashSet<string>();
-
-                    foreach (var neighborLookup in neighborLookups)
-                    {
-                        HexagonCellPrototype neighbor = cellLookups_ByParentCell[cellParentLookup].ContainsKey(neighborLookup)
-                                                                ? cellLookups_ByParentCell[cellParentLookup][neighborLookup]
-                                                                : null;
-
-                        if (neighbor != null && neighbor.uid != cell.uid && foundUids.Contains(neighbor.uid) == false)
-                        {
-                            if (cell.neighbors.Contains(neighbor) == false) cell.neighbors.Add(neighbor);
-                            if (neighbor.neighbors.Contains(cell) == false) neighbor.neighbors.Add(cell);
-                            foundUids.Add(neighbor.uid);
-
-                            neighborsFound++;
-                            continue;
-                        }
-
-                        foreach (Vector2 parentNeighborLookup in parentNeighborLookups)
-                        {
-                            if (cellLookups_ByParentCell.ContainsKey(parentNeighborLookup) == false) continue;
-
-                            neighbor = cellLookups_ByParentCell[parentNeighborLookup].ContainsKey(neighborLookup)
-                                                                   ? cellLookups_ByParentCell[parentNeighborLookup][neighborLookup]
-                                                                   : null;
-
-                            if (neighbor != null && neighbor.uid != cell.uid && foundUids.Contains(neighbor.uid) == false)
-                            {
-                                if (cell.neighbors.Contains(neighbor) == false) cell.neighbors.Add(neighbor);
-                                if (neighbor.neighbors.Contains(cell) == false) neighbor.neighbors.Add(cell);
-                                foundUids.Add(neighbor.uid);
-
-                                neighborsFound++;
-                                continue;
-                            }
-                        }
-                    }
-                    HexagonCellPrototype.EvaluateForEdge(cell, EdgeCellType.Default, true);
-
-                    if (neighborsFound == 0 || neighborsFound > 8) Debug.LogError("cell neighbors found: " + neighborsFound);
-                    if (enableLog) Debug.Log("cell neighbors found: " + neighborsFound);
-                }
-            }
-        }
-
-        public static void Evaluate_WorldCellNeighbors(List<HexagonCellPrototype> neighborsToEvaluate, Dictionary<Vector2, HexagonCellPrototype> cellLookups, bool enableLog = false)
-        {
-            if (neighborsToEvaluate.Count > 1)
-            {
-                foreach (HexagonCellPrototype cell in neighborsToEvaluate)
-                {
-                    int neighborsFound = 0;
-                    List<Vector2> neighborLookups = HexagonCellPrototype.GenerateNeighborLookupCoordinates(cell.center, cell.size);
-                    HashSet<string> foundUids = new HashSet<string>();
-                    foreach (var neighborLookup in neighborLookups)
-                    {
-                        HexagonCellPrototype neighbor = cellLookups.ContainsKey(neighborLookup)
-                                                                ? cellLookups[neighborLookup]
-                                                                : null;
-                        // if (neighbor == null)
-                        // {
-                        //     (Vector2 foundAprox, Vector2 offset) = FindKeyOrApproximateValue_WithOffset(neighborLookup, cellLookups, 1, 100);
-                        //     // Vector2 foundAprox = FindKeyOrApproximateValue(neighborLookup, cellLookups, 1, 100);
-                        //     // bool foundAprox = CheckKeyOrApproximateValue(neighborLookup, cellLookups, 0.5f, 2);
-                        //     // if (foundAprox) Debug.LogError("foundAprox key");
-                        //     if (cellLookups.ContainsKey(foundAprox))
-                        //     {
-                        //         Debug.LogError("foundAprox key: " + foundAprox + ", for neighborLookup: " + neighborLookup + " - Offset: " + offset);
-                        //         neighbor = cellLookups[foundAprox];
-                        //     }
-                        //     else Debug.LogError("No aprox found for: " + neighborLookup);
-                        // }
-                        if (neighbor != null && neighbor.uid != cell.uid && foundUids.Contains(neighbor.uid) == false)
-                        {
-                            if (cell.neighbors.Contains(neighbor) == false) cell.neighbors.Add(neighbor);
-                            if (neighbor.neighbors.Contains(cell) == false) neighbor.neighbors.Add(cell);
-                            foundUids.Add(neighbor.uid);
-
-                            neighborsFound++;
-                        }
-                    }
-                    HexagonCellPrototype.EvaluateForEdge(cell, EdgeCellType.Default, true);
-
-                    if (neighborsFound == 0 || neighborsFound > 8) Debug.LogError("cell neighbors found: " + neighborsFound);
-                    if (enableLog) Debug.Log("cell neighbors found: " + neighborsFound);
-                }
-            }
-        }
-
-        public static void Evaluate_WorldCellNeighbors(Dictionary<Vector2, HexagonCellPrototype> neighborsToEvaluate, bool enableLog = false)
-        {
-            if (neighborsToEvaluate.Count > 1)
-            {
-                foreach (HexagonCellPrototype cell in neighborsToEvaluate.Values)
-                {
-                    int neighborsFound = 0;
-                    List<Vector2> neighborLookups = HexagonCellPrototype.GenerateNeighborLookupCoordinates(cell.center, cell.size);
-                    HashSet<string> foundUids = new HashSet<string>();
-                    foreach (var neighborLookup in neighborLookups)
-                    {
-                        HexagonCellPrototype neighbor = neighborsToEvaluate.ContainsKey(neighborLookup)
-                                                                ? neighborsToEvaluate[neighborLookup]
-                                                                : null;
-
-                        if (neighbor != null && neighbor.uid != cell.uid && foundUids.Contains(neighbor.uid) == false)
-                        {
-                            if (cell.neighbors.Contains(neighbor) == false) cell.neighbors.Add(neighbor);
-                            if (neighbor.neighbors.Contains(cell) == false) neighbor.neighbors.Add(cell);
-                            foundUids.Add(neighbor.uid);
-
-                            neighborsFound++;
-                        }
-                    }
-                    HexagonCellPrototype.EvaluateForEdge(cell, EdgeCellType.Default, true);
-
-                    if (neighborsFound == 0 || neighborsFound > 8) Debug.LogError("cell neighbors found: " + neighborsFound);
-                    if (enableLog) Debug.Log("cell neighbors found: " + neighborsFound);
-                }
-            }
-        }
 
         public static bool CheckKeyOrApproximateValue(Vector2 key, Dictionary<Vector2, HexagonCellPrototype> dict, float offset, int steps)
         {
@@ -1602,85 +1400,6 @@ namespace WFCSystem
 
 
 
-        private static void Rehydrate_WorldSpaceNeighbors(
-            Vector2 areaLookup,
-            Vector2 worldspaceLookup,
-            Dictionary<Vector2, Dictionary<Vector2, HexagonCellPrototype>> worldSpaces_ByArea,
-            bool propagateToNeighbors
-        )
-        {
-            if (worldSpaces_ByArea[areaLookup].ContainsKey(worldspaceLookup) && worldSpaces_ByArea[areaLookup][worldspaceLookup].neighborWorldData != null)
-            {
-                foreach (CellWorldData neighborData in worldSpaces_ByArea[areaLookup][worldspaceLookup].neighborWorldData)
-                {
-                    Vector2 neighborParentLookup = neighborData.parentLookup;
-                    Vector2 neighborLookup = neighborData.lookup;
-                    if (worldSpaces_ByArea.ContainsKey(neighborParentLookup) == false) continue;
-
-                    if (worldSpaces_ByArea[neighborParentLookup].ContainsKey(neighborLookup) == false) continue;
-
-                    HexagonCellPrototype neighborCell = worldSpaces_ByArea[neighborParentLookup][neighborLookup];
-                    if (neighborCell != null && worldSpaces_ByArea[areaLookup][worldspaceLookup].neighbors.Contains(neighborCell) == false)
-                    {
-                        worldSpaces_ByArea[areaLookup][worldspaceLookup].neighbors.Add(neighborCell);
-                        if (propagateToNeighbors) Rehydrate_WorldSpaceNeighbors(neighborParentLookup, neighborLookup, worldSpaces_ByArea, false);
-                    }
-                }
-            }
-        }
-
-        // public static List<HexagonCellPrototype> GetConsecutiveNeighborsFromStartCell(
-        //     HexagonCellPrototype startCell,
-        //     Dictionary<Vector2, Dictionary<Vector2, HexagonCellPrototype>> worldSpaces_ByArea,
-        //     int maxMembers
-        // )
-        // {
-        //     HashSet<string> visitedHeads = new HashSet<string>();
-        //     List<HexagonCellPrototype> found = new List<HexagonCellPrototype>();
-        //     HexagonCellPrototype currentHead = startCell;
-        //     int attempts = 999;
-
-        //     if (found.Contains(startCell) == false) found.Add(startCell);
-        //     visitedHeads.Add(startCell.GetId());
-
-        //     while (currentHead != null && found.Count < maxMembers && attempts > 0)
-        //     {
-        //         // Debug.LogError("found.Count : " + found.Count + ", maxMembers: " + maxMembers);
-
-        //         if (currentHead.neighbors.Count == 0) Rehydrate_WorldSpaceNeighbors(currentHead.GetParentLookup(), currentHead.GetLookup(), worldSpaces_ByArea, true);
-
-        //         // Debug.LogError("currentHead.neighbors: " + currentHead.neighbors.Count);
-
-        //         List<HexagonCellPrototype> shuffledNeighbors = currentHead.neighbors.FindAll(n => n.IsSameLayer(currentHead));
-        //         HexagonCellPrototype.Shuffle(shuffledNeighbors);
-
-        //         foreach (var neighbor in shuffledNeighbors)
-        //         {
-        //             if (found.Contains(neighbor) == false) found.Add(neighbor);
-        //         }
-
-        //         visitedHeads.Add(currentHead.uid);
-        //         // Debug.LogError("n - found.Count : " + found.Count + ", maxMembers: " + maxMembers);
-
-        //         if (found.Count < maxMembers)
-        //         {
-        //             if (found.Count > 0)
-        //             {
-        //                 currentHead = found.Find(c => visitedHeads.Contains(c.uid) == false);
-
-        //                 // if (currentHead == null)
-        //                 // {
-        //                 //     Debug.LogError("no currentHead");
-        //                 // }
-        //                 // else Debug.LogError("currentHead.uid: " + currentHead.uid);
-        //             }
-        //             else break;
-        //         }
-        //         attempts--;
-        //     }
-        //     return found;
-        // }
-
         public static List<HexagonCellPrototype> GetConsecutiveNeighborsFromStartCell(HexagonCellPrototype startCell, int maxMembers)
         {
             HashSet<string> visitedHeads = new HashSet<string>();
@@ -1914,7 +1633,8 @@ namespace WFCSystem
             int maxMembers,
             CellSearchPriority searchPriority = CellSearchPriority.SideNeighbors,
             List<CellStatus> ignoresStatus = null,
-            bool excludeOriginalGridEdge = false
+            bool excludeOriginalGridEdge = false,
+            bool edgeOnly = false
         )
         {
             HashSet<string> visited = new HashSet<string>();

@@ -14,11 +14,10 @@ namespace WFCSystem
         public Vector3 GetPosition();
         public Vector3[] GetCorners();
         public Vector3[] GetSides();
-        public int GetLayer();
-        public string GetLayerStackId();
         public Vector2 GetLookup();
         public Vector2 GetParentLookup();
         public Vector2 GetWorldSpaceLookup();
+        public int GetGridLayer();
         public bool IsEdge();
         public bool IsEdgeOfParent();
         public bool IsOriginalGridEdge();

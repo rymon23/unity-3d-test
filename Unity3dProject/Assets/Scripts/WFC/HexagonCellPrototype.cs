@@ -6,6 +6,8 @@ using ProceduralBase;
 
 namespace WFCSystem
 {
+    public enum Filter_CellType { Any = 0, Edge, NoEdge, NullValue }
+
     public enum EdgeCellType { None = 0, Default = 1, Connector, Inner }
     public enum PathCellType { Unset = 0, Default = 1, Start, End }
     public enum CellStatus { Unset = 0, GenericGround = 1, FlatGround, UnderGround, Remove, AboveGround, Underwater }
@@ -28,7 +30,7 @@ namespace WFCSystem
     {
 
         #region Static Vars
-        static float neighborSearchCenterDistMult = 2.4f;
+        public static float neighborSearchCenterDistMult = 2.4f;
         public static float GetCornerNeighborSearchDist(int cellSize) => 1.2f * ((float)cellSize / 12f);
         public static float vertexCenterPointDistance = 0.36f;
         #endregion
@@ -46,26 +48,26 @@ namespace WFCSystem
             Vector3 center,
             int size,
             IHexCell parentCell,
+            float layerOffset,
             string appendToId = "",
-            int layer = -1,
-            string layerStackId = null,
             bool preAssignGround = false
         )
         {
             this.center = center;
+            this.worldCoordinate = new Vector2(center.x, center.z);
             this.size = size;
             RecalculateEdgePoints();
-            this.worldCoordinate = new Vector2(center.x, center.z);
 
-            bool hasParent = parentCell != null;
-
-            if (layer < 0) layer = hasParent ? parentCell.GetLayer() : 0;
-            this.layer = layer;
 
             string baseID = "x" + size + "-" + center;
             string parentHeader = "";
 
-            if (hasParent)
+            bool hasHostParent = (parentCell != null && parentCell.GetSize() < (int)HexCellSizes.X_108);
+            bool isSubCell = (size < (int)HexCellSizes.X_108);
+
+            this.layer = HexCoreUtil.Calculate_CurrentLayer(layerOffset, center.y);
+
+            if (hasHostParent)
             {
                 this.parentId = parentCell.GetId();
                 parentHeader = "[" + this.parentId + "]-";
@@ -75,9 +77,12 @@ namespace WFCSystem
 
                 this.SetPathCell(parentCell.IsPath());
 
+                int parentLayer = parentCell.GetGridLayer();
+                if (parentLayer != this.layer) Debug.LogError("parent/child layer mismatch detected - parentlayer: " + parentLayer + ", this cell's layer: " + this.layer);
+
                 if (parentCell.IsGround())
                 {
-                    if (layer == parentCell.GetLayer()) this.cellStatus = parentCell.GetCellStatus();
+                    if (layer == parentLayer) this.cellStatus = parentCell.GetCellStatus();
                 }
                 else this.cellStatus = parentCell.GetCellStatus();
             }
@@ -90,33 +95,63 @@ namespace WFCSystem
             this.id = parentHeader + baseID;
             this.uid = UtilityHelpers.GenerateUniqueID(baseID);
 
-            this.layerStackId = layerStackId != null ? layerStackId : this.id;
-
             this.name = "prototype-" + this.id;
             if (layer > 0) this.name += "[L_" + layer + "]";
             if (preAssignGround) SetToGround(true);
         }
 
-        public static HexagonCellPrototype Create_SubCell(Vector3 point, int size, Vector2 worldCoordinate, Vector2 wordlspaceLookup, IHexCell parent = null)
+        // public static HexagonCellPrototype New_SubCell(Vector3 centerPoint, HexCellSizes size, Vector2 worldspaceLookup, int layerBaseOffset, IHexCell parentCell = null)
+        // {
+        //     HexagonCellPrototype new_subcell = new HexagonCellPrototype(centerPoint, (int)size, parentCell, layerBaseOffset);
+        //     new_subcell.SetWorldSpaceLookup(worldspaceLookup);
+        //     new_subcell.SetParentLookup(parentLookup);
+        //     new_subcell.SetWorldCoordinate(new Vector2(centerPoint.x, centerPoint.z));
+        //     return new_subcell;
+        // }
+        public static HexagonCellPrototype New_WorldCell(Vector3 centerPoint, int size, Vector2 parentLookup)
         {
-            HexagonCellPrototype newSubCell = new HexagonCellPrototype(point, size, parent);
-            newSubCell.SetWorldCoordinate(worldCoordinate);
-            newSubCell.SetWorldSpaceLookup(wordlspaceLookup);
-            if (parent != null) newSubCell.SetParentLookup(parent.GetLookup());
-            return newSubCell;
+            int layerBaseOffset = 2;
+            HexagonCellPrototype new_cell = new HexagonCellPrototype(centerPoint, size, null, layerBaseOffset);
+            new_cell.SetParentLookup(parentLookup);
+            new_cell.SetWorldCoordinate(new Vector2(centerPoint.x, centerPoint.z));
+            return new_cell;
         }
+        public static HexagonCellPrototype New_WorldCell(Vector3 centerPoint, int size)
+        {
+            int layerBaseOffset = 2;
+            HexagonCellPrototype new_cell = new HexagonCellPrototype(centerPoint, size, null, layerBaseOffset);
+            new_cell.SetWorldCoordinate(new Vector2(centerPoint.x, centerPoint.z));
+            return new_cell;
+        }
+
+        public string LogStats()
+        {
+            string str = "";
+            str += "Size: " + this.size;
+            str += ", Layer: " + this.layer;
+            str += ", Status: " + this.cellStatus;
+            str += ", IsEdge: " + this.IsEdge();
+
+            return str;
+        }
+
+
+        // temp
+        public Dictionary<HexagonTileSide, List<HexSideEdgeSocket>> sideEdgeSocket = null;
+        public Dictionary<HexagonSide, HexSideStructure> sideEdgeStructures = null;
+        public List<Vector3> bottomFloorPoints = null;
+        public List<Vector3> rawStructureBorderPoints = new List<Vector3>();
+        public List<HexSideStructure> borderSurfaceStructures = new List<HexSideStructure>();
+        public Dictionary<Vector3, Vector3> borderPoints = new Dictionary<Vector3, Vector3>();
 
 
         #region Interface Methods
         public string GetId() => id;
-        public string GetLayerStackId() => layerStackId;
         public string Get_Uid() => uid;
         public string GetParentId() => parentId;
 
         public int GetSize() => size;
 
-        public int GetLayer() => layer;
-        public bool IsSameLayer(HexagonCellPrototype cell) => cell.GetLayer() == GetLayer();
 
         public bool IsEdge() => isEdgeCell;
         public bool IsEdgeOfParent() => isEdgeOfParent;
@@ -210,20 +245,97 @@ namespace WFCSystem
         public string id { get; private set; }
         public string uid { get; private set; }
         public string parentId { get; private set; }
-        public string layerStackId { get; private set; }
         public string topNeighborId;
         public string bottomNeighborId;
         public string name;
         public int size;
-        public int layer { get; private set; }
+        public int layer { get; private set; } = -1;
+        public int GetGridLayer() => layer;
+        public bool IsSameLayer(HexagonCellPrototype cell) => (int)cell.center.y == (int)center.y;
 
         public Vector3 center { get; private set; }
         public Vector3[] cornerPoints { get; private set; }
         public Vector3[] sidePoints { get; private set; }
 
         public List<HexagonCellPrototype> neighbors = new List<HexagonCellPrototype>();
-        public HexagonCellPrototype[] neighborsBySide = new HexagonCellPrototype[6];
+        public HexagonCellPrototype[] neighborsBySide { get; private set; } = new HexagonCellPrototype[6];
         public HexagonCellPrototype[] layerNeighbors = new HexagonCellPrototype[2];
+        public void ClearNeighborLists()
+        {
+            this.neighborsBySide = new HexagonCellPrototype[6];
+            this.neighbors = new List<HexagonCellPrototype>();
+            this.neighbors.AddRange(this.layerNeighbors);
+        }
+
+        public void AssignSideNeighbor(HexagonCellPrototype new_neighbor, HexagonSide side)
+        {
+            if (this.neighbors.Contains(new_neighbor) == false) this.neighbors.Add(new_neighbor);
+            neighborsBySide[(int)side] = new_neighbor;
+
+            if (new_neighbor.neighbors.Contains(this) == false) new_neighbor.neighbors.Add(this);
+            new_neighbor.neighborsBySide[(int)HexCoreUtil.GetRelativeHexagonSideOnSharedRotation(side)] = this;
+        }
+
+        public bool HasSideNeighbor() => neighbors.Any(n => IsSameLayer(n));
+        public bool HasGroundSideNeighbor() => neighbors.Any(n => IsSameLayer(n) && n.IsGround());
+        public bool HasPreassignedNeighbor() => neighbors.Any(n => n.IsPreAssigned());
+        public int GetEdgeSideNeighborCount() => neighbors.FindAll(n => IsSameLayer(n) && n.IsEdge()).Count;
+
+
+        public List<HexagonSide> GetNeighborSides(Filter_CellType filter_CellType)
+        {
+            List<HexagonSide> sides = new List<HexagonSide>();
+            for (int side = 0; side < neighborsBySide.Length; side++)
+            {
+                if (neighborsBySide[side] == null)
+                {
+                    if (filter_CellType == Filter_CellType.NullValue) sides.Add((HexagonSide)side);
+
+                    continue;
+                }
+
+                if (filter_CellType != Filter_CellType.Any)
+                {
+                    if (neighborsBySide[side].IsEdge() != (filter_CellType == Filter_CellType.Edge)) continue;
+                    if ((neighborsBySide[side].IsEdge() == false) != (filter_CellType == Filter_CellType.NoEdge)) continue;
+                }
+                sides.Add((HexagonSide)side);
+            }
+            return sides;
+        }
+
+        public List<HexagonTileSide> GetNeighborSidesX8(Filter_CellType filter_CellType)
+        {
+            List<HexagonTileSide> sides = new List<HexagonTileSide>();
+            List<HexagonCellPrototype> allNeighbors = new List<HexagonCellPrototype>();
+            allNeighbors.AddRange(neighborsBySide);
+            allNeighbors.Add(layerNeighbors[0]);
+            allNeighbors.Add(layerNeighbors[1]);
+
+            for (int side = 0; side < allNeighbors.Count; side++)
+            {
+                if (allNeighbors[side] == null)
+                {
+                    if (filter_CellType == Filter_CellType.NullValue) sides.Add((HexagonTileSide)side);
+
+                    continue;
+                }
+
+                if (filter_CellType != Filter_CellType.Any)
+                {
+                    if (allNeighbors[side].IsEdge() != (filter_CellType == Filter_CellType.Edge)) continue;
+                    if ((allNeighbors[side].IsEdge() == false) != (filter_CellType == Filter_CellType.NoEdge)) continue;
+                }
+                sides.Add((HexagonTileSide)side);
+            }
+            return sides;
+        }
+
+        public HexagonCellPrototype GetNeighborOnSide(int side) => neighborsBySide[side];
+        public HexagonCellPrototype GetNeighborOnSide(HexagonSide side) => neighborsBySide[(int)side];
+        public List<HexagonCellPrototype> GetNeighborsWithStatus(CellStatus status) => neighbors.FindAll(n => n.GetCellStatus() == status);
+
+
         public CellWorldData[] neighborWorldData;
         public Vector3[] GetTerrainChunkCoordinates()
         {
@@ -327,12 +439,6 @@ namespace WFCSystem
         public bool isWorldSpaceCellInitialized;
         #endregion
 
-        // public static Vector2 CalculateAproximateCoordinate(Vector2 v)
-        // {
-        //     int x = Mathf.RoundToInt(v.x);
-        //     int y = Mathf.RoundToInt(v.y);
-        //     return new Vector2Int(x, y);
-        // }
 
         public int CalculateNextSize_Up() => (size * 3);
         public int CalculateNextSize_Down() => (size / 3);
@@ -400,67 +506,13 @@ namespace WFCSystem
             return allEdgePoints;
         }
 
-        public bool HasSideNeighbor() => neighbors.Any(n => n.GetLayer() == layer);
-        public bool HasGroundNeighbor() => neighbors.Any(n => n.GetLayer() == layer && n.IsGround());
-        public bool HasPreassignedNeighbor() => neighbors.Any(n => n.IsPreAssigned());
-        public HexagonCellPrototype GetNeighborOnSide(int side) => neighborsBySide[side];
-        public HexagonCellPrototype GetNeighborOnSide(HexagonSide side) => neighborsBySide[(int)side];
-
-        public void EvaluateNeighborsBySide(float offset = 0.33f)
-        {
-            HexagonCellPrototype[] newNeighborsBySide = new HexagonCellPrototype[6];
-            HashSet<string> added = new HashSet<string>();
-
-            RecalculateEdgePoints();
-
-            for (int side = 0; side < 6; side++)
-            {
-                Vector3 sidePoint = sidePoints[side];
-
-                for (int neighbor = 0; neighbor < neighbors.Count; neighbor++)
-                {
-                    if (neighbors[neighbor] == null)
-                    {
-                        neighbors.Remove(neighbors[neighbor]);
-                        continue;
-                    }
-
-                    if (neighbors[neighbor].layer != layer || added.Contains(neighbors[neighbor].id)) continue;
-
-                    neighbors[neighbor].RecalculateEdgePoints();
-
-                    for (int neighborSide = 0; neighborSide < 6; neighborSide++)
-                    {
-                        Vector3 neighborSidePoint = neighbors[neighbor].sidePoints[neighborSide];
-
-                        if (Vector2.Distance(new Vector2(sidePoint.x, sidePoint.z), new Vector2(neighborSidePoint.x, neighborSidePoint.z)) <= offset)
-                        {
-                            newNeighborsBySide[side] = neighbors[neighbor];
-                            added.Add(neighbors[neighbor].id);
-                            break;
-                        }
-                    }
-                }
-            }
-            neighborsBySide = newNeighborsBySide;
-        }
-
 
         public List<HexagonCellPrototype> GetChildCellsWithCellStatus(CellStatus status)
         {
             if (!HasChildren()) return null;
             return children.FindAll(c => c.cellStatus == status);
-
-            // if (!isGridHost || cellPrototypes_X4_ByLayer == null || cellPrototypes_X4_ByLayer.Count == 0) return null;
-            // List<HexagonCellPrototype> results = new List<HexagonCellPrototype>();
-            // foreach (var kvp in cellPrototypes_X4_ByLayer)
-            // {
-            //     results.AddRange(kvp.Value.FindAll(c => c.cellStatus == status));
-            // }
-            // return results;
         }
 
-        public List<HexagonCellPrototype> GetGetNeighborsWithStatus(CellStatus status) => neighbors.FindAll(n => n.GetCellStatus() == status);
         public List<HexagonCellPrototype> GetChildGroundCells() => GetChildCellsWithCellStatus(CellStatus.GenericGround);
 
         public List<Vector3> GetDottedEdgeLine() => VectorUtil.GenerateDottedLine(this.cornerPoints.ToList(), 8);
@@ -559,13 +611,6 @@ namespace WFCSystem
             isLeveledRampCell = enable;
         }
 
-        [Header("Grid Layer")]
-        [SerializeField] private int _gridLayer = 0;
-        public int GetGridLayer() => _gridLayer;
-        public void SetGridLayer(int gridlayer)
-        {
-            _gridLayer = gridlayer;
-        }
 
 
         [Header("Micro Cluster System")]
@@ -612,11 +657,6 @@ namespace WFCSystem
         public HexagonTileCore GetCurrentTile() => (HexagonTileCore)currentTile;
         public void SetTile(HexagonTileCore newTile, int rotation, bool inverted = false)
         {
-            // if (IsInCluster())
-            // {
-            //     Debug.LogError("Trying to set a Tile on a cell with a clusterId assigned");
-            //     return;
-            // }
             currentTile = (IHexagonTile)newTile;
             currentTileRotation = rotation;
             isCurrentTileInverted = inverted;
@@ -648,20 +688,12 @@ namespace WFCSystem
                     {
                         GlobalSockets defaultSocketId;
 
-                        Debug.LogError("sideNeighbor has no tile. Current cell - Edge: " + IsEdge());
+                        // Debug.LogError("sideNeighbor has no tile. Current cell - Edge: " + IsEdge());
 
                         if (IsGridEdge())
                         {
-                            // Edge Connectors
-                            // if (GetEdgeCellType() == EdgeCellType.Connector && (sideNeighbor.GetParentId() != GetParentId()))
-                            // {
-                            //     defaultSocketId = GlobalSockets.Unset_Edge_Connector;
-                            // }
-                            // else
-                            // {
                             // defaultSocketId = sideNeighbor.isEdgeCell ? GlobalSockets.Unassigned_EdgeCell : GlobalSockets.Unassigned_InnerCell;
                             defaultSocketId = (useWalledEdgePreference && sideNeighbor.isEdgeCell) ? GlobalSockets.Unassigned_EdgeCell : GlobalSockets.Unassigned_InnerCell;
-                            // }
                         }
                         else
                         {
@@ -933,50 +965,6 @@ namespace WFCSystem
         public List<Vector2Int> vertexList = new List<Vector2Int>();
 
 
-        // public EdgeCellType GetEdgeCellType() => _edgeCellType;
-        // public Vector3 GetPosition() => center;
-        // public Vector3[] GetCorners() => cornerPoints;
-        // public Vector3[] GetSides() => sidePoints;
-        // #endregion
-        // public string id { get; private set; }
-        // public string uid { get; private set; }
-        // public string layerStackId { get; private set; }
-        // public string topNeighborId;
-        // public string bottomNeighborId;
-        // public string parentId;
-        // public string name;
-        // public int size;
-        // public int layer { get; private set; }
-
-        // public Vector3 center;
-        // public Vector3[] cornerPoints;
-        // public Vector3[] sidePoints;
-        // public List<HexagonCellPrototype> neighbors = new List<HexagonCellPrototype>();
-        // public HexagonCellPrototype[] neighborsBySide = new HexagonCellPrototype[6];
-        // public HexagonCellPrototype[] layerNeighbors = new HexagonCellPrototype[2];
-
-        // public bool HasTopNeighbor() => layerNeighbors[1] != null;
-        // public bool HasBottomNeighbor() => layerNeighbors[0] != null;
-
-        // public List<Vector2Int> vertexList = new List<Vector2Int>();
-        // public List<Vector2> vertexList_V2 = new List<Vector2>();
-
-        // private CellStatus cellStatus = CellStatus.Unset;
-        // // public List<int> rampSlopeSides;
-        // public bool IsRemoved() => (cellStatus == CellStatus.Remove);
-        // public bool IsDisposable() => IsInCluster() == false && (cellStatus == CellStatus.Remove || cellStatus == CellStatus.UnderGround);
-        // public bool IsAssigned() => currentTile != null || IsGridHost() || isIgnored || IsInClusterSystem() || IsDisposable() || (isLeveledCell && !isLeveledGroundCell);
-        // public bool IsPreAssigned() => (isPath || isGridHost || isWorldSpaceEdgePathConnector || IsInCluster());
-        // public bool IsInCluster() => (clusterId != null);
-        // private bool _isClusterCellParent;
-        // private string _clusterCellParentId;
-        // public bool IsClusterCellParent() => _isClusterCellParent;
-        // public bool IsInClusterSystem() => IsInCluster() || IsClusterCellParent() || (_clusterCellParentId != "" && _clusterCellParentId != null);
-
-        // private IHexagonTile currentTile;
-        // public IHexagonTile GetTile() => currentTile;
-        // public HexagonTileCore GetCurrentTile() => (HexagonTileCore)currentTile;
-
         // public void SetTile(HexagonTileCore newTile, int rotation, bool inverted = false)
         // {
         //     if (IsInCluster())
@@ -1045,8 +1033,8 @@ namespace WFCSystem
         //     allEdgePoints.AddRange(sidePoints);
         //     return allEdgePoints;
         // }
-        // public bool HasSideNeighbor() => neighbors.Any(n => n.GetLayer() == layer);
-        // public bool HasGroundNeighbor() => neighbors.Any(n => n.GetLayer() == layer && n.IsGround());
+        // public bool HasSideNeighbor() => neighbors.Any(n => n.GetGridLayer() == layer);
+        // public bool HasGroundNeighbor() => neighbors.Any(n => n.GetGridLayer() == layer && n.IsGround());
         // public bool HasPreassignedNeighbor() => neighbors.Any(n => n.IsPreAssigned());
         // public HexagonCellPrototype GetNeighborOnSide(int side) => neighborsBySide[side];
         // public HexagonCellPrototype GetNeighborOnSide(HexagonSide side) => neighborsBySide[(int)side];
@@ -1102,28 +1090,12 @@ namespace WFCSystem
         //     return -1;
         // }
 
-        // public List<HexagonCellPrototype> GetChildCellsWithCellStatus(CellStatus status)
-        // {
-        //     if (!isGridHost || cellPrototypes_X4_ByLayer == null || cellPrototypes_X4_ByLayer.Count == 0) return null;
-
-        //     List<HexagonCellPrototype> results = new List<HexagonCellPrototype>();
-        //     foreach (var kvp in cellPrototypes_X4_ByLayer)
-        //     {
-        //         results.AddRange(kvp.Value.FindAll(c => c.cellStatus == status));
-        //     }
-        //     return results;
-        // }
-
-        // public List<HexagonCellPrototype> GetGetNeighborsWithStatus(CellStatus status) => neighbors.FindAll(n => n.GetCellStatus() == status);
-        // public List<HexagonCellPrototype> GetChildGroundCells() => GetChildCellsWithCellStatus(CellStatus.GenericGround);
-
-        // public List<Vector3> GetDottedEdgeLine() => VectorUtil.GenerateDottedLine(this.cornerPoints.ToList(), 8);
 
         #region Static Methods
 
         public static List<Vector2> CalculateNeighborLookupCoordinates(HexagonCellPrototype cell)
         {
-            List<Vector2> estimatedNeighborCenters = HexagonCellPrototype.GenerateNeighborLookupCoordinates(cell.center, cell.size);
+            List<Vector2> estimatedNeighborCenters = HexCoreUtil.GenerateNeighborLookupCoordinates(cell.center, cell.size);
             // List<Vector2> estimatedNeighborCenters = HexagonCellPrototype.GenerateChildrenLookupCoordinates_X11(cell.center, cell.size);
             // List<Vector3> estimatedNeighborCenters = HexagonCellPrototype.GenerateHexagonCenterPoints(cell.center, cell.size, null, false);
             List<Vector2> neighborLookups = new List<Vector2>();
@@ -1477,7 +1449,7 @@ namespace WFCSystem
             int lowestLayer = -1;
             foreach (HexagonCellPrototype item in prototypes)
             {
-                if (lowestLayer == -1 || lowestLayer > item.GetLayer()) lowestLayer = item.GetLayer();
+                if (lowestLayer == -1 || lowestLayer > item.GetGridLayer()) lowestLayer = item.GetGridLayer();
             }
             return lowestLayer;
         }
@@ -1486,7 +1458,7 @@ namespace WFCSystem
             int highestLayer = -1;
             foreach (HexagonCellPrototype item in prototypes)
             {
-                if (highestLayer == -1 || highestLayer < item.GetLayer()) highestLayer = item.GetLayer();
+                if (highestLayer == -1 || highestLayer < item.GetGridLayer()) highestLayer = item.GetGridLayer();
             }
             return highestLayer;
         }
@@ -1788,7 +1760,7 @@ namespace WFCSystem
                         {
                             for (int l = IX + 1; l < newPath.Count; l++)
                             {
-                                if (newPath[IX].GetLayerStackId() == newPath[l].GetLayerStackId())
+                                if (newPath[IX].GetLookup() == newPath[l].GetLookup())
                                 {
                                     newPath.Remove(newPath[l]);
                                     IX = 0;
@@ -1924,7 +1896,7 @@ namespace WFCSystem
 
                         HexagonCellPrototype currentCell = initialPath[i];
 
-                        endLayerSum += currentCell.GetLayer();
+                        endLayerSum += currentCell.GetGridLayer();
                         ends++;
 
                         currentCell.SetPathCell(true, PathCellType.End);
@@ -1962,7 +1934,7 @@ namespace WFCSystem
                 bool reject = false;
                 foreach (var item in finalPath)
                 {
-                    if (item.GetLayerStackId() == currentCell.GetLayerStackId())
+                    if (item.GetLookup() == currentCell.GetLookup())
                     {
                         Debug.Log("GenerateRandomPathBetweenCells - cell in finalPath has current as layer neighbor ");
 
@@ -1982,21 +1954,21 @@ namespace WFCSystem
 
                 if (reject) continue;
 
-                int compareLayer = (prevCell != null) ? prevCell.GetLayer() : avgEndLayer;
-                int layerDiff = Mathf.Abs(compareLayer - currentCell.GetLayer());
+                int compareLayer = (prevCell != null) ? prevCell.GetGridLayer() : avgEndLayer;
+                int layerDiff = Mathf.Abs(compareLayer - currentCell.GetGridLayer());
 
                 if (layerDiff > 1)
                 {
-                    int desiredLayer = compareLayer > currentCell.GetLayer() ? compareLayer - 1 : compareLayer + 1;
+                    int desiredLayer = compareLayer > currentCell.GetGridLayer() ? compareLayer - 1 : compareLayer + 1;
                     HexagonCellPrototype updatedCell = ChangeGroundCellOnLayerStack(currentCell, desiredLayer);
                     updatedCell.SetPathCell(true);
                     finalPath.Add(updatedCell);
                     continue;
                 }
 
-                if (currentCell.IsDisposable() || (allowNonGroundCells == false && !currentCell.IsGround()) || (allowNonGroundCells && !currentCell.IsGround() && !currentCell.HasGroundNeighbor()))
+                if (currentCell.IsDisposable() || (allowNonGroundCells == false && !currentCell.IsGround()) || (allowNonGroundCells && !currentCell.IsGround() && !currentCell.HasGroundSideNeighbor()))
                 {
-                    int desiredLayer = compareLayer > currentCell.GetLayer() ? compareLayer - 1 : compareLayer + 1;
+                    int desiredLayer = compareLayer > currentCell.GetGridLayer() ? compareLayer - 1 : compareLayer + 1;
                     HexagonCellPrototype updatedCell = ChangeGroundCellOnLayerStack(currentCell, desiredLayer);
                     updatedCell.SetPathCell(true);
                     finalPath.Add(updatedCell);
@@ -2058,27 +2030,30 @@ namespace WFCSystem
             return GetRandomEntryPrototypes(possibles, num, assign, -1, excludeAdjacentNeighbors);
         }
 
-        public static void EvaluateCellNeighborsAndEdgesInLayerList(List<HexagonCellPrototype> allLayerPrototypes, EdgeCellType edgeCellType, Transform transform, bool assignOriginalGridEdge, HashSet<string> checkGridConnectorByParentIds = null)
+        public static void EvaluateCellNeighborsAndEdgesInLayerList(List<HexagonCellPrototype> allLayerPrototypes, EdgeCellType edgeCellType, Transform transform, bool assignOriginalGridEdge)
         {
-            HexagonCellPrototype.PopulateNeighborsFromCornerPoints(allLayerPrototypes, transform);
+            HexCellUtil.PopulateNeighborsFromCornerPoints(allLayerPrototypes, transform);
             HexagonCellPrototype.GetEdgePrototypes(allLayerPrototypes, EdgeCellType.Default, assignOriginalGridEdge);
         }
         public static void EvaluateCellNeighborsAndEdgesInLayerList(List<HexagonCellPrototype> allLayerPrototypes, EdgeCellType edgeCellType, bool assignOriginalGridEdge)
         {
-            HexagonCellPrototype.PopulateNeighborsFromCornerPoints(allLayerPrototypes);
+            HexCellUtil.PopulateNeighborsFromCornerPoints(allLayerPrototypes);
             HexagonCellPrototype.GetEdgePrototypes(allLayerPrototypes, EdgeCellType.Default, assignOriginalGridEdge);
         }
 
 
-        public static void ResetNeighbors(List<HexagonCellPrototype> prototypes, EdgeCellType edgeCellType)
+        public static void ClearNeighborLists(List<HexagonCellPrototype> cells)
         {
-            foreach (HexagonCellPrototype prototype in prototypes)
+            foreach (HexagonCellPrototype currentCell in cells)
             {
-                prototype.neighborsBySide = new HexagonCellPrototype[6];
-                prototype.neighbors = new List<HexagonCellPrototype>();
-                prototype.neighbors.AddRange(prototype.layerNeighbors);
+                currentCell.ClearNeighborLists();
             }
-            EvaluateCellNeighborsAndEdgesInLayerList(prototypes, edgeCellType, false);
+        }
+
+        public static void ResetNeighbors(List<HexagonCellPrototype> cells, EdgeCellType edgeCellType)
+        {
+            ClearNeighborLists(cells);
+            EvaluateCellNeighborsAndEdgesInLayerList(cells, edgeCellType, false);
         }
 
         public static List<HexagonCellPrototype> GetEdgePrototypes(List<HexagonCellPrototype> prototypes, EdgeCellType edgeCellType, bool assignOriginalGridEdge = false)
@@ -2112,8 +2087,6 @@ namespace WFCSystem
 
             if (sideNeighborCount < 6)
             {
-                if (prototype.size == 4) Debug.LogError("sideNeighborCount: " + sideNeighborCount + ", prototype.neighbors: " + prototype.neighbors.Count);
-
                 prototype.SetEdgeCell(true, edgeCellType);
                 isEdge = true;
             }
@@ -2253,265 +2226,6 @@ namespace WFCSystem
             }
         }
         #endregion
-
-        public static void PopulateNeighborsFromCornerPoints(List<HexagonCellPrototype> cells, float offset = 0.33f)
-        {
-            int duplicatesFound = 0;
-            for (int ixA = 0; ixA < cells.Count; ixA++)
-            {
-                HexagonCellPrototype cellA = cells[ixA];
-                if (cellA.cellStatus == CellStatus.Remove) continue;
-
-                for (int ixB = 0; ixB < cells.Count; ixB++)
-                {
-                    HexagonCellPrototype cellB = cells[ixB];
-                    if (ixB == ixA || cellB.cellStatus == CellStatus.Remove || cellA.layer != cellB.layer) continue;
-
-                    float distance = Vector3.Distance(cellA.center, cellB.center);
-                    if (distance > cellA.size * neighborSearchCenterDistMult) continue;
-
-                    if (distance < 1f)
-                    {
-                        cellB.cellStatus = CellStatus.Remove;
-                        duplicatesFound++;
-                        // Debug.LogError("Duplicate Cells: " + cellA.id + ", uid: " + cellA.uid + ", and " + cellB.id + ", uid: " + cellB.uid + "\n total cells: " + cells.Count);
-                        continue;
-                    }
-
-                    bool found = false;
-
-                    for (int crIXA = 0; crIXA < cellA.cornerPoints.Length; crIXA++)
-                    {
-                        if (found) break;
-
-                        Vector3 cornerA = cellA.cornerPoints[crIXA];
-
-                        for (int crIXB = 0; crIXB < cellB.cornerPoints.Length; crIXB++)
-                        {
-                            Vector3 cornerB = cellB.cornerPoints[crIXB];
-
-                            Vector2 posA = new Vector2(cornerA.x, cornerA.z);
-                            Vector2 posB = new Vector2(cornerB.x, cornerB.z);
-
-                            if (Vector2.Distance(posA, posB) <= offset)
-                            {
-                                if (cellA.neighbors.Contains(cellB) == false) cellA.neighbors.Add(cellB);
-                                if (cellB.neighbors.Contains(cellA) == false) cellB.neighbors.Add(cellA);
-                                found = true;
-                                break;
-                            }
-
-                        }
-                    }
-                }
-                cellA.EvaluateNeighborsBySide(offset);
-            }
-            if (duplicatesFound > 0) Debug.LogError("Duplicate Cells found and marked for removal: " + duplicatesFound);
-        }
-
-        public static void PopulateNeighborsFromCornerPoints(List<HexagonCellPrototype> cells, Transform transform, float offset = 0.33f)
-        {
-            int duplicatesFound = 0;
-            for (int ixA = 0; ixA < cells.Count; ixA++)
-            {
-                HexagonCellPrototype cellA = cells[ixA];
-                if (cellA.cellStatus == CellStatus.Remove) continue;
-
-                for (int ixB = 0; ixB < cells.Count; ixB++)
-                {
-                    HexagonCellPrototype cellB = cells[ixB];
-                    if (ixB == ixA || cellB.cellStatus == CellStatus.Remove || cellA.layer != cellB.layer) continue;
-
-                    Vector3 cellPosA = transform.TransformVector(cellA.center);
-                    Vector3 cellPosB = transform.TransformVector(cellB.center);
-
-                    float distance = Vector3.Distance(cellPosA, cellPosB);
-                    if (distance > cellA.size * neighborSearchCenterDistMult) continue;
-
-                    if (distance < 1f)
-                    {
-                        cellB.cellStatus = CellStatus.Remove;
-                        duplicatesFound++;
-                        // Debug.LogError("Duplicate Cells: " + cellA.id + ", uid: " + cellA.uid + ", and " + cellB.id + ", uid: " + cellB.uid + "\n total cells: " + cells.Count);
-                        continue;
-                    }
-
-                    bool found = false;
-
-                    for (int crIXA = 0; crIXA < cellA.cornerPoints.Length; crIXA++)
-                    {
-                        if (found) break;
-
-                        Vector3 cornerA = transform.TransformVector(cellA.cornerPoints[crIXA]);
-
-                        for (int crIXB = 0; crIXB < cellB.cornerPoints.Length; crIXB++)
-                        {
-                            Vector3 cornerB = transform.TransformVector(cellB.cornerPoints[crIXB]);
-
-                            Vector2 posA = new Vector2(cornerA.x, cornerA.z);
-                            Vector2 posB = new Vector2(cornerB.x, cornerB.z);
-
-                            if (Vector2.Distance(posA, posB) <= offset)
-                            {
-                                if (cellA.neighbors.Contains(cellB) == false) cellA.neighbors.Add(cellB);
-                                if (cellB.neighbors.Contains(cellA) == false) cellB.neighbors.Add(cellA);
-                                found = true;
-                                break;
-                            }
-
-                        }
-                    }
-                }
-                cellA.EvaluateNeighborsBySide(offset);
-            }
-            if (duplicatesFound > 0) Debug.LogError("Duplicate Cells found and marked for removal: " + duplicatesFound);
-        }
-
-        public static void PopulateNeighborsFromCornerPointsXZ(List<HexagonCellPrototype> cells, Transform transform, float offset = 0.33f)
-        {
-            int duplicatesFound = 0;
-            for (int ixA = 0; ixA < cells.Count; ixA++)
-            {
-                HexagonCellPrototype cellA = cells[ixA];
-                if (cellA.cellStatus == CellStatus.Remove) continue;
-
-                for (int ixB = 0; ixB < cells.Count; ixB++)
-                {
-                    HexagonCellPrototype cellB = cells[ixB];
-                    if (cellA.Get_Uid() == cellB.Get_Uid()) continue;
-                    if (ixB == ixA || cellB.cellStatus == CellStatus.Remove || cellA.layer != cellB.layer) continue;
-
-                    Vector3 cellPosA = transform.TransformVector(cellA.center);
-                    Vector3 cellPosB = transform.TransformVector(cellB.center);
-
-                    float distance = VectorUtil.DistanceXZ(cellPosA, cellPosB);
-
-                    float searcRange = (cellA.size * neighborSearchCenterDistMult);
-
-                    if (distance > searcRange)
-                    {
-                        // Debug.LogError("Neighbor out of range - Distance: " + distance + ", Range: " + searcRange);
-                        continue;
-                    }
-
-                    if (distance < 1f)
-                    {
-                        cellB.cellStatus = CellStatus.Remove;
-                        duplicatesFound++;
-                        // Debug.LogError("Duplicate Cells: " + cellA.id + ", uid: " + cellA.uid + ", and " + cellB.id + ", uid: " + cellB.uid + "\n total cells: " + cells.Count);
-                        continue;
-                    }
-
-                    bool found = false;
-
-                    for (int crIXA = 0; crIXA < cellA.cornerPoints.Length; crIXA++)
-                    {
-                        if (found) break;
-
-                        Vector3 cornerA = transform.TransformVector(cellA.cornerPoints[crIXA]);
-
-                        for (int crIXB = 0; crIXB < cellB.cornerPoints.Length; crIXB++)
-                        {
-                            Vector3 cornerB = transform.TransformVector(cellB.cornerPoints[crIXB]);
-
-                            Vector2 posA = new Vector2(cornerA.x, cornerA.z);
-                            Vector2 posB = new Vector2(cornerB.x, cornerB.z);
-
-                            if (Vector2.Distance(posA, posB) <= offset)
-                            {
-                                if (cellA.neighbors.Contains(cellB) == false) cellA.neighbors.Add(cellB);
-                                if (cellB.neighbors.Contains(cellA) == false) cellB.neighbors.Add(cellA);
-                                found = true;
-
-                                // Debug.Log("Neighbor found");
-                                break;
-                            }
-
-                        }
-                    }
-                }
-                cellA.EvaluateNeighborsBySide(offset);
-            }
-            if (duplicatesFound > 0) Debug.LogError("Duplicate Cells found and marked for removal: " + duplicatesFound);
-        }
-
-
-        // public static void ReevaluateNonGroundPrototypesElevationStatus(Dictionary<int, List<HexagonCellPrototype>> prototypesByLayer, TerrainVertex[,] vertexGrid)
-        // {
-        //     List<HexagonCellPrototype> topLayerPrototypes = prototypesByLayer[prototypesByLayer.Count - 1];
-
-        //     AssignTerrainVertexIndiciesToPrototypes(topLayerPrototypes, vertexGrid);
-
-        //     foreach (HexagonCellPrototype topPrototype in topLayerPrototypes)
-        //     {
-
-        //         float lowestElevationInVertices;
-
-        //     }
-
-        //     foreach (TerrainVertex vertex in vertexGrid)
-        //     {
-        //         (HexagonCellPrototype closestCell, float closestDistance) = GetHexagonCellProtoypeBoundsParentOfVertex(topLayerPrototypes, vertex, true, false);
-
-        //         if (closestCell == null)
-        //         {
-        //             // Debug.LogError("NO closestCell found");
-        //             continue;
-        //         }
-
-
-
-        //         int indexX = vertex.index_X;
-        //         int indexZ = vertex.index_Z;
-        //         Vector2 cellPosXZ = new Vector2(closestCell.center.x, closestCell.center.z);
-
-        //         if (_terrainVertexSurfacesIndiciesByCellXZCenter.ContainsKey(cellPosXZ) == false)
-        //         {
-        //             _terrainVertexSurfacesIndiciesByCellXZCenter.Add(cellPosXZ, new List<(int, int)>());
-        //         }
-
-        //         _terrainVertexSurfacesIndiciesByCellXZCenter[cellPosXZ].Add((indexX, indexZ));
-        //     }
-
-
-        //     foreach (HexagonCellPrototype prototypeCell in topLayerPrototypes)
-        //     {
-        //         if (prototypeCell._vertexIndices != null && prototypeCell._vertexIndices.Count > 0)
-        //         {
-        //             // Debug.Log("GroundPrototypesToTerrainVertexElevation - A");
-        //             ClearLayersAboveVertexElevationsAndSetGround(prototypeCell, prototypeCell._vertexIndices, prototypeCell._vertexIndicesBySide, vertexGrid, distanceYOffset, fallbackOnBottomCell);
-        //             continue;
-        //         }
-
-        //         // Debug.Log("GroundPrototypesToTerrainVertexElevation - B");
-        //         Vector2 currentPosXZ = new Vector2(prototypeCell.center.x, prototypeCell.center.z);
-
-        //         // Get closest vertex
-        //         float closestDistance = float.MaxValue;
-        //         TerrainVertex closestVertex = vertexGrid[0, 0];
-
-        //         for (int x = 0; x < vertexGrid.GetLength(0); x++)
-        //         {
-        //             for (int z = 0; z < vertexGrid.GetLength(1); z++)
-        //             {
-        //                 TerrainVertex currentVertex = vertexGrid[x, z];
-
-        //                 Vector2 vertexPosXZ = new Vector2(currentVertex.position.x, currentVertex.position.z);
-
-        //                 float dist = Vector2.Distance(currentPosXZ, vertexPosXZ);
-        //                 if (dist < closestDistance)
-        //                 {
-        //                     // Debug.Log("currentVertex - elevationY:" + currentVertex.position.y);
-        //                     closestDistance = dist;
-        //                     closestVertex = currentVertex;
-        //                 }
-
-        //             }
-        //         }
-
-        //         if (closestDistance != float.MaxValue) ClearLayersAboveElevationAndSetGround(prototypeCell, closestVertex.position.y, distanceYOffset, fallbackOnBottomCell);
-        //     }
-        // }
 
         public static List<int> GetGridEdgeVertexIndices(List<HexagonCellPrototype> allGroundEdgePrototypes, TerrainVertex[,] vertexGrid, float searchDistance = 36f)
         {
@@ -2716,69 +2430,6 @@ namespace WFCSystem
             }
         }
 
-
-        public static (Dictionary<int, List<HexagonCellPrototype>>, List<HexagonCellPrototype>, List<Vector2>) GenerateGridsByLayer_WithOutOfBounds(
-            Vector3 centerPos,
-            float radius,
-            int cellSize,
-            int cellLayers,
-            int cellLayerElevation,
-            IHexCell parentCell,
-            int baseLayerOffset = 0,
-            Transform transform = null,
-            bool preAssignGround = false
-        )
-        {
-            (List<HexagonCellPrototype> newCellPrototypes, List<HexagonCellPrototype> outsideParent) = GenerateHexGrid(
-                centerPos,
-                cellSize,
-                (int)radius,
-                parentCell,
-                transform
-                );
-
-            List<Vector2> allXZCenterPoints = new List<Vector2>();
-            foreach (var item in newCellPrototypes)
-            {
-                allXZCenterPoints.Add(new Vector2(item.center.x, item.center.z));
-            }
-
-            if (preAssignGround)
-            {
-                foreach (var item in newCellPrototypes)
-                {
-                    item.SetToGround(true);
-                }
-            }
-
-            Dictionary<int, List<HexagonCellPrototype>> newPrototypesByLayer = new Dictionary<int, List<HexagonCellPrototype>>();
-            int startingLayer = 0 + baseLayerOffset;
-            newPrototypesByLayer.Add(startingLayer, newCellPrototypes);
-
-            if (cellLayers > 1)
-            {
-                cellLayers += startingLayer;
-
-                for (int i = startingLayer + 1; i < cellLayers; i++)
-                {
-                    List<HexagonCellPrototype> newLayer;
-                    if (i == startingLayer + 1)
-                    {
-                        newLayer = DuplicateGridToNewLayerAbove(newPrototypesByLayer[startingLayer], cellLayerElevation, i, parentCell);
-                    }
-                    else
-                    {
-                        List<HexagonCellPrototype> previousLayer = newPrototypesByLayer[i - 1];
-                        newLayer = DuplicateGridToNewLayerAbove(previousLayer, cellLayerElevation, i, parentCell);
-                    }
-                    newPrototypesByLayer.Add(i, newLayer);
-                }
-            }
-            return (newPrototypesByLayer, outsideParent, allXZCenterPoints);
-        }
-
-
-
         public static void AssignParentsToChildren(List<HexagonCellPrototype> children, List<HexagonCellPrototype> parents)
         {
             foreach (HexagonCellPrototype child in children)
@@ -2789,7 +2440,7 @@ namespace WFCSystem
                     {
                         parent.SetChild(child);
 
-                        // Debug.Log("AssignParentsToChildren - child - Size: " + child.GetSize() + ", Layer: " + child.GetLayer() + ",  parent - Size: " + parent.GetSize() + ", Layer: " + parent.GetLayer() + ", parentId: " + parent.GetId());
+                        // Debug.Log("AssignParentsToChildren - child - Size: " + child.GetSize() + ", Layer: " + child.GetGridLayer() + ",  parent - Size: " + parent.GetSize() + ", Layer: " + parent.GetGridLayer() + ", parentId: " + parent.GetId());
                         break;
                     }
                 }
@@ -2800,7 +2451,7 @@ namespace WFCSystem
         public static Dictionary<int, Dictionary<int, List<HexagonCellPrototype>>> GenerateGridsByLayerBySize(
             Dictionary<int, List<Vector3>> baseCenterPointsBySize,
             int cellLayers,
-            int cellLayerElevation,
+            int cellLayerOffset,
             IHexCell parentCell,
             int baseLayerOffset,
             Transform transform = null,
@@ -2837,10 +2488,11 @@ namespace WFCSystem
 
                 // Debug.Log("GenerateGridsByLayerBySize - currentSize: " + currentSize + ", Count: " + kvp.Value.Count + ", toPassDown: " + toPassDown.Count);
 
-                List<HexagonCellPrototype> newCellPrototypes = GenerateCellsFromCenterPoints(toPassDown,
+                List<HexagonCellPrototype> newCellPrototypes = GenerateCellsFromCenterPoints(
+                        toPassDown,
                         currentSize,
                         (prevSize == -1) ? parentCell : null,
-                        baseLayer,
+                        cellLayerOffset,
                         transform,
                         preAssignGround
                     );
@@ -2872,12 +2524,12 @@ namespace WFCSystem
                         List<HexagonCellPrototype> newLayer;
                         if (i == startingLayer + 1)
                         {
-                            newLayer = DuplicateGridToNewLayerAbove(newPrototypesByLayer[startingLayer], cellLayerElevation, i, parentCell);
+                            newLayer = DuplicateGridToNewLayer_Above(newPrototypesByLayer[startingLayer], cellLayerOffset, parentCell);
                         }
                         else
                         {
                             List<HexagonCellPrototype> previousLayer = newPrototypesByLayer[i - 1];
-                            newLayer = DuplicateGridToNewLayerAbove(previousLayer, cellLayerElevation, i, parentCell);
+                            newLayer = DuplicateGridToNewLayer_Above(previousLayer, cellLayerOffset, parentCell);
                         }
 
                         if (prevSize > currentSize) AssignParentsToChildren(newLayer, newPrototypesBySizeByLayer[prevSize][i]);
@@ -2895,10 +2547,9 @@ namespace WFCSystem
 
         public static Dictionary<int, List<HexagonCellPrototype>> GenerateGridsByLayer(
             List<Vector3> baseCenterPoints,
-            // float baseElevation,
-            int cellSize,
+            HexCellSizes cellSize,
             int cellLayers,
-            int cellLayerElevation,
+            int cellLayerOffset,
             IHexCell parentCell,
             int baseLayerOffset,
             Transform transform = null,
@@ -2907,7 +2558,7 @@ namespace WFCSystem
         {
             int startingLayer = 0 + baseLayerOffset;
 
-            List<HexagonCellPrototype> newCellPrototypes = GenerateCellsFromCenterPoints(baseCenterPoints, cellSize, parentCell, parentCell == null ? startingLayer : -1, transform, preAssignGround);
+            List<HexagonCellPrototype> newCellPrototypes = GenerateCellsFromCenterPoints(baseCenterPoints, (int)cellSize, parentCell, cellLayerOffset, transform, preAssignGround);
 
             Dictionary<int, List<HexagonCellPrototype>> newPrototypesByLayer = new Dictionary<int, List<HexagonCellPrototype>>();
             newPrototypesByLayer.Add(startingLayer, newCellPrototypes);
@@ -2921,12 +2572,12 @@ namespace WFCSystem
                     List<HexagonCellPrototype> newLayer;
                     if (i == startingLayer + 1)
                     {
-                        newLayer = DuplicateGridToNewLayerAbove(newPrototypesByLayer[startingLayer], cellLayerElevation, i, parentCell);
+                        newLayer = DuplicateGridToNewLayer_Above(newPrototypesByLayer[startingLayer], cellLayerOffset, parentCell);
                     }
                     else
                     {
                         List<HexagonCellPrototype> previousLayer = newPrototypesByLayer[i - 1];
-                        newLayer = DuplicateGridToNewLayerAbove(previousLayer, cellLayerElevation, i, parentCell);
+                        newLayer = DuplicateGridToNewLayer_Above(previousLayer, cellLayerOffset, parentCell);
                     }
                     newPrototypesByLayer.Add(i, newLayer);
                 }
@@ -2938,9 +2589,9 @@ namespace WFCSystem
         public static Dictionary<int, List<HexagonCellPrototype>> GenerateGridsByLayer(
             Vector3 centerPos,
             float radius,
-            int cellSize,
+            HexCellSizes cellSize,
             int cellLayers,
-            int cellLayerElevation,
+            int cellLayerOffset,
             IHexCell parentCell,
             int baseLayerOffset = 0,
             Transform transform = null,
@@ -2950,11 +2601,12 @@ namespace WFCSystem
         )
         {
             int startingLayer = 0 + baseLayerOffset;
-            List<HexagonCellPrototype> newCellPrototypes = GenerateHexGrid(
+            List<HexagonCellPrototype> newCellPrototypes = HexGridUtil.GenerateHexGrid(
                 centerPos,
-                cellSize,
+                (int)cellSize,
                 (int)radius,
                 parentCell,
+                cellLayerOffset,
                 transform,
                 useCorners,
                 false
@@ -2986,12 +2638,12 @@ namespace WFCSystem
                     List<HexagonCellPrototype> newLayer;
                     if (i == startingLayer + 1)
                     {
-                        newLayer = DuplicateGridToNewLayerAbove(newPrototypesByLayer[startingLayer], cellLayerElevation, i, parentCell);
+                        newLayer = DuplicateGridToNewLayer_Above(newPrototypesByLayer[startingLayer], cellLayerOffset, parentCell);
                     }
                     else
                     {
                         List<HexagonCellPrototype> previousLayer = newPrototypesByLayer[i - 1];
-                        newLayer = DuplicateGridToNewLayerAbove(previousLayer, cellLayerElevation, i, parentCell);
+                        newLayer = DuplicateGridToNewLayer_Above(previousLayer, cellLayerOffset, parentCell);
                     }
                     newPrototypesByLayer.Add(i, newLayer);
                 }
@@ -2999,31 +2651,13 @@ namespace WFCSystem
             return newPrototypesByLayer;
         }
 
-        public static Dictionary<int, List<HexagonCellPrototype>> GenerateGridsByLayer(Vector3 centerPos, float radius, int cellSize, int cellLayers, int cellLayerElevation, Vector2 gridGenerationCenterPosXZOffeset, int baseLayerOffset, string parentId = "", Transform transform = null, bool useCorners = true)
+        public static Dictionary<int, List<HexagonCellPrototype>> GenerateGridsByLayer(Vector3 centerPos, float radius, HexCellSizes cellSize, int cellLayers, int cellLayerOffset, Vector2 gridGenerationCenterPosXZOffeset, int baseLayerOffset, string parentId = "", Transform transform = null, bool useCorners = true)
         {
-            List<HexagonCellPrototype> newCellPrototypes = GenerateHexGrid(centerPos, cellSize, (int)radius, null, null, null);
-            // List<HexagonCellPrototype> newCellPrototypes = GetPrototypesWithinXZRadius(
-            //                             GenerateGridWithinRadius(
-            //                                     centerPos,
-            //                                     radius,
-            //                                     cellSize, parentCell),
-            //                                     centerPos,
-            //                                     radius);
-
+            List<HexagonCellPrototype> newCellPrototypes = HexGridUtil.GenerateHexGrid(centerPos, (int)cellSize, (int)radius, null, cellLayerOffset, null);
             Dictionary<int, List<HexagonCellPrototype>> newPrototypesByLayer = new Dictionary<int, List<HexagonCellPrototype>>();
 
             int startingLayer = 0 + baseLayerOffset;
             newPrototypesByLayer.Add(startingLayer, newCellPrototypes);
-
-            // // TEMP
-            // if (useCorners && transform != null || parentCell != null)
-            // {
-            //     Transform tran = transform ? transform : parentCell.gameObject.transform;
-            //     Vector3[] corners = HexagonGenerator.GenerateHexagonPoints(tran.position, 12);
-
-            //     List<HexagonCellPrototype> cornerPrototypesByLayer = GeneratePrototypesAtPoints(corners, cellSize, parentCell);
-            //     newPrototypesByLayer[startingLayer].AddRange(cornerPrototypesByLayer);
-            // }
 
             if (cellLayers > 1)
             {
@@ -3034,12 +2668,12 @@ namespace WFCSystem
                     List<HexagonCellPrototype> newLayer;
                     if (i == startingLayer + 1)
                     {
-                        newLayer = DuplicateGridToNewLayerAbove(newPrototypesByLayer[startingLayer], cellLayerElevation, i, null);
+                        newLayer = DuplicateGridToNewLayer_Above(newPrototypesByLayer[startingLayer], cellLayerOffset, null);
                     }
                     else
                     {
                         List<HexagonCellPrototype> previousLayer = newPrototypesByLayer[i - 1];
-                        newLayer = DuplicateGridToNewLayerAbove(previousLayer, cellLayerElevation, i, null);
+                        newLayer = DuplicateGridToNewLayer_Above(previousLayer, cellLayerOffset, null);
                     }
                     newPrototypesByLayer.Add(i, newLayer);
                 }
@@ -3052,7 +2686,7 @@ namespace WFCSystem
             List<Vector3> baseCenterPoints,
             int size,
             IHexCell parentCell,
-            int layer = -1,
+            int layerOffset,
             Transform transform = null,
             bool preAssignGround = false
         )
@@ -3077,247 +2711,13 @@ namespace WFCSystem
                 }
                 if (!skip)
                 {
-                    newPrototypes.Add(new HexagonCellPrototype(centerPoint, size, parentCell, "-" + i, layer, null, preAssignGround));
+                    newPrototypes.Add(new HexagonCellPrototype(centerPoint, size, parentCell, layerOffset, "-" + i, preAssignGround));
                     added.Add(centerPoint);
                 }
 
             }
             return newPrototypes;
         }
-
-
-        public static List<HexagonCellPrototype> GenerateHexGrid(
-            Vector3 center,
-            int size,
-            int radius,
-            IHexCell parentCell,
-            Transform transform = null,
-            List<int> useCorners = null,
-            bool logResults = false
-        )
-        {
-            // Dictionary<HexagonCellPrototype, List<Vector3>> quadrantCenterPoints = new Dictionary<HexagonCellPrototype, List<Vector3>>();
-            List<Vector3> spawnCenters = new List<Vector3>();
-            List<Vector3> quatCenterPoints = new List<Vector3>();
-            List<int> quadrantSizes = new List<int>();
-
-            bool filterOutCorners = (useCorners == null || useCorners.Count == 0);
-
-            int prevStepSize = radius;
-            int currentStepSize = radius;
-            while (size < currentStepSize)
-            {
-                currentStepSize = (prevStepSize / 3);
-
-                List<Vector3> newCenterPoints = new List<Vector3>();
-                if (quatCenterPoints.Count == 0)
-                {
-                    newCenterPoints = (!filterOutCorners && currentStepSize <= size) ? HexCoreUtil.GenerateHexagonCenterPoints(center, currentStepSize, useCorners, true)
-                        : HexCoreUtil.GenerateHexagonCenterPoints(center, currentStepSize, true, currentStepSize > size);
-                    // newCenterPoints = HexCoreUtil.GenerateHexagonCenterPoints(center, currentStepSize, true, currentStepSize > size);
-                }
-                else
-                {
-                    foreach (Vector3 centerPoint in quatCenterPoints)
-                    {
-                        HexagonCellPrototype quadrantPrototype = new HexagonCellPrototype(centerPoint, prevStepSize, false);
-                        // List<Vector3> points = HexCoreUtil.GenerateHexagonCenterPoints(centerPoint, currentStepSize, true, true);
-
-                        List<Vector3> points = (!filterOutCorners && currentStepSize <= size) ? HexCoreUtil.GenerateHexagonCenterPoints(centerPoint, currentStepSize, useCorners, true)
-                            : HexCoreUtil.GenerateHexagonCenterPoints(centerPoint, currentStepSize, true, true);
-
-                        newCenterPoints.AddRange(points);
-                        // quadrantCenterPoints.Add(quadrantPrototype, points);
-                    }
-                }
-                // Debug.Log("GenerateHexGrid - newCenterPoints: " + newCenterPoints.Count + ", currentStepSize: " + currentStepSize + ", desired size: " + size);
-
-                prevStepSize = currentStepSize;
-
-                if (currentStepSize <= size)
-                {
-                    spawnCenters.AddRange(newCenterPoints);
-                    break;
-                }
-                else
-                {
-                    quatCenterPoints.Clear();
-                    quatCenterPoints.AddRange(newCenterPoints);
-                    // Debug.Log("Quadrants of size " + currentStepSize + ": " + quatCenterPoints.Count);
-                }
-            }
-
-            List<HexagonCellPrototype> results = new List<HexagonCellPrototype>();
-            Vector2 baseCenterPosXZ = new Vector2(center.x, center.z);
-            // Debug.Log("GenerateHexGrid - spawnCenters: " + spawnCenters.Count + ", size: " + size + ", filterOutCorners: " + filterOutCorners);
-
-            int skipped = 0;
-            for (int i = 0; i < spawnCenters.Count; i++)
-            {
-                // Vector3 centerPoint = spawnCenters[i];
-                Vector3 centerPoint = transform != null ? transform.TransformPoint(spawnCenters[i]) : spawnCenters[i];
-
-                // Filter out duplicate points & out of bounds
-                float distance = Vector2.Distance(new Vector2(centerPoint.x, centerPoint.z), baseCenterPosXZ);
-                // Debug.Log("GenerateHexGrid - centerPoint: " + centerPoint + ", size: " + size + ", distance: " + distance);
-
-                if (filterOutCorners == false || (filterOutCorners && distance < radius))
-                {
-                    bool skip = false;
-                    foreach (HexagonCellPrototype item in results)
-                    {
-                        // if (Vector2.Distance(new Vector2(centerPoint.x, centerPoint.z), new Vector2(item.center.x, item.center.z)) < 1f)
-                        if (Vector3.Distance(centerPoint, item.center) < 1f)
-                        {
-                            skip = true;
-                            skipped++;
-                            break;
-                        }
-                    }
-                    if (!skip) results.Add(new HexagonCellPrototype(centerPoint, size, parentCell, "-" + i));
-                }
-            }
-
-            // Debug.Log("GenerateHexGrid - 01 results: " + results.Count + ", size: " + size);
-            if (filterOutCorners)
-            {
-                HexagonCellPrototype parentHex = new HexagonCellPrototype(center, radius, false);
-                results = GetPrototypesWithinHexagon(results, center, radius, parentHex.GetEdgePoints(), logResults);
-            }
-
-            if (logResults)
-            {
-                if (parentCell != null)
-                {
-                    Debug.Log("GenerateHexGrid - results: " + results.Count + ", size: " + size + ", parentCell: " + parentCell.GetId());
-                    if (skipped > 0) Debug.LogError("Skipped: " + skipped + ", parentCell: " + parentCell.GetId() + ",  size: " + size);
-
-                    if (transform != null)
-                    {
-                        Debug.Log("GenerateHexGrid - parent: " + parentCell.GetId() + ", position: " + parentCell.GetPosition() + ",  center: " + center + ", transformed Pos: " + transform.InverseTransformVector(parentCell.GetPosition()));
-                    }
-                    if (size == 4)
-                    {
-                        foreach (var item in results)
-                        {
-                            Debug.Log("GenerateHexGrid - parent: " + parentCell.GetId() + ", result: " + item.id);
-                        }
-                    }
-                }
-                else
-                {
-                    Debug.Log("GenerateHexGrid - 02 results: " + results.Count + ", size: " + size);
-                    if (skipped > 0) Debug.LogError("Skipped: " + skipped + ", size: " + size);
-
-                    if (size == 12)
-                    {
-                        foreach (var item in results)
-                        {
-                            Debug.Log("GenerateHexGrid - X12, result - id: " + item.id + ", uid: " + item.uid);
-                        }
-                    }
-                }
-            }
-
-            return results;
-        }
-
-
-
-
-        public static (List<HexagonCellPrototype>, List<HexagonCellPrototype>) GenerateHexGrid(
-            Vector3 center,
-            int size,
-            int radius,
-            IHexCell parentCell,
-            Transform transform = null
-        )
-        {
-            List<Vector3> newSpawnCenterPoints = new List<Vector3>();
-            List<Vector3> quatCenterPoints = new List<Vector3>();
-
-            int prevStepSize = radius;
-            int currentStepSize = radius;
-            while (size < currentStepSize)
-            {
-                currentStepSize = (prevStepSize / 3);
-
-                List<Vector3> newCenterPoints = new List<Vector3>();
-                if (quatCenterPoints.Count == 0)
-                {
-                    // newCenterPoints = (!filterOutCorners && currentStepSize <= size) ? GenerateHexagonCenterPoints(center, currentStepSize, useCorners, true)
-                    //     : GenerateHexagonCenterPoints(center, currentStepSize, true, currentStepSize > size);
-                    newCenterPoints = HexCoreUtil.GenerateHexagonCenterPoints(center, currentStepSize, true, currentStepSize > size);
-                }
-                else
-                {
-                    foreach (Vector3 centerPoint in quatCenterPoints)
-                    {
-                        // HexagonCellPrototype quadrantPrototype = new HexagonCellPrototype(centerPoint, prevStepSize);
-                        // List<Vector3> points = (!filterOutCorners && currentStepSize <= size) ? GenerateHexagonCenterPoints(centerPoint, currentStepSize, useCorners, true)
-                        //     : GenerateHexagonCenterPoints(centerPoint, currentStepSize, true, true);
-                        List<Vector3> points = HexCoreUtil.GenerateHexagonCenterPoints(centerPoint, currentStepSize, true, true);
-                        newCenterPoints.AddRange(points);
-                    }
-                }
-                // Debug.Log("GenerateHexGrid - newCenterPoints: " + newCenterPoints.Count + ", currentStepSize: " + currentStepSize + ", desired size: " + size);
-                prevStepSize = currentStepSize;
-
-                if (currentStepSize <= size)
-                {
-                    newSpawnCenterPoints.AddRange(newCenterPoints);
-                    break;
-                }
-                else
-                {
-                    quatCenterPoints.Clear();
-                    quatCenterPoints.AddRange(newCenterPoints);
-                    // Debug.Log("Quadrants of size " + currentStepSize + ": " + quatCenterPoints.Count);
-                }
-            }
-            List<HexagonCellPrototype> newPrototypes = GenerateCellsFromCenterPoints(newSpawnCenterPoints, size, parentCell, parentCell != null ? parentCell.GetLayer() : -1, transform);
-
-            HexagonCellPrototype parentHex = new HexagonCellPrototype(center, radius, false);
-            (List<HexagonCellPrototype> prototypesWithinRadius, List<HexagonCellPrototype> outsideTheRadius) = GetPrototypesWithinHexagon_WithExcluded(newPrototypes, center, radius, parentHex.GetEdgePoints());
-
-            return (prototypesWithinRadius, outsideTheRadius);
-        }
-
-        // public List<Vector2> Calculate_ParentNeighborLookups()
-        // {
-        //     Vector2 parentLookup = GetParentLookup();
-        //     Vector3[] cornerPoints = HexCoreUtil.GenerateHexagonPoints(new Vector3(parentLookup.x, 0, parentLookup.y ), CalculateNextSize_Up);
-        //     List<Vector2> results = new List<Vector2>();
-        //     for (int i = 0; i < 6; i++)
-        //     {
-        //         // Get Side
-        //         Vector3 sidePoint = Vector3.Lerp(cornerPoints[i], cornerPoints[(i + 1) % 6], 0.5f);
-        //         Vector3 direction = (sidePoint - center).normalized;
-        //         float edgeDistance = Vector2.Distance(new Vector2(sidePoint.x, sidePoint.z), new Vector2(center.x, center.z));
-
-        //         sidePoint = center + direction * (edgeDistance * 2f);
-        //         results.Add(HexCoreUtil.Calculate_CenterLookup(sidePoint, size));
-        //     }
-        //     return results;
-        // }
-
-        public static List<Vector2> GenerateNeighborLookupCoordinates(Vector3 center, int size)
-        {
-            Vector3[] cornerPoints = HexCoreUtil.GenerateHexagonPoints(center, size);
-            List<Vector2> results = new List<Vector2>();
-            for (int i = 0; i < 6; i++)
-            {
-                // Get Side
-                Vector3 sidePoint = Vector3.Lerp(cornerPoints[i], cornerPoints[(i + 1) % 6], 0.5f);
-                Vector3 direction = (sidePoint - center).normalized;
-                float edgeDistance = Vector2.Distance(new Vector2(sidePoint.x, sidePoint.z), new Vector2(center.x, center.z));
-
-                sidePoint = center + direction * (edgeDistance * 2f);
-                results.Add(HexCoreUtil.Calculate_CenterLookup(sidePoint, size));
-            }
-            return results;
-        }
-
 
         public static List<Vector2> GenerateChildrenLookupCoordinates_X11(Vector3 center, int size)
         {
@@ -3354,7 +2754,6 @@ namespace WFCSystem
         }
 
 
-
         public static void RemoveExcessPrototypesByDistance(List<HexagonCellPrototype> prototypes, float distanceThreshold = 0.5f)
         {
             prototypes.Sort((a, b) => Vector3.Distance(a.center, Vector3.zero).CompareTo(Vector3.Distance(b.center, Vector3.zero)));
@@ -3378,80 +2777,55 @@ namespace WFCSystem
             Debug.Log("RemoveExcessPrototypesByDistance: removed: " + removed);
         }
 
-        // public static List<HexagonCellPrototype> DuplicateGridToNewLayerAbove(List<HexagonCellPrototype> prototypes, int layerElevation, int layer, IHexCell parentCell, bool log = false)
-        // {
-        //     List<HexagonCellPrototype> newPrototypes = new List<HexagonCellPrototype>();
-        //     foreach (var prototype in prototypes)
-        //     {
-        //         if (prototype.GetCellStatus() == CellStatus.Remove) continue;
-
-        //         Vector3 newCenterPos = new Vector3(prototype.center.x, prototype.center.y + layerElevation, prototype.center.z);
-        //         HexagonCellPrototype newPrototype = new HexagonCellPrototype(newCenterPos, prototype.size, parentCell, "", layer, prototype.GetLayerStackId());
-
-        //         newPrototype.bottomNeighborId = prototype.id;
-
-        //         // Set layer neighbors
-        //         newPrototype.layerNeighbors[0] = prototype;
-        //         if (newPrototype.neighbors.Contains(prototype) == false) newPrototype.neighbors.Add(prototype);
-
-        //         prototype.layerNeighbors[1] = newPrototype;
-        //         if (prototype.neighbors.Contains(newPrototype) == false) prototype.neighbors.Add(newPrototype);
-
-        //         if (log) Debug.Log("newPrototype - size: " + newPrototype.size + ", neighbors: " + newPrototype.neighbors.Count);
-        //         newPrototypes.Add(newPrototype);
-        //     }
-        //     return newPrototypes;
-        // }
-
-        public static List<HexagonCellPrototype> DuplicateGridToNewLayerAbove(List<HexagonCellPrototype> prototypes, int layerElevation, int layer, IHexCell parentCell, bool log = false)
+        public static List<HexagonCellPrototype> DuplicateGridToNewLayer_Above(List<HexagonCellPrototype> _cells, int layerOffset, IHexCell parentCell, bool log = false)
         {
-            List<HexagonCellPrototype> newPrototypes = new List<HexagonCellPrototype>();
-            foreach (var prototype in prototypes)
+            List<HexagonCellPrototype> newCells = new List<HexagonCellPrototype>();
+            foreach (var _cell in _cells)
             {
-                if (prototype.GetCellStatus() == CellStatus.Remove) continue;
+                if (_cell.GetCellStatus() == CellStatus.Remove) continue;
 
-                HexagonCellPrototype newPrototype = DuplicateCellToNewLayerAbove(prototype, layerElevation, layer, parentCell, log);
-                newPrototypes.Add(newPrototype);
+                HexagonCellPrototype newPrototype = DuplicateCellToNewLayer_Above(_cell, layerOffset, parentCell, log);
+                newCells.Add(newPrototype);
             }
-            return newPrototypes;
+            return newCells;
         }
 
-        public static HexagonCellPrototype DuplicateCellToNewLayerAbove(HexagonCellPrototype prototype, int layerElevation, int layer, IHexCell parentCell, bool log = false)
+        public static HexagonCellPrototype DuplicateCellToNewLayer_Above(HexagonCellPrototype originalCell, int layerOffset, IHexCell parentCell, bool log = false)
         {
-            Vector3 newCenterPos = new Vector3(prototype.center.x, prototype.center.y + layerElevation, prototype.center.z);
-            HexagonCellPrototype newPrototype = new HexagonCellPrototype(newCenterPos, prototype.size, parentCell, "", layer, prototype.GetLayerStackId());
+            Vector3 new_center = new Vector3(originalCell.center.x, originalCell.center.y + layerOffset, originalCell.center.z);
+            HexagonCellPrototype new_cell = new HexagonCellPrototype(new_center, originalCell.size, parentCell, layerOffset);
 
-            newPrototype.bottomNeighborId = prototype.id;
-            newPrototype.SetWorldSpaceLookup(prototype.GetWorldSpaceLookup());
+            new_cell.bottomNeighborId = originalCell.id;
+            new_cell.SetWorldSpaceLookup(originalCell.GetWorldSpaceLookup());
 
             // Set layer neighbors
-            newPrototype.layerNeighbors[0] = prototype;
-            if (newPrototype.neighbors.Contains(prototype) == false) newPrototype.neighbors.Add(prototype);
+            new_cell.layerNeighbors[0] = originalCell;
+            if (new_cell.neighbors.Contains(originalCell) == false) new_cell.neighbors.Add(originalCell);
 
-            prototype.layerNeighbors[1] = newPrototype;
-            if (prototype.neighbors.Contains(newPrototype) == false) prototype.neighbors.Add(newPrototype);
+            originalCell.layerNeighbors[1] = new_cell;
+            if (originalCell.neighbors.Contains(new_cell) == false) originalCell.neighbors.Add(new_cell);
 
-            if (log) Debug.Log("newPrototype - size: " + newPrototype.size + ", neighbors: " + newPrototype.neighbors.Count);
-            return newPrototype;
+            if (log) Debug.Log("new_cell - size: " + new_cell.size + ", neighbors: " + new_cell.neighbors.Count);
+            return new_cell;
         }
 
-        public static HexagonCellPrototype DuplicateCellToNewLayerBelow(HexagonCellPrototype prototype, int layerElevation, int layer, IHexCell parentCell, bool log = false)
+        public static HexagonCellPrototype DuplicateCellToNewLayer_Below(HexagonCellPrototype originalCell, int layerOffset, IHexCell parentCell, bool log = false)
         {
-            Vector3 newCenterPos = new Vector3(prototype.center.x, prototype.center.y - layerElevation, prototype.center.z);
-            HexagonCellPrototype newPrototype = new HexagonCellPrototype(newCenterPos, prototype.size, parentCell, "", layer, prototype.GetLayerStackId());
+            Vector3 new_center = new Vector3(originalCell.center.x, originalCell.center.y - layerOffset, originalCell.center.z);
+            HexagonCellPrototype new_cell = new HexagonCellPrototype(new_center, originalCell.size, parentCell, layerOffset);
 
-            newPrototype.bottomNeighborId = prototype.id;
-            newPrototype.SetWorldSpaceLookup(prototype.GetWorldSpaceLookup());
+            new_cell.bottomNeighborId = originalCell.id;
+            new_cell.SetWorldSpaceLookup(originalCell.GetWorldSpaceLookup());
 
             // Set layer neighbors
-            newPrototype.layerNeighbors[1] = prototype;
-            if (newPrototype.neighbors.Contains(prototype) == false) newPrototype.neighbors.Add(prototype);
+            new_cell.layerNeighbors[1] = originalCell;
+            if (new_cell.neighbors.Contains(originalCell) == false) new_cell.neighbors.Add(originalCell);
 
-            prototype.layerNeighbors[0] = newPrototype;
-            if (prototype.neighbors.Contains(newPrototype) == false) prototype.neighbors.Add(newPrototype);
+            originalCell.layerNeighbors[0] = new_cell;
+            if (originalCell.neighbors.Contains(new_cell) == false) originalCell.neighbors.Add(new_cell);
 
-            if (log) Debug.Log("newPrototype - size: " + newPrototype.size + ", neighbors: " + newPrototype.neighbors.Count);
-            return newPrototype;
+            if (log) Debug.Log("new_cell - size: " + new_cell.size + ", neighbors: " + new_cell.neighbors.Count);
+            return new_cell;
         }
 
         public static List<HexagonCellPrototype> GetPrototypesWithinHexagon(
@@ -4128,13 +3502,13 @@ namespace WFCSystem
         {
             Dictionary<Vector3, List<(MeshVertexSurfaceType, List<Vector3>)>> vertexSurfaceSets = GenerateTunnelVertexPointsFromPrototypes(prototypes, layerElevation);
 
-            return MeshGenerator.GenerateMeshesFromVertexSurfaces(vertexSurfaceSets);
+            return MeshUtil.GenerateMeshesFromVertexSurfaces(vertexSurfaceSets);
         }
         public static Mesh GenerateTunnelMeshFromFromProtoTypes(List<HexagonCellPrototype> prototypes, int layerElevation, Transform transform)
         {
             Dictionary<Vector3, List<(MeshVertexSurfaceType, List<Vector3>)>> vertexSurfaceSets = GenerateTunnelVertexPointsFromPrototypes(prototypes, layerElevation, transform);
 
-            return MeshGenerator.GenerateMeshFromVertexSurfaces(MeshGenerator.GenerateMeshesFromVertexSurfaces(vertexSurfaceSets));
+            return MeshUtil.GenerateMeshFromVertexSurfaces(MeshUtil.GenerateMeshesFromVertexSurfaces(vertexSurfaceSets));
         }
 
         public static Dictionary<Vector3, List<(MeshVertexSurfaceType, List<Vector3>)>> GenerateTunnelVertexPointsFromPrototypes(List<HexagonCellPrototype> prototypes, int layerElevation, Transform transform = null)
@@ -4148,8 +3522,7 @@ namespace WFCSystem
 
                 visited.Add(prototype.GetId());
 
-                prototype.EvaluateNeighborsBySide(0.8f);
-
+                // prototype.EvaluateNeighborsBySide(0.8f);
                 bool hasGroundEntryNeighbor = false;
 
                 List<int> sideWalls = new List<int>();
@@ -4368,7 +3741,7 @@ namespace WFCSystem
 
             foreach (var prototype in prototypes)
             {
-                prototype.EvaluateNeighborsBySide(0.8f);
+                // prototype.EvaluateNeighborsBySide(0.8f);
 
                 List<int> sideWalls = new List<int>();
 
@@ -4546,8 +3919,6 @@ namespace WFCSystem
 
         public class MeshGenerator : MonoBehaviour
         {
-
-
             public static List<Mesh> GenerateMeshesFromTerrainVertexSurfaces(Dictionary<Vector2, List<TerrainVertex>> vertexSurfaceSetsByXZPos)
             {
                 // Create a list to hold the individual surface meshes
@@ -4839,61 +4210,6 @@ namespace WFCSystem
 
             //     return surfaceMeshes;
             // }
-
-
-
-
-
-            private static int[] GenerateTriangles2(int vertexCount)
-            {
-                List<int> triangles = new List<int>();
-
-                // Generate triangles using a clockwise winding order
-                for (int i = 0; i < vertexCount - 2; i++)
-                {
-                    if (i % 2 == 0)
-                    {
-                        triangles.Add(i);
-                        triangles.Add(i + 1);
-                        triangles.Add(i + 2);
-                    }
-                    else
-                    {
-                        triangles.Add(i + 2);
-                        triangles.Add(i + 1);
-                        triangles.Add(i);
-                    }
-                }
-
-                return triangles.ToArray();
-            }
-
-
-            // private static int[] GenerateTriangles(int vertexCount, Dictionary<Vector3, int> vertexIndexMap, List<Vector3> surface)
-            // {
-            //     List<int> triangles = new List<int>();
-
-            //     // Generate triangles using a clockwise winding order
-            //     for (int i = 0; i < vertexCount - 2; i++)
-            //     {
-            //         if (i % 2 == 0)
-            //         {
-            //             triangles.Add(vertexIndexMap[surface[i]]);
-            //             triangles.Add(vertexIndexMap[surface[i + 1]]);
-            //             triangles.Add(vertexIndexMap[surface[i + 2]]);
-            //         }
-            //         else
-            //         {
-            //             triangles.Add(vertexIndexMap[surface[i + 2]]);
-            //             triangles.Add(vertexIndexMap[surface[i + 1]]);
-            //             triangles.Add(vertexIndexMap[surface[i]]);
-            //         }
-            //     }
-
-            //     return triangles.ToArray();
-            // }
-
-
 
             // public static List<Mesh> GenerateMeshesFromTerrainVertexSurfaces(Dictionary<Vector2, List<TerrainVertex>> vertexSurfaceSetsByXZPos)
             // {
@@ -5248,126 +4564,9 @@ namespace WFCSystem
             //     return surfaceMeshes;
             // }
 
-            public static List<Mesh> GenerateMeshesFromTerrainVertexSurfaces(List<List<Vector3>> vertexSurfaceSets)
-            {
-                // Create a list to hold the individual surface meshes
-                List<Mesh> surfaceMeshes = new List<Mesh>();
 
-                foreach (List<Vector3> surface in vertexSurfaceSets)
-                {
-                    // Create a new mesh to represent the current surface
-                    Mesh surfaceMesh = new Mesh();
 
-                    // Set the surface vertices to the mesh
-                    surfaceMesh.vertices = surface.ToArray();
 
-                    // int[] traingles = ProceduralTerrainUtility.GenerateTerrainSurfaceTriangles(surface.Count);
-                    int[] traingles = GenerateTriangles(surface.Count);
-                    surfaceMesh.triangles = traingles;
-
-                    // ReverseNormals(surfaceMesh);
-                    // ReverseTriangles(surfaceMesh);
-
-                    // Set the UVs to the mesh (you can customize this based on your requirements)
-                    Vector2[] uvs = new Vector2[surface.Count];
-                    for (int i = 0; i < surface.Count; i++)
-                    {
-                        uvs[i] = new Vector2(surface[i].x, surface[i].y); // Use x and y as UV coordinates
-                    }
-                    surfaceMesh.uv = uvs;
-
-                    // Recalculate normals and bounds for the surface mesh
-                    surfaceMesh.RecalculateNormals();
-                    surfaceMesh.RecalculateBounds();
-
-                    // Add the surface mesh to the list of surface meshes
-                    surfaceMeshes.Add(surfaceMesh);
-                }
-                return surfaceMeshes;
-            }
-
-            public static List<Mesh> GenerateMeshesFromVertexSurfaces(Dictionary<Vector3, List<(MeshVertexSurfaceType, List<Vector3>)>> vertexSurfaceSets)
-            {
-                // Create a list to hold the individual surface meshes
-                List<Mesh> surfaceMeshes = new List<Mesh>();
-
-                foreach (var kvp in vertexSurfaceSets)
-                {
-                    Vector3 meshFacingPosition = kvp.Key;
-
-                    foreach (var surface in kvp.Value)
-                    {
-                        // Create a new mesh to represent the current surface
-                        Mesh surfaceMesh = new Mesh();
-
-                        (MeshVertexSurfaceType surfaceType, List<Vector3> surfacePoints) = surface;
-
-                        // Set the surface vertices to the mesh
-                        surfaceMesh.vertices = surfacePoints.ToArray();
-
-                        switch (surfaceType)
-                        {
-                            case MeshVertexSurfaceType.Bottom:
-                                // Generate triangles based on the surface vertices
-                                int[] bottomTriangles = GenerateTriangles(surfacePoints.Count);
-                                surfaceMesh.triangles = bottomTriangles;
-
-                                // Reverse the winding order of the triangles to make the surface face upward
-                                // ReverseNormals(surfaceMesh);
-                                ReverseNormals(surfaceMesh);
-                                ReverseTriangles(surfaceMesh); // Updated: Reverse the triangles as well
-                                break;
-
-                            case MeshVertexSurfaceType.Top:
-                                // Generate triangles based on the surface vertices
-                                int[] topTriangles = GenerateTriangles(surfacePoints.Count);
-                                surfaceMesh.triangles = topTriangles;
-
-                                // Reverse the winding order of the triangles to make the surface face downward
-                                // ReverseNormals(surfaceMesh);
-                                break;
-
-                            case MeshVertexSurfaceType.SideOuter:
-                                // Generate triangles based on the surface vertices
-                                int[] outerSideTriangles = GenerateRectangularTriangles(surfacePoints.Count);
-                                surfaceMesh.triangles = outerSideTriangles;
-                                ReverseTriangles(surfaceMesh); // Updated: Reverse the triangles as well
-
-                                Debug.Log("SideOuter ");
-                                break;
-
-                            default: // Side
-
-                                // Generate triangles based on the surface vertices
-                                int[] innerSideTriangles = GenerateRectangularTriangles(surfacePoints.Count);
-                                surfaceMesh.triangles = innerSideTriangles;
-
-                                // Reverse the winding order of the triangles
-                                ReverseNormals(surfaceMesh);
-                                // ReverseTriangles(surfaceMesh);
-
-                                break;
-                        }
-
-                        // Set the UVs to the mesh (you can customize this based on your requirements)
-                        Vector2[] uvs = new Vector2[surfacePoints.Count];
-                        for (int i = 0; i < surfacePoints.Count; i++)
-                        {
-                            uvs[i] = new Vector2(surfacePoints[i].x, surfacePoints[i].y); // Use x and y as UV coordinates
-                        }
-                        surfaceMesh.uv = uvs;
-
-                        // Recalculate normals and bounds for the surface mesh
-                        surfaceMesh.RecalculateNormals();
-                        surfaceMesh.RecalculateBounds();
-
-                        // Add the surface mesh to the list of surface meshes
-                        surfaceMeshes.Add(surfaceMesh);
-                    }
-                }
-
-                return surfaceMeshes;
-            }
 
 
             // public static List<Mesh> GenerateMeshesFromVertexSurfaces(Dictionary<Vector3, List<(MeshVertexSurfaceType, List<Vector3>)>> vertexSurfaceSets)
@@ -5488,85 +4687,6 @@ namespace WFCSystem
             //     return surfaceMeshes;
             // }
 
-            private static int[] GenerateRectangularTriangles(int vertexCount)
-            {
-                int[] triangles = new int[(vertexCount - 2) * 6]; // Each rectangle has 2 triangles, and each triangle has 3 vertices
-                int triangleIndex = 0;
-
-                for (int i = 0; i < vertexCount - 2; i += 4)
-                {
-                    triangles[triangleIndex++] = i;
-                    triangles[triangleIndex++] = i + 1;
-                    triangles[triangleIndex++] = i + 2;
-
-                    triangles[triangleIndex++] = i + 2;
-                    triangles[triangleIndex++] = i + 1;
-                    triangles[triangleIndex++] = i + 3;
-                }
-
-                return triangles;
-            }
-
-            public static void ReverseNormals(Mesh mesh)
-            {
-                Vector3[] normals = mesh.normals;
-                for (int i = 0; i < normals.Length; i++)
-                {
-                    normals[i] = -normals[i];
-                }
-                mesh.normals = normals;
-            }
-
-            private static void ReverseTriangles(Mesh mesh)
-            {
-                int[] triangles = mesh.triangles;
-                int numTriangles = triangles.Length / 3;
-
-                for (int i = 0; i < numTriangles; i++)
-                {
-                    // Swap the order of the second and third vertices of each triangle
-                    int temp = triangles[i * 3 + 1];
-                    triangles[i * 3 + 1] = triangles[i * 3 + 2];
-                    triangles[i * 3 + 2] = temp;
-                }
-
-                // Set the reversed triangles back to the mesh
-                mesh.triangles = triangles;
-            }
-
-            // Helper method to generate triangle indices for a mesh
-            private static int[] GenerateTriangles(int vertexCount)
-            {
-                int[] triangles = new int[(vertexCount - 2) * 3];
-                int index = 0;
-                for (int i = 0; i < vertexCount - 2; i++)
-                {
-                    triangles[index++] = 0;
-                    triangles[index++] = i + 1;
-                    triangles[index++] = i + 2;
-                }
-                return triangles;
-            }
-
-            public static Mesh GenerateMeshFromVertexSurfaces(List<Mesh> surfaceMeshes)
-            {
-                // Create a new mesh to hold the combined surface meshes
-                Mesh combinedMesh = new Mesh();
-
-                // Combine the surface meshes into a single mesh
-                CombineInstance[] combine = new CombineInstance[surfaceMeshes.Count];
-                for (int i = 0; i < surfaceMeshes.Count; i++)
-                {
-                    combine[i].mesh = surfaceMeshes[i];
-                    combine[i].transform = Matrix4x4.identity;
-                }
-
-                combinedMesh.CombineMeshes(combine, true, true);
-
-                // Return the combined mesh
-                return combinedMesh;
-            }
-
 
             // public static Mesh GenerateMeshFromVertexSurfaces(Dictionary<Vector3, List<List<Vector3>>> vertexSurfaceSets)
             // {
@@ -5647,7 +4767,7 @@ namespace WFCSystem
             }
         }
 
-        public static HexagonCellPrototype GetClosestByCenterPoint(List<HexagonCellPrototype> prototypes, Vector3 position)
+        public static HexagonCellPrototype GetClosestCenter(List<HexagonCellPrototype> prototypes, Vector3 position)
         {
             HexagonCellPrototype nearestCellToPos = prototypes[0];
             float nearestDist = float.MaxValue;
@@ -5662,6 +4782,21 @@ namespace WFCSystem
                 }
             }
             return nearestCellToPos;
+        }
+        public static (HexagonCellPrototype, float) GetClosestCenter_WithDistance(List<HexagonCellPrototype> cells, Vector3 position)
+        {
+            HexagonCellPrototype nearest = cells[0];
+            float nearestDist = float.MaxValue;
+            for (int i = 0; i < cells.Count; i++)
+            {
+                float dist = VectorUtil.DistanceXZ(cells[i].center, position);
+                if (dist < nearestDist)
+                {
+                    nearestDist = dist;
+                    nearest = cells[i];
+                }
+            }
+            return (nearest, nearestDist);
         }
 
         public static Vector3 CalculateCenterPositionFromGroup(List<HexagonCellPrototype> prototypes)
@@ -5680,237 +4815,14 @@ namespace WFCSystem
             return center;
         }
 
-        public enum MeshVertexSurfaceType
-        {
-            Bottom = 0,
-            Top,
-            SideInner,
-            SideOuter,
-        }
-
-        public enum UndergroundEntranceType
-        {
-            Basement,
-            Pit,
-            Cave,
-        }
+    }
 
 
-
-
-        // public class MeshGenerator : MonoBehaviour
-        // {
-        //     public static Mesh GenerateMeshFromVertexSurfaces(Dictionary<Vector3, List<List<Vector3>>> vertexSurfaceSets)
-        //     {
-        //         // Create a list to hold the individual surface meshes
-        //         List<Mesh> surfaceMeshes = new List<Mesh>();
-
-        //         foreach (var kvp in vertexSurfaceSets)
-        //         {
-        //             Vector3 meshFacingPosition = kvp.Key;
-
-        //             foreach (List<Vector3> surface in kvp.Value)
-        //             {
-        //                 // Create a new mesh to represent the current surface
-        //                 Mesh surfaceMesh = new Mesh();
-
-        //                 // Convert the list of vertex positions into arrays of vertices, triangles, and UVs
-        //                 Vector3[] vertices = surface.ToArray();
-        //                 int[] triangles = GenerateTriangles(vertices.Length);
-        //                 Vector2[] uvs = GenerateUVs(vertices.Length);
-
-        //                 // Assign the vertices, triangles, and UVs to the surface mesh
-        //                 surfaceMesh.vertices = vertices;
-        //                 surfaceMesh.triangles = triangles;
-        //                 surfaceMesh.uv = uvs;
-
-        //                 // Calculate the normals of the vertices based on their relationship with the meshFacingPosition
-        //                 Vector3[] normals = new Vector3[vertices.Length];
-        //                 for (int i = 0; i < vertices.Length; i++)
-        //                 {
-        //                     normals[i] = (vertices[i] - meshFacingPosition).normalized;
-        //                 }
-        //                 surfaceMesh.normals = normals;
-
-        //                 // Recalculate bounds for the surface mesh
-        //                 surfaceMesh.RecalculateBounds();
-
-        //                 // Add the surface mesh to the list of surface meshes
-        //                 surfaceMeshes.Add(surfaceMesh);
-        //             }
-        //         }
-
-        //         // Create a new mesh to hold the combined surface meshes
-        //         Mesh combinedMesh = new Mesh();
-
-        //         // Combine the surface meshes into a single mesh
-        //         CombineInstance[] combine = new CombineInstance[surfaceMeshes.Count];
-        //         for (int i = 0; i < surfaceMeshes.Count; i++)
-        //         {
-        //             combine[i].mesh = surfaceMeshes[i];
-        //             combine[i].transform = Matrix4x4.identity;
-        //         }
-
-        //         combinedMesh.CombineMeshes(combine, true, true);
-
-        //         // Return the combined mesh
-        //         return combinedMesh;
-        //     }
-
-        //     // Helper method to generate triangle indices for a mesh
-        //     private static int[] GenerateTriangles(int vertexCount)
-        //     {
-        //         int[] triangles = new int[(vertexCount - 2) * 3];
-        //         int index = 0;
-        //         for (int i = 1; i < vertexCount - 1; i++)
-        //         {
-        //             triangles[index++] = 0;
-        //             triangles[index++] = i;
-        //             triangles[index++] = i + 1;
-        //         }
-        //         return triangles;
-        //     }
-
-        //     // Helper method to generate UV coordinates for a mesh
-        //     private static Vector2[] GenerateUVs(int vertexCount)
-        //     {
-        //         Vector2[] uvs = new Vector2[vertexCount];
-        //         for (int i = 0; i < vertexCount; i++)
-        //         {
-        //             uvs[i] = new Vector2(0, 0); // Set UV coordinates to (0, 0) for simplicity
-        //         }
-        //         return uvs;
-        //     }
-        // }
-
-
-        // public class MeshGenerator : MonoBehaviour
-        // {
-        //     public static Mesh GenerateMeshFromVertexSurfaces(Dictionary<Vector3, List<List<Vector3>>> vertexSurfaceSets)
-        //     {
-        //         // Create a list to hold the individual surface meshes
-        //         List<Mesh> surfaceMeshes = new List<Mesh>();
-
-        //         foreach (var kvp in vertexSurfaceSets)
-        //         {
-        //             Vector3 meshFacingPosition = kvp.Key;
-
-        //             foreach (List<Vector3> surface in kvp.Value)
-        //             {
-        //                 // Create a new mesh to represent the current surface
-        //                 Mesh surfaceMesh = new Mesh();
-
-        //                 // Convert the list of vertex positions into arrays of vertices, triangles, and UVs
-        //                 Vector3[] vertices = surface.ToArray();
-        //                 int[] triangles = GenerateTriangles(vertices.Length);
-        //                 Vector2[] uvs = GenerateUVs(vertices.Length);
-
-        //                 // Assign the vertices, triangles, and UVs to the surface mesh
-        //                 surfaceMesh.vertices = vertices;
-        //                 surfaceMesh.triangles = triangles;
-        //                 surfaceMesh.uv = uvs;
-
-        //                 // Recalculate normals and bounds for the surface mesh
-        //                 surfaceMesh.RecalculateNormals();
-        //                 surfaceMesh.RecalculateBounds();
-
-        //                 // Add the surface mesh to the list of surface meshes
-        //                 surfaceMeshes.Add(surfaceMesh);
-        //             }
-        //         }
-
-        //         // Create a new mesh to hold the combined surface meshes
-        //         Mesh combinedMesh = new Mesh();
-
-        //         // Combine the surface meshes into a single mesh
-        //         CombineInstance[] combine = new CombineInstance[surfaceMeshes.Count];
-        //         for (int i = 0; i < surfaceMeshes.Count; i++)
-        //         {
-        //             combine[i].mesh = surfaceMeshes[i];
-        //             combine[i].transform = Matrix4x4.identity;
-        //         }
-
-        //         combinedMesh.CombineMeshes(combine, true, true);
-
-        //         // Return the combined mesh
-        //         return combinedMesh;
-        //     }
-        //     // public static Mesh GenerateMeshFromVertexSurfaces(List<List<Vector3>> vertexSurfaces)
-        //     // {
-        //     //     // Create a list to hold the individual surface meshes
-        //     //     List<Mesh> surfaceMeshes = new List<Mesh>();
-
-        //     //     foreach (List<Vector3> surface in vertexSurfaces)
-        //     //     {
-        //     //         // Create a new mesh to represent the current surface
-        //     //         Mesh surfaceMesh = new Mesh();
-
-        //     //         // Convert the list of vertex positions into arrays of vertices, triangles, and UVs
-        //     //         Vector3[] vertices = surface.ToArray();
-        //     //         int[] triangles = GenerateTriangles(vertices.Length);
-        //     //         Vector2[] uvs = GenerateUVs(vertices.Length);
-
-        //     //         // Assign the vertices, triangles, and UVs to the surface mesh
-        //     //         surfaceMesh.vertices = vertices;
-        //     //         surfaceMesh.triangles = triangles;
-        //     //         surfaceMesh.uv = uvs;
-
-        //     //         // Recalculate normals and bounds for the surface mesh
-        //     //         surfaceMesh.RecalculateNormals();
-        //     //         surfaceMesh.RecalculateBounds();
-
-        //     //         // Add the surface mesh to the list of surface meshes
-        //     //         surfaceMeshes.Add(surfaceMesh);
-        //     //     }
-
-        //     //     // Create a new mesh to hold the combined surface meshes
-        //     //     Mesh combinedMesh = new Mesh();
-
-        //     //     // Combine the surface meshes into a single mesh
-        //     //     CombineInstance[] combine = new CombineInstance[surfaceMeshes.Count];
-        //     //     for (int i = 0; i < surfaceMeshes.Count; i++)
-        //     //     {
-        //     //         combine[i].mesh = surfaceMeshes[i];
-        //     //         combine[i].transform = Matrix4x4.identity;
-        //     //     }
-
-        //     //     combinedMesh.CombineMeshes(combine, true, true);
-
-        //     //     // Return the combined mesh
-        //     //     return combinedMesh;
-        //     // }
-
-        //     // Helper method to generate triangle indices for a mesh
-        //     private static int[] GenerateTriangles(int vertexCount)
-        //     {
-        //         int[] triangles = new int[(vertexCount - 2) * 3];
-        //         int index = 0;
-        //         for (int i = 1; i < vertexCount - 1; i++)
-        //         {
-        //             triangles[index++] = 0;
-        //             triangles[index++] = i;
-        //             triangles[index++] = i + 1;
-        //         }
-        //         return triangles;
-        //     }
-
-        //     // Helper method to generate UV coordinates for a mesh
-        //     private static Vector2[] GenerateUVs(int vertexCount)
-        //     {
-        //         Vector2[] uvs = new Vector2[vertexCount];
-        //         for (int i = 0; i < vertexCount; i++)
-        //         {
-        //             uvs[i] = new Vector2(0, 0); // Set UV coordinates to (0, 0) for simplicity
-        //         }
-        //         return uvs;
-        //     }
-        // }
-
-
-        // #region Multithreading
-
-
-        // #endregion
+    public enum UndergroundEntranceType
+    {
+        Basement,
+        Pit,
+        Cave,
     }
 
 }

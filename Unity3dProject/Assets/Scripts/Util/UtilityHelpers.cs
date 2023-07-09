@@ -9,6 +9,8 @@ using System.Linq;
 
 static class UtilityHelpers
 {
+    public static string ListToString(List<int> list) => string.Join(", ", list);
+
     public static void ExpandListToFitIndex(int index, List<GameObject> objects)
     {
         int currentCount = objects.Count;

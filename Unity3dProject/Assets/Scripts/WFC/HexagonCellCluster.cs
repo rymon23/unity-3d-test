@@ -597,7 +597,7 @@ namespace WFCSystem
                                             && e.layer == n.layer
                                             && topEdgeCellsOfParent.Contains(n)
 
-                                            && GetMemberParentById(e.parentId).GetLayer() != GetMemberParentById(n.parentId).GetLayer()
+                                            && GetMemberParentById(e.parentId).GetGridLayer() != GetMemberParentById(n.parentId).GetGridLayer()
                                             ));
 
 
@@ -652,11 +652,11 @@ namespace WFCSystem
             // Consolidate members by layer
             foreach (var item in prototypes)
             {
-                if (membersByLayer.ContainsKey(item.GetLayer()) == false)
+                if (membersByLayer.ContainsKey(item.GetGridLayer()) == false)
                 {
-                    membersByLayer.Add(item.GetLayer(), new List<HexagonCellPrototype>());
+                    membersByLayer.Add(item.GetGridLayer(), new List<HexagonCellPrototype>());
                 }
-                membersByLayer[item.GetLayer()].Add(item);
+                membersByLayer[item.GetGridLayer()].Add(item);
             }
             return membersByLayer;
         }
@@ -705,118 +705,5 @@ namespace WFCSystem
 
             CalculateCenterFromCellCenters();
         }
-
-        // public static List<HexagonCellCluster> GetHexagonCellClusters(List<HexagonCell> cells, Vector3 positionCenter, WFCCollapseOrder collapseOrder = 0, bool ignoreEdges = false)
-        // {
-        //     List<HexagonCell> edgeCells = HexagonCell.GetEdgeCells(cells); // get the edge cells first
-        //     HexagonCell centerCell = HexagonCell.GetClosestCellByCenterPoint(cells, positionCenter);
-
-        //     List<HexagonCell> allCells = new List<HexagonCell>();
-
-        //     if (!ignoreEdges)
-        //     {
-        //         allCells.AddRange(edgeCells);
-        //     }
-        //     if (collapseOrder == WFCCollapseOrder.Default)
-        //     {
-        //         allCells.Add(centerCell);
-        //     }
-        //     if (ignoreEdges)
-        //     {
-        //         allCells.AddRange(cells.Except(edgeCells).Except(allCells));
-        //         allCells = allCells.OrderByDescending(x => x._neighbors.Count).ToList();
-        //     }
-        //     else
-        //     {
-        //         allCells.AddRange(cells.Except(allCells));
-        //     }
-
-        //     HashSet<int> addedToCluster = new HashSet<int>();
-        //     List<HexagonCellCluster> clusters = new List<HexagonCellCluster>();
-        //     int clusterId = -1;
-
-        //     if (ignoreEdges == false)
-        //     {
-        //         foreach (HexagonCell cell in edgeCells)
-        //         {
-        //             HexagonCell nei = cell._neighbors.Find(c => c._neighbors.Count == 6);
-        //             if (nei != null && !addedToCluster.Contains(nei.id) && !AnyNeighborsInACluster(nei._neighbors))
-        //             {
-        //                 List<HexagonCell> toAdd = new List<HexagonCell>();
-
-        //                 foreach (HexagonCell neighborCell in nei._neighbors)
-        //                 {
-        //                     toAdd.Add(neighborCell);
-        //                     addedToCluster.Add(neighborCell.id);
-        //                     neighborCell.isClusterPrototype = true;
-        //                 }
-        //                 if (toAdd.Count > 0)
-        //                 {
-        //                     clusterId++;
-        //                     HexagonCellCluster cluster = new HexagonCellCluster(clusterId, new List<HexagonCell>());
-
-        //                     toAdd.Add(nei);
-        //                     toAdd.Add(cell);
-        //                     cluster.cells.AddRange(toAdd.OrderByDescending(x => x._neighbors.Count));
-
-        //                     clusters.Add(cluster);
-        //                     addedToCluster.Add(cell.id);
-        //                     cluster.Reevaluate();
-
-        //                     // Set cluster to edge cluster if any cell is an edge cell
-        //                     if (cluster.cells.Any(x => edgeCells.Contains(x)))
-        //                     {
-        //                         cluster.SetEdgeCluster(true);
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //     }
-
-        //     clusterId = -1;
-        //     foreach (HexagonCell cell in allCells)
-        //     {
-        //         if (!addedToCluster.Contains(cell.id))
-        //         {
-        //             if (cell._neighbors.Count > 0 && !ignoreEdges || !cell._neighbors.Any(x => x.isEdgeCell || x.isEntryCell))
-        //             {
-        //                 List<HexagonCell> toAdd = new List<HexagonCell>();
-
-        //                 foreach (HexagonCell neighborCell in cell._neighbors)
-        //                 {
-        //                     if (!addedToCluster.Contains(neighborCell.id))
-        //                     {
-        //                         toAdd.Add(neighborCell);
-        //                         addedToCluster.Add(neighborCell.id);
-        //                         neighborCell.isClusterPrototype = true;
-        //                     }
-        //                 }
-
-        //                 if (toAdd.Count > 0)
-        //                 {
-        //                     clusterId++;
-        //                     HexagonCellCluster cluster = new HexagonCellCluster(clusterId, new List<HexagonCell>());
-        //                     toAdd.Add(cell);
-        //                     cluster.cells.AddRange(toAdd.OrderByDescending(x => x._neighbors.Count));
-
-        //                     clusters.Add(cluster);
-        //                     addedToCluster.Add(cell.id);
-        //                     cluster.Reevaluate();
-
-        //                     // Set cluster to edge cluster if any cell is an edge cell
-        //                     if (cluster.cells.Any(x => edgeCells.Contains(x)))
-        //                     {
-        //                         cluster.SetEdgeCluster(true);
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //     }
-        //     return clusters.OrderByDescending(x => x.cells.Count).ToList();
-        // }
-
-
-
-
     }
 }

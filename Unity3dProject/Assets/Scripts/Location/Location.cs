@@ -169,7 +169,7 @@ namespace ProceduralBase
             GridPreset _gridPreset,
             LocationType _locationType,
             TileDirectory _tileDirectory,
-            HexagonSocketDirectory _socketDirectory,
+            // HexagonSocketDirectory _socketDirectory,
             CellSearchPriority _cellSearchPriority,
             bool _enableTunnels,
             int _defaultNeightborBufferDistanceMin,
@@ -191,7 +191,7 @@ namespace ProceduralBase
             defaultNeightborBufferDistanceMin = _defaultNeightborBufferDistanceMin;
             priority = _priority;
             tileDirectory = _tileDirectory;
-            socketDirectory = _socketDirectory;
+            // socketDirectory = _socketDirectory;
             cluster_memberMin = _cluster_memberMin;
             cluster_memberMax = _cluster_memberMax;
             cluster_TunnelMemberMin = _cluster_memberMin;
@@ -205,7 +205,7 @@ namespace ProceduralBase
         public GridPreset gridPreset;
         [Header(" ")]
         public TileDirectory tileDirectory;
-        public HexagonSocketDirectory socketDirectory;
+        // public HexagonSocketDirectory socketDirectory;
         [Header(" ")]
         public Vector2 elevationRangeMinMax;
         [Header(" ")]
@@ -226,5 +226,4 @@ namespace ProceduralBase
         public int cluster_TunnelMemberMax;
         public CellSearchPriority cellSearchPriority;
     }
-
 }

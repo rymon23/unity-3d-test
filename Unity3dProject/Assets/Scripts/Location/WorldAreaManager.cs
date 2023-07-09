@@ -102,9 +102,10 @@ namespace ProceduralBase
         // [SerializeField] private bool instantiateTunnnels;
 
         [Header(" ")]
-        [SerializeField] private bool trigger_expand_WorldSpaceCells = false;
+        [SerializeField] private bool trigger_generate_CurrentAreaLocations = false;
+        // [SerializeField] private bool trigger_expand_WorldSpaceCells = false;
+        // [Header(" ")]
         [Header(" ")]
-        [SerializeField] private bool trigger_generate_WorldSpaceCellGrids = false;
         [SerializeField] private bool trigger_generate_WorldSpaces = false;
         [SerializeField] private bool trigger_generate_WorldAreas = false;
         [SerializeField] private bool trigger_generate_WorldRegions = false;
@@ -350,7 +351,7 @@ namespace ProceduralBase
         public List<Vector2> GetCurrentWorldAreaNeighborLookups()
         {
             HexagonCellPrototype current_AreaCell = GetCurrentWorldAreaCell();
-            List<Vector2> calculatedAreaNeighborLookups = HexagonCellPrototype.GenerateNeighborLookupCoordinates(current_AreaCell.center, current_AreaCell.size);
+            List<Vector2> calculatedAreaNeighborLookups = HexCoreUtil.GenerateNeighborLookupCoordinates(current_AreaCell.center, current_AreaCell.size);
             List<Vector2> results = new List<Vector2>();
 
             foreach (Vector2 areaLookup in calculatedAreaNeighborLookups)
@@ -794,17 +795,14 @@ namespace ProceduralBase
 
         #endregion
 
-        private void Generate_WorldSpace_CellGrid_Location(HexagonCellPrototype worldspaceCell, int gridBaseElevation, int layersMax, Dictionary<Vector2, HexagonCellPrototype> subCellTerraforms)
+        private void Generate_WorldSpace_CellGrid_Location(HexagonCellPrototype worldspaceCell, int gridBaseElevation, int layersMax, Dictionary<Vector2, HexagonCellPrototype> subCellTerraforms, bool enableLog = true)
         {
             HashSet<string> neighborIDsToEvaluate = new HashSet<string>();
-            // List<HexagonCellPrototype> neighborsToEvaluate = new List<HexagonCellPrototype>();
-
             Dictionary<int, List<HexagonCellPrototype>> neighborsToEvaluate_bySize = new Dictionary<int, List<HexagonCellPrototype>>() {
                 {(int)HexCellSizes.Default, new List<HexagonCellPrototype>()},
                 {(int)HexCellSizes.X_4, new List<HexagonCellPrototype>()},
             };
 
-            // List<HexagonGrid> newlyAddedGrids = new List<HexagonGrid>();
             int baseLayer = HexCoreUtil.Calculate_CurrentLayer(cellLayerElevation, gridBaseElevation);
             // int totalCreated = 0;
             // Debug.Log("gridBaseElevation: " + gridBaseElevation + ", baseLayer: " + baseLayer);
@@ -844,7 +842,7 @@ namespace ProceduralBase
                 bottomLayer = (baseLayer - undergroundLayers);
                 startingLayer = bottomLayer;
 
-                Debug.Log("useUnderGround - baseLayer: " + baseLayer + ", bottomLayer: " + bottomLayer + ", topLayer: " + topLayer);
+                // Debug.Log("useUnderGround - baseLayer: " + baseLayer + ", bottomLayer: " + bottomLayer + ", topLayer: " + topLayer);
             }
 
             foreach (int currentSize in new_cellCenters_ByLookup_BySize.Keys)
@@ -852,7 +850,6 @@ namespace ProceduralBase
                 if (currentSize > (int)HexCellSizes.Default) continue;
 
                 int childSize = (int)HexCellSizes.X_4;
-
 
                 //Add currentSize & childSize
                 if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup].ContainsKey(currentSize) == false)
@@ -888,75 +885,166 @@ namespace ProceduralBase
                         continue;
                     }
 
+                    if (subCellTerraforms.ContainsKey(pointLookup) == false || subCellTerraforms[pointLookup].size != currentSize) continue;
+
                     if (HexCoreUtil.IsAnyHexPointWithinPolygon(point, currentSize, worldspaceCorners))
                     {
-                        if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][baseLayer].ContainsKey(pointLookup) == false)
+                        HexagonCellPrototype newCell = subCellTerraforms[pointLookup];
+                        int currentGroundLayer = newCell.layer;
+
+                        if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize].ContainsKey(currentGroundLayer) == false) cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize].Add(currentGroundLayer, new Dictionary<Vector2, HexagonCellPrototype>());
+                        if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][currentGroundLayer].ContainsKey(pointLookup)) continue;
+
+                        newCell.SetWorldCoordinate(newPos);
+                        newCell.SetWorldSpaceLookup(worldspaceLookup);
+
+                        CellStatus groundTypeFound = CellStatus.Unset;
+                        bool allowBufferStatusAssignment = false;
+
+                        List<HexagonCellPrototype> childCells = null;
+
+                        // if (subCellTerraforms.ContainsKey(pointLookup) && subCellTerraforms[pointLookup].size == currentSize && (int)subCellTerraforms[pointLookup].center.y == (int)newCell.center.y)
+                        // {
+                        groundTypeFound = newCell.GetCellStatus();
+
+                        if (layersMax > 1 && groundTypeFound == CellStatus.GenericGround)
                         {
-                            if (subCellTerraforms.ContainsKey(pointLookup) == false || subCellTerraforms[pointLookup].size != currentSize) continue;
+                            allowBufferStatusAssignment = HexCellUtil.IsCellInBeteenNeighborsOfStatus(newCell, CellStatus.FlatGround, subCellTerraforms);
+                            // if (allowBufferStatusAssignment) Debug.Log("allowBufferStatusAssignment " + allowBufferStatusAssignment);
+                            if (allowBufferStatusAssignment == false) continue;
+                        }
 
-                            HexagonCellPrototype newCell = subCellTerraforms[pointLookup];
-                            newCell.SetWorldCoordinate(newPos);
-                            newCell.SetWorldSpaceLookup(worldspaceLookup);
-                            newCell.SetGridLayer(baseLayer);
+                        if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup].ContainsKey(childSize) == false)
+                        {
+                            cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup].Add(childSize, new Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>>());
+                        }
 
-                            CellStatus groundTypeFound = CellStatus.Unset;
-                            List<HexagonCellPrototype> childCells = null;
+                        if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize].ContainsKey(currentGroundLayer) == false)
+                        {
+                            cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize].Add(currentGroundLayer, new Dictionary<Vector2, HexagonCellPrototype>());
+                        }
 
-                            if (subCellTerraforms.ContainsKey(pointLookup) && subCellTerraforms[pointLookup].size == currentSize && (int)subCellTerraforms[pointLookup].center.y == (int)newCell.center.y)
+                        // Generate child cells within here
+                        List<Vector3> childrenX4 = HexCoreUtil.GenerateHexCenterPoints_X13(newCell.center, childSize);
+                        childCells = new List<HexagonCellPrototype>();
+                        foreach (Vector3 childPoint in childrenX4)
+                        {
+                            Vector2 childLookup = HexCoreUtil.Calculate_CenterLookup(childPoint, childSize);
+                            if (
+                                cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize][currentGroundLayer].ContainsKey(childLookup) == false &&
+                                HexCoreUtil.IsAnyHexPointWithinPolygon(childPoint, childSize, worldspaceCorners)
+                            )
                             {
-                                groundTypeFound = newCell.GetCellStatus();
+                                HexagonCellPrototype newChildCell = new HexagonCellPrototype(childPoint, childSize, newCell, cellLayerElevation);
+                                newChildCell.SetWorldSpaceLookup(worldspaceLookup);
+                                newChildCell.SetCellStatus(groundTypeFound);
 
-                                // Generate child cells within here
-                                List<Vector3> childrenX4 = HexCoreUtil.GenerateHexCenterPoints_X13(newCell.center, childSize);
-                                childCells = new List<HexagonCellPrototype>();
-                                foreach (Vector3 childPoint in childrenX4)
+                                cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize][currentGroundLayer].Add(childLookup, newChildCell);
+
+                                childCells.Add(newChildCell);
+
+                                if (neighborIDsToEvaluate.Contains(newChildCell.Get_Uid()) == false)
                                 {
-                                    Vector2 childLookup = HexCoreUtil.Calculate_CenterLookup(childPoint, childSize);
-                                    if (
-                                        cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize][baseLayer].ContainsKey(childLookup) == false &&
-                                        HexCoreUtil.IsAnyHexPointWithinPolygon(childPoint, childSize, worldspaceCorners)
-                                    )
-                                    {
-                                        HexagonCellPrototype newChildCell = new HexagonCellPrototype(childPoint, childSize, newCell);
-                                        newChildCell.SetWorldSpaceLookup(worldspaceLookup);
-                                        newChildCell.SetGridLayer(baseLayer);
-                                        newChildCell.SetCellStatus(groundTypeFound);
-
-                                        cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize][baseLayer].Add(childLookup, newChildCell);
-
-                                        childCells.Add(newChildCell);
-
-                                        if (neighborIDsToEvaluate.Contains(newChildCell.Get_Uid()) == false)
-                                        {
-                                            neighborIDsToEvaluate.Add(newChildCell.Get_Uid());
-                                            neighborsToEvaluate_bySize[childSize].Add(newChildCell);
-                                        }
-                                    }
+                                    neighborIDsToEvaluate.Add(newChildCell.Get_Uid());
+                                    neighborsToEvaluate_bySize[childSize].Add(newChildCell);
                                 }
                             }
+                        }
 
-                            cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][baseLayer].Add(pointLookup, newCell);
+                        if (childCells[0].layer != newCell.layer) Debug.LogError("currentGroundLayer: " + currentGroundLayer + ", parent/child layer mismatch detected - parentlayer: " + newCell.layer + ", this cell's layer: " + childCells[0].layer);
+                        // }
 
-                            // Add to neighborsToEvaluate_bySize
-                            if (neighborIDsToEvaluate.Contains(newCell.Get_Uid()) == false)
+                        cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][currentGroundLayer].Add(pointLookup, newCell);
+
+                        // Add to neighborsToEvaluate_bySize
+                        if (neighborIDsToEvaluate.Contains(newCell.Get_Uid()) == false)
+                        {
+                            neighborIDsToEvaluate.Add(newCell.Get_Uid());
+                            neighborsToEvaluate_bySize[currentSize].Add(newCell);
+                        }
+
+
+                        if (layersMax < 2 || (currentSize != (int)HexCellSizes.X_12 && currentSize != (int)HexCellSizes.X_4)) continue;
+
+                        // Generate new layers 
+                        HexagonCellPrototype previousCell = newCell;
+                        List<HexagonCellPrototype> previousChildCells = childCells;
+
+                        // Debug.LogError("currentGroundLayer: " + currentGroundLayer + ", newCell.layer: " + newCell.layer + ", cellLayerElevation: " + cellLayerElevation);
+
+                        // Add Upper Layers
+                        startingLayer = (currentGroundLayer + 1);
+
+                        for (int currentLayer = startingLayer; currentLayer < topLayer; currentLayer++)
+                        {
+                            HexagonCellPrototype nextLayerCell = HexagonCellPrototype.DuplicateCellToNewLayer_Above(previousCell, cellLayerElevation, null);
+
+                            if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize].ContainsKey(currentLayer) == false)
                             {
-                                neighborIDsToEvaluate.Add(newCell.Get_Uid());
-                                neighborsToEvaluate_bySize[currentSize].Add(newCell);
+                                cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize].Add(currentLayer, new Dictionary<Vector2, HexagonCellPrototype>());
+                            }
+                            else if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][currentLayer].ContainsKey(nextLayerCell.GetLookup())) continue;
+
+
+                            if (groundTypeFound == CellStatus.Unset && subCellTerraforms.ContainsKey(pointLookup) && subCellTerraforms[pointLookup].size == currentSize && (int)subCellTerraforms[pointLookup].center.y == (int)nextLayerCell.center.y)
+                            {
+                                groundTypeFound = newCell.GetCellStatus();
+                            }
+                            else if (groundTypeFound != CellStatus.Unset)
+                            {
+                                if (groundTypeFound == CellStatus.FlatGround || (allowBufferStatusAssignment && (currentLayer - startingLayer) > 1)) nextLayerCell.SetCellStatus(CellStatus.AboveGround);
                             }
 
+                            cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][currentLayer].Add(nextLayerCell.GetLookup(), nextLayerCell);
 
-                            if (layersMax < 2 || (currentSize != (int)HexCellSizes.X_12 && currentSize != (int)HexCellSizes.X_4)) continue;
-
-                            // Generate new layers 
-                            HexagonCellPrototype previousCell = newCell;
-                            List<HexagonCellPrototype> previousChildCells = childCells;
-
-                            // Add Upper Layers
-                            startingLayer = (baseLayer + 1);
-
-                            for (int currentLayer = startingLayer; currentLayer < topLayer; currentLayer++)
+                            // Add to neighborsToEvaluate_bySize
+                            if (neighborIDsToEvaluate.Contains(nextLayerCell.Get_Uid()) == false)
                             {
-                                HexagonCellPrototype nextLayerCell = HexagonCellPrototype.DuplicateCellToNewLayerAbove(previousCell, cellLayerElevation, currentLayer, null);
+                                neighborIDsToEvaluate.Add(nextLayerCell.Get_Uid());
+                                neighborsToEvaluate_bySize[currentSize].Add(nextLayerCell);
+                            }
+
+                            previousCell = nextLayerCell;
+
+                            // Duplicate Children Cells to Next Layer
+                            if (previousChildCells != null)
+                            {
+                                if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize].ContainsKey(currentLayer) == false) cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize].Add(currentLayer, new Dictionary<Vector2, HexagonCellPrototype>());
+
+                                List<HexagonCellPrototype> nextLayerChildCells = new List<HexagonCellPrototype>();
+                                foreach (HexagonCellPrototype prevChild in previousChildCells)
+                                {
+                                    if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize][currentLayer].ContainsKey(prevChild.GetLookup())) continue;
+
+                                    HexagonCellPrototype newChildCell = HexagonCellPrototype.DuplicateCellToNewLayer_Above(prevChild, cellLayerElevation, nextLayerCell);
+
+                                    cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize][currentLayer].Add(newChildCell.GetLookup(), newChildCell);
+
+                                    nextLayerChildCells.Add(newChildCell);
+
+                                    if (neighborIDsToEvaluate.Contains(newChildCell.Get_Uid()) == false)
+                                    {
+                                        neighborIDsToEvaluate.Add(newChildCell.Get_Uid());
+                                        neighborsToEvaluate_bySize[childSize].Add(newChildCell);
+                                    }
+                                }
+
+                                previousChildCells = nextLayerChildCells;
+
+                                if (nextLayerChildCells[0].layer != nextLayerCell.layer || currentLayer != nextLayerCell.layer) Debug.LogError("startingLayer: " + startingLayer + ", currentLayer: " + currentLayer + ", parent/child layer mismatch detected - parentlayer: " + nextLayerCell.layer + ", this cell's layer: " + nextLayerChildCells[0].layer + ", cellLayerElevation: " + cellLayerElevation);
+                            }
+                        }
+
+                        // Add Underground Layers
+                        if (useUnderGround)
+                        {
+                            previousCell = newCell;
+                            previousChildCells = childCells;
+                            startingLayer = (currentGroundLayer - 1);
+
+                            for (int currentLayer = startingLayer; currentLayer > bottomLayer - 1; currentLayer--)
+                            {
+                                HexagonCellPrototype nextLayerCell = HexagonCellPrototype.DuplicateCellToNewLayer_Below(previousCell, cellLayerElevation, null);
 
                                 if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize].ContainsKey(currentLayer) == false)
                                 {
@@ -964,19 +1052,13 @@ namespace ProceduralBase
                                 }
                                 else if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][currentLayer].ContainsKey(nextLayerCell.GetLookup())) continue;
 
-
-                                if (groundTypeFound == CellStatus.Unset && subCellTerraforms.ContainsKey(pointLookup) && subCellTerraforms[pointLookup].size == currentSize && (int)subCellTerraforms[pointLookup].center.y == (int)nextLayerCell.center.y)
+                                if (groundTypeFound == CellStatus.FlatGround || (allowBufferStatusAssignment && (startingLayer - currentLayer) > 1))
                                 {
-                                    groundTypeFound = newCell.GetCellStatus();
-                                }
-                                else if (groundTypeFound != CellStatus.Unset)
-                                {
-                                    if (groundTypeFound == CellStatus.FlatGround) nextLayerCell.SetCellStatus(CellStatus.AboveGround);
+                                    nextLayerCell.SetCellStatus(CellStatus.UnderGround);
                                 }
 
                                 cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][currentLayer].Add(nextLayerCell.GetLookup(), nextLayerCell);
 
-                                // Add to neighborsToEvaluate_bySize
                                 if (neighborIDsToEvaluate.Contains(nextLayerCell.Get_Uid()) == false)
                                 {
                                     neighborIDsToEvaluate.Add(nextLayerCell.Get_Uid());
@@ -985,8 +1067,10 @@ namespace ProceduralBase
 
                                 previousCell = nextLayerCell;
 
+
                                 // Duplicate Children Cells to Next Layer
-                                if (groundTypeFound == CellStatus.FlatGround && previousChildCells != null)
+                                if (previousChildCells != null)
+                                // if (groundTypeFound == CellStatus.FlatGround && previousChildCells != null)
                                 {
                                     if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize].ContainsKey(currentLayer) == false) cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize].Add(currentLayer, new Dictionary<Vector2, HexagonCellPrototype>());
 
@@ -995,7 +1079,7 @@ namespace ProceduralBase
                                     {
                                         if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize][currentLayer].ContainsKey(prevChild.GetLookup())) continue;
 
-                                        HexagonCellPrototype newChildCell = HexagonCellPrototype.DuplicateCellToNewLayerAbove(prevChild, cellLayerElevation, currentLayer, nextLayerCell);
+                                        HexagonCellPrototype newChildCell = HexagonCellPrototype.DuplicateCellToNewLayer_Below(prevChild, cellLayerElevation, nextLayerCell);
 
                                         cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize][currentLayer].Add(newChildCell.GetLookup(), newChildCell);
 
@@ -1011,67 +1095,10 @@ namespace ProceduralBase
                                     previousChildCells = nextLayerChildCells;
                                 }
                             }
-
-                            // Add Underground Layers
-                            if (useUnderGround)
-                            {
-                                previousCell = newCell;
-                                previousChildCells = childCells;
-                                startingLayer = (baseLayer - 1);
-
-                                for (int currentLayer = startingLayer; currentLayer > bottomLayer - 1; currentLayer--)
-                                {
-                                    HexagonCellPrototype nextLayerCell = HexagonCellPrototype.DuplicateCellToNewLayerBelow(previousCell, cellLayerElevation, currentLayer, null);
-
-                                    if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize].ContainsKey(currentLayer) == false)
-                                    {
-                                        cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize].Add(currentLayer, new Dictionary<Vector2, HexagonCellPrototype>());
-                                    }
-                                    else if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][currentLayer].ContainsKey(nextLayerCell.GetLookup())) continue;
-
-                                    if (groundTypeFound == CellStatus.FlatGround) nextLayerCell.SetCellStatus(CellStatus.UnderGround);
-
-                                    cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][currentLayer].Add(nextLayerCell.GetLookup(), nextLayerCell);
-
-                                    if (neighborIDsToEvaluate.Contains(nextLayerCell.Get_Uid()) == false)
-                                    {
-                                        neighborIDsToEvaluate.Add(nextLayerCell.Get_Uid());
-                                        neighborsToEvaluate_bySize[currentSize].Add(nextLayerCell);
-                                    }
-
-                                    previousCell = nextLayerCell;
-
-
-                                    // Duplicate Children Cells to Next Layer
-                                    if (groundTypeFound == CellStatus.FlatGround && previousChildCells != null)
-                                    {
-                                        if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize].ContainsKey(currentLayer) == false) cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize].Add(currentLayer, new Dictionary<Vector2, HexagonCellPrototype>());
-
-                                        List<HexagonCellPrototype> nextLayerChildCells = new List<HexagonCellPrototype>();
-                                        foreach (HexagonCellPrototype prevChild in previousChildCells)
-                                        {
-                                            if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize][currentLayer].ContainsKey(prevChild.GetLookup())) continue;
-
-                                            HexagonCellPrototype newChildCell = HexagonCellPrototype.DuplicateCellToNewLayerBelow(prevChild, cellLayerElevation, currentLayer, nextLayerCell);
-
-                                            cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][childSize][currentLayer].Add(newChildCell.GetLookup(), newChildCell);
-
-                                            nextLayerChildCells.Add(newChildCell);
-
-                                            if (neighborIDsToEvaluate.Contains(newChildCell.Get_Uid()) == false)
-                                            {
-                                                neighborIDsToEvaluate.Add(newChildCell.Get_Uid());
-                                                neighborsToEvaluate_bySize[childSize].Add(newChildCell);
-                                            }
-                                        }
-
-                                        previousChildCells = nextLayerChildCells;
-                                    }
-                                }
-                            }
-
-                            created++;
                         }
+
+                        created++;
+
                     }
                 }
             }
@@ -1081,9 +1108,9 @@ namespace ProceduralBase
             foreach (var kvp in neighborsToEvaluate_bySize)
             {
                 int currentSize = kvp.Key;
-                Debug.Log("subcell neighbors To evaluate - size: " + currentSize + " - " + neighborsToEvaluate_bySize[currentSize].Count);
+                // Debug.Log("subcell neighbors To evaluate - size: " + currentSize + " - " + neighborsToEvaluate_bySize[currentSize].Count);
                 bool log = currentSize == 4;
-                HexGridPathingUtil.Evaluate_SubCellNeighbors(
+                HexCellUtil.Evaluate_SubCellNeighbors(
                     neighborsToEvaluate_bySize[currentSize],
                     worldspaceCell,
                     cellLookup_ByLayer_BySize_ByWorldSpace,
@@ -1092,8 +1119,11 @@ namespace ProceduralBase
                 );
             }
 
+            HexCellSizes desiredSize = locationPrefab.GetSettings().tileDirectory.HasTileSize(HexCellSizes.X_4) ? HexCellSizes.X_4 : HexCellSizes.Default;
+
             HexagonCellCluster newPreassignedCluster = HexagonCellManager.Generate_ClusterSubGridFromPrototypesByLayer(
-                            cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][(int)HexCellSizes.Default],
+                            cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][(int)desiredSize],
+                            cellLookup_ByLayer_BySize_ByWorldSpace,
                             CellClusterType.Other,
                             true,
                             null
@@ -1217,7 +1247,7 @@ namespace ProceduralBase
                             {
                                 new_cellCenters_ByLookup_BySize_ByWorldSpace[worldspaceLookup][currentSize].Add(pointLookup, point);
 
-                                HexagonCellPrototype newCell = new HexagonCellPrototype(point, currentSize, worldSpaceCell);
+                                HexagonCellPrototype newCell = new HexagonCellPrototype(point, currentSize, worldSpaceCell, cellLayerElevation);
                                 newCell.SetWorldCoordinate(newPos);
                                 newCell.SetWorldSpaceLookup(worldspaceLookup);
 
@@ -1239,7 +1269,7 @@ namespace ProceduralBase
 
                                     for (int currentLayer = startingLayer + 1; currentLayer < cellLayersMax; currentLayer++)
                                     {
-                                        HexagonCellPrototype nextLayerCell = HexagonCellPrototype.DuplicateCellToNewLayerAbove(bottomCell, cellLayerElevation, currentLayer, null);
+                                        HexagonCellPrototype nextLayerCell = HexagonCellPrototype.DuplicateCellToNewLayer_Above(bottomCell, cellLayerElevation, null);
                                         if (new_cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][currentLayer].ContainsKey(nextLayerCell.GetLookup())) continue;
 
                                         new_cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][currentLayer].Add(nextLayerCell.GetLookup(), nextLayerCell);
@@ -1270,18 +1300,18 @@ namespace ProceduralBase
                 {
                     int neighborsFound = 0;
 
-                    List<Vector2> neighborLookups = HexagonCellPrototype.GenerateNeighborLookupCoordinates(cell.center, cell.size);
-                    foreach (var lookup in neighborLookups)
+                    // List<Vector2> neighborLookups = HexagonCellPrototype.GenerateNeighborLookupCoordinates(cell.center, cell.size);
+                    Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.GenerateNeighborLookupCoordinatesBySide(cell.center, cell.size);
+                    foreach (var kvp in neighborLookupsBySide)
                     {
-                        HexagonCellPrototype neighbor = new_cellLookup_ByLayer_BySize_ByWorldSpace[cell.GetWorldSpaceLookup()][cell.size][cell.GetLayer()].ContainsKey(lookup)
-                                                                ? new_cellLookup_ByLayer_BySize_ByWorldSpace[cell.GetWorldSpaceLookup()][cell.size][cell.GetLayer()][lookup]
+                        Vector2 neighborLookup = kvp.Value;
+                        HexagonCellPrototype neighbor = new_cellLookup_ByLayer_BySize_ByWorldSpace[cell.GetWorldSpaceLookup()][cell.size][cell.GetGridLayer()].ContainsKey(neighborLookup)
+                                                                ? new_cellLookup_ByLayer_BySize_ByWorldSpace[cell.GetWorldSpaceLookup()][cell.size][cell.GetGridLayer()][neighborLookup]
                                                                 : null;
 
-                        // HexagonCellPrototype neighbor = new_cellLookup_ByLayer_BySize_ByWorldSpace[cell.GetWorldSpaceLookup()][cell.size][cell.GetLayer()].Find(n => n.GetLookup() == lookup);
                         if (neighbor != null && neighbor.uid != cell.uid)
                         {
-                            if (cell.neighbors.Contains(neighbor) == false) cell.neighbors.Add(neighbor);
-                            if (neighbor.neighbors.Contains(cell) == false) neighbor.neighbors.Add(cell);
+                            cell.AssignSideNeighbor(neighbor, kvp.Key);
 
                             neighborsFound++;
                             continue;
@@ -1294,18 +1324,17 @@ namespace ProceduralBase
                             if (
                                 !new_cellLookup_ByLayer_BySize_ByWorldSpace.ContainsKey(worldspaceLookup) ||
                                 !new_cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup].ContainsKey(cell.size) ||
-                                !new_cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][cell.size].ContainsKey(cell.GetLayer())
+                                !new_cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][cell.size].ContainsKey(cell.GetGridLayer())
                             ) continue;
 
-                            neighbor = new_cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][cell.size][cell.GetLayer()].ContainsKey(lookup)
-                                                            ? new_cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][cell.size][cell.GetLayer()][lookup]
+                            neighbor = new_cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][cell.size][cell.GetGridLayer()].ContainsKey(neighborLookup)
+                                                            ? new_cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][cell.size][cell.GetGridLayer()][neighborLookup]
                                                             : null;
 
-                            // neighbor = new_cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][cell.size][cell.GetLayer()].Find(n => n.GetLookup() == lookup);
+                            // neighbor = new_cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][cell.size][cell.GetGridLayer()].Find(n => n.GetLookup() == lookup);
                             if (neighbor != null && neighbor.uid != cell.uid)
                             {
-                                if (cell.neighbors.Contains(neighbor) == false) cell.neighbors.Add(neighbor);
-                                if (neighbor.neighbors.Contains(cell) == false) neighbor.neighbors.Add(cell);
+                                cell.AssignSideNeighbor(neighbor, kvp.Key);
 
                                 neighborsFound++;
                                 break;
@@ -1316,7 +1345,7 @@ namespace ProceduralBase
                     HexagonCellPrototype.EvaluateForEdge(cell, EdgeCellType.Default, true);
 
                     if (neighborsFound == 0 || neighborsFound > 8) Debug.LogError("cell neighbors found: " + neighborsFound);
-                    // Debug.Log("cell neighbors found: " + neighborsFound + ", layer: " + cell.GetLayer());
+                    // Debug.Log("cell neighbors found: " + neighborsFound + ", layer: " + cell.GetGridLayer());
                 }
                 // Debug.Log("WorldSpace neighbors To evaluate: " + neighborsToEvaluate.Count);
                 // HexagonCellPrototype.PopulateNeighborsFromCornerPointsXZ(neighborsToEvaluate, transform, 12f);
@@ -1364,7 +1393,7 @@ namespace ProceduralBase
 
 
 
-        private void GenerateWorldCells_WorldSpace(int amount = 12)
+        private void GenerateWorldCells_WorldSpace(int amount = 12, bool enableLog = false)
         {
             // temp
             // _terrainChunkData_ByLookup = new Dictionary<Vector2, TerrainChunkData>();
@@ -1393,7 +1422,7 @@ namespace ProceduralBase
             }
             // Get Parent Cells
             List<HexagonCellPrototype> parentCellsToFill = HexGridPathingUtil.GetConsecutiveInactiveWorldSpaceNeighbors(initialParentCell, _worldAreas_ByRegion, amount);
-            Debug.LogError("parentCellsToFill: " + parentCellsToFill.Count);
+            if (enableLog) Debug.LogError("parentCellsToFill: " + parentCellsToFill.Count);
 
             Dictionary<Vector2, Dictionary<Vector2, HexagonCellPrototype>> new_worldSpaces_ByArea = new Dictionary<Vector2, Dictionary<Vector2, HexagonCellPrototype>>();
             HashSet<string> neighborIDsToEvaluate = new HashSet<string>();
@@ -1440,31 +1469,32 @@ namespace ProceduralBase
                         }
                     }
 
-                    if (HexCoreUtil.IsAnyHexPointWithinPolygon(point, cellSize, parentCellCorners))
+                    if (
+                        new_worldSpaces_ByArea[areaLookup].ContainsKey(worldSpaceLookup) == false && neighborsToEvaluate.ContainsKey(worldSpaceLookup) == false &&
+                        HexCoreUtil.IsAnyHexPointWithinPolygon(point, cellSize, parentCellCorners)
+                    )
                     {
-                        if (new_worldSpaces_ByArea[areaLookup].ContainsKey(worldSpaceLookup) == false && neighborsToEvaluate.ContainsKey(worldSpaceLookup) == false)
+                        // HexagonCellPrototype newWorldSpaceCell = new HexagonCellPrototype(CalculateCoordinateWorldPosition(newWorldCoordinate), cellSize, null);
+                        // newWorldSpaceCell.SetWorldCoordinate(newWorldCoordinate);
+                        // newWorldSpaceCell.SetParentLookup(areaLookup);
+                        HexagonCellPrototype newWorldSpaceCell = HexagonCellPrototype.New_WorldCell(CalculateCoordinateWorldPosition(newWorldCoordinate), cellSize, areaLookup);
+                        newWorldSpaceCell.objectIndex = created;
+
+                        new_worldSpaces_ByArea[areaLookup].Add(newWorldSpaceCell.GetLookup(), newWorldSpaceCell);
+
+                        if (worldSpaceLookup != newWorldSpaceCell.GetLookup()) Debug.LogError("Inconsistent lookup coordinates found! - newWorldSpaceCell.GetLookup(): " + newWorldSpaceCell.GetLookup() + ", worldSpaceLookup: " + worldSpaceLookup);
+
+                        if (neighborIDsToEvaluate.Contains(newWorldSpaceCell.Get_Uid()) == false)
                         {
-                            HexagonCellPrototype newWorldSpaceCell = new HexagonCellPrototype(CalculateCoordinateWorldPosition(newWorldCoordinate), cellSize, null);
-                            newWorldSpaceCell.SetWorldCoordinate(newWorldCoordinate);
-                            newWorldSpaceCell.SetParentLookup(areaLookup);
-                            newWorldSpaceCell.objectIndex = created;
-
-                            new_worldSpaces_ByArea[areaLookup].Add(newWorldSpaceCell.GetLookup(), newWorldSpaceCell);
-
-                            if (worldSpaceLookup != newWorldSpaceCell.GetLookup()) Debug.LogError("Inconsistent lookup coordinates found! - newWorldSpaceCell.GetLookup(): " + newWorldSpaceCell.GetLookup() + ", worldSpaceLookup: " + worldSpaceLookup);
-
-                            if (neighborIDsToEvaluate.Contains(newWorldSpaceCell.Get_Uid()) == false)
-                            {
-                                neighborIDsToEvaluate.Add(newWorldSpaceCell.Get_Uid());
-                                neighborsToEvaluate.Add(newWorldSpaceCell.GetLookup(), newWorldSpaceCell);
-                            }
-
-                            // Add terrain chunk center lookups to dictionary; 
-                            int chunksAdded = TerrainChunkData.Generate_WorldspaceChunkData(newWorldSpaceCell, _terrainChunkData_ByLookup, currentChunkIX);
-                            currentChunkIX += chunksAdded;
-
-                            created++;
+                            neighborIDsToEvaluate.Add(newWorldSpaceCell.Get_Uid());
+                            neighborsToEvaluate.Add(newWorldSpaceCell.GetLookup(), newWorldSpaceCell);
                         }
+
+                        // Add terrain chunk center lookups to dictionary; 
+                        int chunksAdded = TerrainChunkData.Generate_WorldspaceChunkData(newWorldSpaceCell, _terrainChunkData_ByLookup, currentChunkIX);
+                        currentChunkIX += chunksAdded;
+
+                        created++;
                     }
                 }
 
@@ -1476,14 +1506,14 @@ namespace ProceduralBase
 
             if (neighborsToEvaluate.Count > 1)
             {
-                // Debug.Log("World Area neighbors To evaluate: " + neighborsToEvaluate.Count);
-                HexGridPathingUtil.Evaluate_WorldCellNeighbors(neighborsToEvaluate, true);
+                if (enableLog) Debug.Log("World Area neighbors To evaluate: " + neighborsToEvaluate.Count);
+                HexCellUtil.Evaluate_WorldCellNeighbors(neighborsToEvaluate, enableLog);
             }
-            Debug.Log("Created " + totalCreated + " new WorldSpaces across " + _worldSpaces_ByArea.Count + " WorldAreas");
+            if (enableLog) Debug.Log("Created " + totalCreated + " new WorldSpaces across " + _worldSpaces_ByArea.Count + " WorldAreas");
         }
 
 
-        private void GenerateWorldCells_SubCells(List<HexagonCellPrototype> worldspaceCells)
+        private void GenerateWorldCells_SubCells(List<HexagonCellPrototype> worldspaceCells, bool enableLog = false)
         {
             _subCellTerraforms_ByWorldspace = new Dictionary<Vector2, Dictionary<Vector2, HexagonCellPrototype>>();
 
@@ -1584,39 +1614,39 @@ namespace ProceduralBase
 
                             if (new_subCells_ByWorldspace[wordlspaceLookup].ContainsKey(newCellLookup) == false && neighborsToEvaluate.ContainsKey(newCellLookup) == false)
                             {
-                                HexagonCellPrototype newSubCell = new HexagonCellPrototype(point, currentSize, worldspaceCell);
-                                newSubCell.SetWorldCoordinate(newWorldCoordinate);
-                                newSubCell.SetParentLookup(wordlspaceLookup);
-                                newSubCell.SetWorldSpaceLookup(wordlspaceLookup);
+                                HexagonCellPrototype new_subCell = new HexagonCellPrototype(point, currentSize, worldspaceCell, cellLayerElevation);
+                                new_subCell.SetWorldCoordinate(newWorldCoordinate);
+                                new_subCell.SetParentLookup(wordlspaceLookup);
+                                new_subCell.SetWorldSpaceLookup(wordlspaceLookup);
 
                                 if (islandbufferPoints.ContainsKey(newCellLookup))
                                 {
-                                    newSubCell.Highlight(true);
-                                    newSubCell.SetToGround(false);
-                                    // newSubCell.SetPathCell(true);
+                                    new_subCell.Highlight(true);
+                                    new_subCell.SetToGround(false);
+                                    // new_subCell.SetPathCell(true);
                                 }
 
-                                // float pathNoiseValue = LayerdNoise.Calculate_NoiseForCoordinate((int)newSubCell.center.x, (int)newSubCell.center.z, layeredNoise_locationPath);
+                                // float pathNoiseValue = LayerdNoise.Calculate_NoiseForCoordinate((int)new_subCell.center.x, (int)new_subCell.center.z, layeredNoise_locationPath);
                                 // if (pathNoiseValue > locationNoise_pathNoiseMin)
                                 // {
-                                //     newSubCell.SetToGround(false);
-                                //     newSubCell.SetPathCell(true);
+                                //     new_subCell.SetToGround(false);
+                                //     new_subCell.SetPathCell(true);
                                 // }
-                                else newSubCell.SetToGround(true);
+                                else new_subCell.SetToGround(true);
 
-                                new_subCells_ByWorldspace[wordlspaceLookup].Add(newSubCell.GetLookup(), newSubCell);
+                                new_subCells_ByWorldspace[wordlspaceLookup].Add(new_subCell.GetLookup(), new_subCell);
 
-                                if (newCellLookup != newSubCell.GetLookup()) Debug.LogError("Inconsistent lookup coordinates found! - newSubCell.GetLookup(): " + newSubCell.GetLookup() + ", newCellLookup: " + newCellLookup);
+                                if (newCellLookup != new_subCell.GetLookup()) Debug.LogError("Inconsistent lookup coordinates found! - new_subCell.GetLookup(): " + new_subCell.GetLookup() + ", newCellLookup: " + newCellLookup);
 
-                                if (neighborIDsToEvaluate.Contains(newSubCell.Get_Uid()) == false)
+                                if (neighborIDsToEvaluate.Contains(new_subCell.Get_Uid()) == false)
                                 {
-                                    neighborIDsToEvaluate.Add(newSubCell.Get_Uid());
-                                    neighborsToEvaluate.Add(newSubCell.GetLookup(), newSubCell);
+                                    neighborIDsToEvaluate.Add(new_subCell.Get_Uid());
+                                    neighborsToEvaluate.Add(new_subCell.GetLookup(), new_subCell);
                                 }
                                 created++;
 
                                 if (_subCellTerraforms_ByWorldspace.ContainsKey(wordlspaceLookup) == false) _subCellTerraforms_ByWorldspace.Add(wordlspaceLookup, new Dictionary<Vector2, HexagonCellPrototype>());
-                                _subCellTerraforms_ByWorldspace[wordlspaceLookup].Add(newSubCell.GetLookup(), newSubCell);
+                                _subCellTerraforms_ByWorldspace[wordlspaceLookup].Add(new_subCell.GetLookup(), new_subCell);
                             }
                         }
                     }
@@ -1625,22 +1655,20 @@ namespace ProceduralBase
                 // Debug.Log("Created " + created + " SubCells within Worldspace coordinate: " + wordlspaceLookup);
                 totalCreated += created;
 
-                Generate_WorldSpace_CellGrid_Location(worldspaceCell, lowestHighestPointHeight.x, cellLayersMax, _subCellTerraforms_ByWorldspace[wordlspaceLookup]);
+                Generate_WorldSpace_CellGrid_Location(worldspaceCell, lowestHighestPointHeight.x, cellLayersMax, _subCellTerraforms_ByWorldspace[wordlspaceLookup], enableLog);
             }
-
 
             if (neighborsToEvaluate.Count > 1)
             {
-                Debug.Log("SubCell neighbors To evaluate: " + neighborsToEvaluate.Count);
-                HexGridPathingUtil.Evaluate_WorldCellNeighbors(neighborsToEvaluate, true);
+                if (enableLog) Debug.Log("SubCell neighbors To evaluate: " + neighborsToEvaluate.Count);
+                HexCellUtil.Evaluate_WorldCellNeighbors(neighborsToEvaluate, enableLog);
             }
-            // _subCells_ByWorldspace = new_subCells_ByWorldspace;
 
-            Debug.Log("Created " + totalCreated + " new SubCells across " + new_subCells_ByWorldspace.Count + " worldspaces");
+            if (enableLog) Debug.Log("Created " + totalCreated + " new SubCells across " + new_subCells_ByWorldspace.Count + " worldspaces");
         }
 
 
-        private void GenerateWorldCells_Area(int amount = 20)
+        private void GenerateWorldCells_Area(int amount = 20, bool enableLog = false)
         {
             if (_worldRegionsLookup == null || _worldRegionsLookup.Count == 0) GenerateWorldCells_Region(_worldRegionSize);
             if (_worldRegionsLookup == null)
@@ -1703,40 +1731,36 @@ namespace ProceduralBase
                             continue;
                         }
                     }
-                    // if (VectorUtil.IsPointWithinPolygon(point, parentCellCorners) || VectorUtil.DistanceXZ(point, regionCenterPoint) < (parentCellSize * 0.96f))
-                    if (HexCoreUtil.IsAnyHexPointWithinPolygon(point, cellSize, parentCellCorners))
+
+                    if (
+                        new_worldAreas_ByRegion[regionLookup].ContainsKey(areaLookup) == false && neighborsToEvaluate.ContainsKey(areaLookup) == false &&
+                        HexCoreUtil.IsAnyHexPointWithinPolygon(point, cellSize, parentCellCorners))
                     {
-                        // if (new_worldAreas_ByRegion[regionLookup].ContainsKey(areaLookup) == false)
-                        if (new_worldAreas_ByRegion[regionLookup].ContainsKey(areaLookup) == false && neighborsToEvaluate.ContainsKey(areaLookup) == false)
+
+                        HexagonCellPrototype newAreaCell = HexagonCellPrototype.New_WorldCell(CalculateCoordinateWorldPosition(newWorldCoordinate), cellSize, regionLookup);
+
+                        new_worldAreas_ByRegion[regionLookup].Add(newAreaCell.GetLookup(), newAreaCell);
+
+                        if (areaLookup != newAreaCell.GetLookup())
                         {
-                            HexagonCellPrototype newAreaCell = new HexagonCellPrototype(CalculateCoordinateWorldPosition(newWorldCoordinate), cellSize, null);
-                            newAreaCell.SetWorldCoordinate(newWorldCoordinate);
-                            newAreaCell.SetParentLookup(regionLookup);
-
-                            new_worldAreas_ByRegion[regionLookup].Add(newAreaCell.GetLookup(), newAreaCell);
-
-                            if (areaLookup != newAreaCell.GetLookup())
-                            {
-                                Debug.LogError("newAreaCell.GetLookup(): " + newAreaCell.GetLookup() + ", areaLookup: " + areaLookup);
-                            }
-
-                            // if (neighborIDsToEvaluate.Contains(newAreaCell.Get_Uid()) == false && neighborsToEvaluate.ContainsKey(areaLookup) == false)
-                            if (neighborIDsToEvaluate.Contains(newAreaCell.Get_Uid()) == false)
-                            {
-                                neighborIDsToEvaluate.Add(newAreaCell.Get_Uid());
-                                neighborsToEvaluate.Add(newAreaCell.GetLookup(), newAreaCell);
-                            }
-
-                            // Assign World Status from noise
-                            float baseNoiseHeight = WorldManagerUtil.CalculateNoiseHeightForVertex((int)newAreaCell.center.x, (int)newAreaCell.center.z, _global_terrainHeightDefault, globalNoise.fastNoise, persistence, octaves, lacunarity);
-                            if (baseNoiseHeight < _globalSeaLevel)
-                            {
-                                newAreaCell.worldCellStatus = WorldCellStatus.Ocean;
-                            }
-                            else newAreaCell.worldCellStatus = WorldCellStatus.Land;
-
-                            created++;
+                            Debug.LogError("newAreaCell.GetLookup(): " + newAreaCell.GetLookup() + ", areaLookup: " + areaLookup);
                         }
+
+                        if (neighborIDsToEvaluate.Contains(newAreaCell.Get_Uid()) == false)
+                        {
+                            neighborIDsToEvaluate.Add(newAreaCell.Get_Uid());
+                            neighborsToEvaluate.Add(newAreaCell.GetLookup(), newAreaCell);
+                        }
+
+                        // Assign World Status from noise
+                        float baseNoiseHeight = WorldManagerUtil.CalculateNoiseHeightForVertex((int)newAreaCell.center.x, (int)newAreaCell.center.z, _global_terrainHeightDefault, globalNoise.fastNoise, persistence, octaves, lacunarity);
+                        if (baseNoiseHeight < _globalSeaLevel)
+                        {
+                            newAreaCell.worldCellStatus = WorldCellStatus.Ocean;
+                        }
+                        else newAreaCell.worldCellStatus = WorldCellStatus.Land;
+
+                        created++;
                     }
                 }
 
@@ -1746,17 +1770,17 @@ namespace ProceduralBase
 
             if (neighborsToEvaluate.Count > 1)
             {
-                Debug.Log("World Area neighbors To evaluate: " + neighborsToEvaluate.Count);
-                HexGridPathingUtil.Evaluate_WorldCellNeighbors(neighborsToEvaluate, true);
-                // HexGridPathingUtil.Evaluate_WorldCellNeighbors(neighborsToEvaluate, new_worldAreas_ByRegion, parentCellSize, true);
+                if (enableLog) Debug.Log("World Area neighbors To evaluate: " + neighborsToEvaluate.Count);
+                HexCellUtil.Evaluate_WorldCellNeighbors(neighborsToEvaluate, enableLog);
             }
+
             _worldAreas_ByRegion = new_worldAreas_ByRegion;
 
             Debug.Log("Created " + totalCreated + " new WorldAreas across " + _worldAreas_ByRegion.Count + " WorldRegions");
         }
 
 
-        private void GenerateWorldCells_Region(int regionSize, int radiusMult = 4)
+        private void GenerateWorldCells_Region(int regionSize, int radiusMult = 4, bool enableLog = false)
         {
             Dictionary<Vector2, HexagonCellPrototype> new_regionCellsByLookup = new Dictionary<Vector2, HexagonCellPrototype>();
             Dictionary<string, Vector2> newWorldRegionsLookupById = new Dictionary<string, Vector2>();
@@ -1775,7 +1799,6 @@ namespace ProceduralBase
             List<HexagonCellPrototype> neighborsToEvaluate = new List<HexagonCellPrototype>();
 
             foreach (Vector3 centerPoint in newCenterPoints.Values)
-            // foreach (Vector3 centerPoint in newCenterPoints)
             {
                 Vector2 newCoordinate = VectorUtil.Calculate_AproximateCoordinate(centerPoint);
                 Vector2 newLookup = HexCoreUtil.Calculate_CenterLookup(newCoordinate, regionSize);
@@ -1787,8 +1810,10 @@ namespace ProceduralBase
                 }
                 else
                 {
-                    HexagonCellPrototype newRegionCell = new HexagonCellPrototype(CalculateCoordinateWorldPosition(newCoordinate), regionSize, null);
-                    newRegionCell.SetWorldCoordinate(newCoordinate);
+                    // HexagonCellPrototype newRegionCell = new HexagonCellPrototype(CalculateCoordinateWorldPosition(newCoordinate), regionSize, null);
+                    // newRegionCell.SetWorldCoordinate(newCoordinate);
+                    HexagonCellPrototype newRegionCell = HexagonCellPrototype.New_WorldCell(CalculateCoordinateWorldPosition(newCoordinate), regionSize);
+
                     new_regionCellsByLookup.Add(newLookup, newRegionCell);
                     newWorldRegionsLookupById.Add(newRegionCell.Get_Uid(), newLookup);
 
@@ -1802,8 +1827,8 @@ namespace ProceduralBase
 
             if (neighborsToEvaluate.Count > 1)
             {
-                Debug.Log("World Region neighbors To evaluate: " + neighborsToEvaluate.Count);
-                HexGridPathingUtil.Evaluate_WorldCellNeighbors(neighborsToEvaluate, new_regionCellsByLookup, true);
+                if (enableLog) Debug.Log("World Region neighbors To evaluate: " + neighborsToEvaluate.Count);
+                HexCellUtil.Evaluate_WorldCellNeighbors(neighborsToEvaluate, new_regionCellsByLookup, enableLog);
             }
 
             _worldRegionsLookup = new_regionCellsByLookup;
@@ -1870,33 +1895,6 @@ namespace ProceduralBase
                 worldSpaceNeighborVertexGridsByCoord.Add(worldLookupCoord, _terrainVertexGridDataByCenterCoordinate[worldLookupCoord]);
             }
             return worldSpaceNeighborVertexGridsByCoord;
-        }
-
-
-        public void EvaluateAdjacentCellGridNeighbors(List<HexagonCellPrototype> neighboringWorldspaceHexCells)
-        {
-            List<HexagonCellPrototype> edgeGridNeighborsToEvaluate = new List<HexagonCellPrototype>();
-
-            foreach (var item in neighboringWorldspaceHexCells)
-            {
-                // Debug.LogError("ownerWorldAreaCoordinate: " + item.GetWorldCordinate());
-                Vector2 worldLookupCoord = item.GetLookup();
-                if (_worldSpaceCellGridByCenterCoordinate.ContainsKey(worldLookupCoord) == false) continue;
-
-                HexagonGrid hexGrid = GetWorldSpaceCellGrid(worldLookupCoord);
-                if (hexGrid == null)
-                {
-                    continue;
-                }
-                Dictionary<int, List<HexagonCellPrototype>> gridCellPrototypesByLayer = hexGrid.GetDefaultPrototypesByLayer();
-
-                foreach (var kvp in gridCellPrototypesByLayer)
-                {
-                    edgeGridNeighborsToEvaluate.AddRange(kvp.Value.FindAll(p => !p.IsRemoved() && p.GetEdgeCellType() == EdgeCellType.Default));
-                }
-            }
-
-            HexagonCellPrototype.PopulateNeighborsFromCornerPoints(edgeGridNeighborsToEvaluate, transform);
         }
 
         public List<HexagonCellPrototype> FindInRange_WorldCells(Dictionary<Vector2, HexagonCellPrototype> worldCellLookup, Vector2 coord, int searchRange)
@@ -1980,13 +1978,7 @@ namespace ProceduralBase
                 if (navMeshSurface != null) navMeshSurface.BuildNavMesh();
             }
 
-            if (evaluate_NoiseRanges)
-            {
-                evaluate_NoiseRanges = false;
 
-                Evaluate_LocationPrefabNoiseRanges();
-                Assign_LocationsToWorldArea(_currentWorldPos_AreaLookup);
-            }
 
             debug_currentLocationNoiseIndex = Mathf.Clamp(debug_currentLocationNoiseIndex, 0, locationNoise_ranges.Count - 1);
 
@@ -2019,8 +2011,7 @@ namespace ProceduralBase
                 trigger_reset = false;
                 trigger_reset_build = false;
 
-                trigger_expand_WorldSpaceCells = true;
-
+                // trigger_expand_WorldSpaceCells = true;
                 _currentRadius = _worldspaceSize;
 
                 if (useRandomTerrainHeight) _global_terrainHeightDefault = CalculateRandomHeight();
@@ -2051,11 +2042,22 @@ namespace ProceduralBase
                 trigger_generate_WorldSpaces = false;
                 GenerateWorldCells_WorldSpace();
             }
-            if (trigger_generate_WorldSpaceCellGrids)
+
+            if (trigger_generate_CurrentAreaLocations)
             {
-                trigger_generate_WorldSpaceCellGrids = false;
-                Generate_WorldSpace_CellGrids(AssignActiveWorldSpaces(), _currentWorldPos_AreaLookup);
+                trigger_generate_CurrentAreaLocations = false;
+                evaluate_NoiseRanges = true;
+                // Generate_WorldSpace_CellGrids(AssignActiveWorldSpaces(), _currentWorldPos_AreaLookup);
             }
+
+            if (evaluate_NoiseRanges)
+            {
+                evaluate_NoiseRanges = false;
+
+                Evaluate_LocationPrefabNoiseRanges();
+                Assign_LocationsToWorldArea(_currentWorldPos_AreaLookup, false);
+            }
+
             // if (trigger_expand_WorldSpaceCells)
             // {
             //     trigger_expand_WorldSpaceCells = false;
@@ -2077,53 +2079,11 @@ namespace ProceduralBase
                 TimeLog("World Build timer.");
             }
 
-            // if (trigger_GenerateTrees)
-            // {
-            //     trigger_GenerateTrees = false;
-            //     // Instantiate_Trees();
-            // }
-
-            // if (trigger_IntantiateLocations)
-            // {
-            //     trigger_IntantiateLocations = false;
-
-            //     if (_worldSpace_LocationData_ByCoordinate != null && _worldSpace_LocationData_ByCoordinate.Count > 0)
-            //     {
-            //         Instantiate_Locations();
-            //     }
-            // }
-
             if (randomizeTerrainHeight)
             {
                 randomizeTerrainHeight = false;
                 _global_terrainHeightDefault = CalculateRandomHeight();
             }
-
-            // if (trigger_EvaluateLocationMarkers)
-            // {
-            //     trigger_EvaluateLocationMarkers = false;
-
-            //     EvaluateLocationMarkers();
-
-            //     foreach (var clusters in _worldSpace_clusters_ByCoordinate.Values)
-            //     {
-            //         HexGridVertexUtil.Assign_TunnelEntryVertices_V2(
-            //             clusters,
-            //             _globalTerrainVertexGridByCoordinate,
-            //             cellLayerElevation,
-            //             transform
-            //         );
-            //     }
-
-            //     // Bounds activeGridBounds = GetActiveWorldGridBounds(_activeWorldspaceCells);
-            //     // RefreshTerrainMeshes(
-            //     //     _globalTerrainVertexGridCoordinates,
-            //     //     _globalTerrainVertexGridByCoordinate,
-            //     //     transform,
-            //     //     activeGridBounds,
-            //     //     _activeWorldspaceCells
-            //     // );
-            // }
         }
 
         public Vector3 CalculateCoordinateWorldPosition(Vector2 coordinate) => new Vector3(coordinate.x, transform.position.y, coordinate.y);
@@ -4313,6 +4273,7 @@ namespace ProceduralBase
                     bool terraformed = false;
                     bool canPlaceTree = (closest_WorldspaceLookup != Vector2.positiveInfinity);
                     bool markedForRemoval = false;
+                    bool updateBufferCell = false;
 
                     if (closest_WorldspaceTerraformLookup != Vector2.positiveInfinity)
                     {
@@ -4324,9 +4285,9 @@ namespace ProceduralBase
                             // Evaluate nearest subcell
                             Dictionary<int, List<Vector3>> closest_subCellCentersBySize = HexCoreUtil.Calculate_ClosestHexCenterPoints_X13(position, new int[] { 12, 4 });
                             (HexagonCellPrototype nearestGroundCell, float dist) = HexCoreUtil.GetCloseestCellLookupInDictionary_withDistance(
-                                   position,
-                                   closest_subCellCentersBySize,
-                                   subCellTerraformLookups_ByWorldspace[closest_WorldspaceTerraformLookup],
+                                    position,
+                                    closest_subCellCentersBySize,
+                                    subCellTerraformLookups_ByWorldspace[closest_WorldspaceTerraformLookup],
                                     includeCellStatusList
                                );
 
@@ -4428,6 +4389,7 @@ namespace ProceduralBase
                                             if (dist < (nearestGroundCell.size * 1.6f))
                                             {
                                                 baseNoiseHeight = Mathf.Clamp(baseNoiseHeight, cellNoiseHeight - 0.9f, cellNoiseHeight + 0.9f);
+                                                updateBufferCell = true;
                                             }
                                             else
                                             {
@@ -4449,6 +4411,40 @@ namespace ProceduralBase
                                             // baseNoiseHeight = Mathf.Lerp(baseNoiseHeight, roundedValue, 0.2f);
                                             baseNoiseHeight = Mathf.Lerp(baseNoiseHeight, cellNoiseHeight, distMult);
                                             baseNoiseHeight = Mathf.Lerp(baseNoiseHeight, cellNoiseHeight, distMult);
+
+                                            if (updateBufferCell)
+                                            {
+                                                Vector3 nearestCellCenter = HexCoreUtil.Calculate_ClosestHexCenter_V2(position, (int)nearestGroundCell.size);
+                                                Vector2 nearestCellLookup = HexCoreUtil.Calculate_CenterLookup(nearestCellCenter, (int)nearestGroundCell.size);
+
+                                                int currentLayer = HexCoreUtil.Calculate_CurrentLayer(cellLayerElevation, baseNoiseHeight);
+                                                if (
+                                                    cellLookup_ByLayer_BySize_ByWorldSpace[closest_WorldspaceTerraformLookup][nearestGroundCell.size].ContainsKey(currentLayer) &&
+                                                    cellLookup_ByLayer_BySize_ByWorldSpace[closest_WorldspaceTerraformLookup][nearestGroundCell.size][currentLayer].ContainsKey(nearestCellLookup)
+                                                )
+                                                {
+                                                    // cellLookup_ByLayer_BySize_ByWorldSpace[closest_WorldspaceTerraformLookup][nearestGroundCell.size][currentLayer][nearestCellLookup].SetCellStatus(CellStatus.GenericGround);
+
+                                                    // int layerBelow = currentLayer - 3;
+                                                    // if (
+                                                    //     cellLookup_ByLayer_BySize_ByWorldSpace[closest_WorldspaceTerraformLookup][nearestGroundCell.size].ContainsKey(layerBelow) &&
+                                                    //     cellLookup_ByLayer_BySize_ByWorldSpace[closest_WorldspaceTerraformLookup][nearestGroundCell.size][layerBelow].ContainsKey(nearestCellLookup)
+                                                    // )
+                                                    // {
+                                                    //     cellLookup_ByLayer_BySize_ByWorldSpace[closest_WorldspaceTerraformLookup][nearestGroundCell.size][layerBelow][nearestCellLookup].SetCellStatus(CellStatus.UnderGround);
+                                                    // }
+
+                                                    // int layerAbove = currentLayer + 1;
+                                                    // if (
+                                                    //     cellLookup_ByLayer_BySize_ByWorldSpace[closest_WorldspaceTerraformLookup][nearestGroundCell.size].ContainsKey(layerAbove) &&
+                                                    //     cellLookup_ByLayer_BySize_ByWorldSpace[closest_WorldspaceTerraformLookup][nearestGroundCell.size][layerAbove].ContainsKey(nearestCellLookup)
+                                                    // )
+                                                    // {
+                                                    //     cellLookup_ByLayer_BySize_ByWorldSpace[closest_WorldspaceTerraformLookup][nearestGroundCell.size][layerAbove][nearestCellLookup].SetCellStatus(CellStatus.AboveGround);
+                                                    // }
+
+                                                }
+                                            }
                                         }
                                     }
                                     else
@@ -4847,66 +4843,6 @@ namespace ProceduralBase
             //         Debug.Log("_worldAreaTerrainChunkArea_ByLookup: " + _worldAreaTerrainChunkArea_ByLookup.Count);
             //     }
             // }
-
-            // if (_worldAreas_ByRegion != null && filename_celllookup_byLayer_bySize_ByWorldSpace != null && (cellLookup_ByLayer_BySize_ByWorldSpace == null || cellLookup_ByLayer_BySize_ByWorldSpace.Count == 0))
-            // {
-            //     Dictionary<Vector2, Dictionary<int, Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>>>> lookup_ByLayer_BySize_ByWorldSpace = LoadData_CellGrid_ByParentWorldSpace_ByWorldArea(
-            //                 savedfilePath,
-            //                 filename_celllookup_byLayer_bySize_ByWorldSpace
-            //             );
-
-            //     if (lookup_ByLayer_BySize_ByWorldSpace != null)
-            //     {
-            //         cellLookup_ByLayer_BySize_ByWorldSpace = lookup_ByLayer_BySize_ByWorldSpace;
-            //         Debug.Log("cellLookup_ByLayer_BySize_ByWorldSpace - areas: " + cellLookup_ByLayer_BySize_ByWorldSpace.Count);
-
-            //         if (_activeWorldspaceLookups != null && _activeWorldspaceLookups.Count > 0)
-            //         {
-
-            //             Dictionary<Vector2, HexagonGrid> new_worldSpaceCellGridByCenterCoordinate = new Dictionary<Vector2, HexagonGrid>();
-
-            //             Vector2 initialCoord = VectorUtil.CalculateCoordinate(transform.position);
-
-            //             foreach (Vector2 worldspaceLookupCoord in _activeWorldspaceLookups)
-            //             {
-            //                 if (_worldSpaces_ByArea[initialCoord].ContainsKey(worldspaceLookupCoord) == false) continue;
-
-            //                 HexagonCellPrototype worldSpaceCell = _worldSpaces_ByArea[initialCoord][worldspaceLookupCoord];
-            //                 Vector3 worldSpaceCenterPoint = worldSpaceCell.center;
-
-            //                 if (new_worldSpaceCellGridByCenterCoordinate.ContainsKey(worldspaceLookupCoord) == false)
-            //                 {
-            //                     Vector3 centerPos = worldSpaceCell.center;
-            //                     HexagonGrid newHexGrid = new HexagonGrid(
-            //                      _global_defaultCellSize,
-            //                      cellLayersMax,
-            //                      cellLayersMax,
-            //                      cellLayerElevation,
-            //                      GridPreset.Outpost
-            //                     );
-
-            //                     newHexGrid.AssignGridCells(cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookupCoord]);
-            //                     newHexGrid.EvaluateCellParents(cellLookup_ByLayer_BySize_ByWorldSpace);
-            //                     newHexGrid.Rehydrate_CellGrids(cellLookup_ByLayer_BySize_ByWorldSpace);
-
-            //                     new_worldSpaceCellGridByCenterCoordinate.Add(worldspaceLookupCoord, newHexGrid);
-            //                     // if (newHexGrid != null) newlyAddedGrids.Add(newHexGrid);
-            //                 }
-            //             }
-
-            //             _worldSpaceCellGridByCenterCoordinate = new_worldSpaceCellGridByCenterCoordinate;
-            //         }
-
-            //     }
-            // }
-            // if (filenameHead != null)
-            // {
-            //     Dictionary<Vector2, Dictionary<int, List<Vector3>>> hexCenterPointsBySizeByCoordinate = LoadData(savedfilePath, filenameHead);
-            //     if (hexCenterPointsBySizeByCoordinate != null)
-            //     {
-            //         _worldSpaceCellGridBaseCentersBySize = hexCenterPointsBySizeByCoordinate;
-            //     }
-            // }
         }
 
         [Header("Save / Load Settings")]
@@ -4929,7 +4865,7 @@ namespace ProceduralBase
         // [SerializeField] private bool save__chunkData;
 
 
-        public Dictionary<Vector2, Dictionary<int, Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>>>> LoadData_CellGrid_ByParentWorldSpace_ByWorldArea(string directoryPath, string fileName)
+        public Dictionary<Vector2, Dictionary<int, Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>>>> LoadData_CellGrid_ByParentWorldSpace_ByWorldArea(string directoryPath, string fileName, int layerOffset)
         {
             if (WorldSaveLoadUtil.LoadFilePath(directoryPath, fileName, out string filePath) == false) return null;
 
@@ -4974,29 +4910,17 @@ namespace ProceduralBase
                                 {
                                     dictionary[worldspaceLookup][currentSize].Add(currentLayer, new Dictionary<Vector2, HexagonCellPrototype>());
                                 }
-                                // var lookup = Vector2.positiveInfinity;
 
                                 foreach (WorldCellData cellData in result[s_worldspaceLookup][currentSize][currentLayer].Values)
                                 {
-                                    // if (new Vector2Converter().TryConvertFrom(s_lookup, out lookup))
-                                    // {
-                                    // WorldCellData cellData = item.Value;
-
-                                    // if (dictionary[key].ContainsKey(12) == false) dictionary[key].Add(12, new Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>>());
-
-                                    // if (dictionary[key][12].ContainsKey(12) == false) dictionary[key][12].Add(12,  new Dictionary<Vector2, HexagonCellPrototype>());
-
                                     Vector2 lookup = cellData.lookup.ToVector2();
                                     Vector3 center = cellData.center.ToVector3();
-                                    HexagonCellPrototype cell = new HexagonCellPrototype(center, currentSize, null, "", currentLayer);
+                                    HexagonCellPrototype cell = new HexagonCellPrototype(center, currentSize, null, layerOffset);
                                     cellData.PastToCell(cell);
 
                                     dictionary[worldspaceLookup][currentSize][currentLayer].Add(lookup, cell);
                                 }
-
                             }
-
-
                         }
                     }
                 }
@@ -5112,7 +5036,7 @@ namespace ProceduralBase
             locationNoise_ranges = UtilityHelpers.Evaluate_NoiseRangeChunks(locationNoise_RangeMin, locationNoise_RangeMax, locationMarkerPrefabs_Default.Count, locationNoise_weightMult);
         }
 
-        public void Assign_LocationsToWorldArea(Vector2 areaLookup)
+        public void Assign_LocationsToWorldArea(Vector2 areaLookup, bool enableLog = false)
         {
             List<Color> colors = UtilityHelpers.GenerateUniqueRandomColors(locationMarkerPrefabs_Default.Count);
 
@@ -5166,7 +5090,20 @@ namespace ProceduralBase
 
             Evaluate_WorldAreaFolder(areaLookup);
 
-            GenerateWorldCells_SubCells(assignedWorldspaceCells);
+            GenerateWorldCells_SubCells(assignedWorldspaceCells, enableLog);
+
+
+            if (instantiateLocations)
+            {
+                foreach (var wsCell in assignedWorldspaceCells)
+                {
+                    if (Instantiate_Location(areaLookup, wsCell.GetLookup()))
+                    {
+                        break; //Testing just 1 for now
+                    }
+                }
+            }
+
         }
 
 
@@ -5243,13 +5180,14 @@ namespace ProceduralBase
 
         public bool Generate_Location(LocationData locationData, Transform folder)
         {
+            //Temp
+            if (locationData.locationType == LocationType.Tunnel) return false;
+
             WFC_Core wfc = new WFC_Core(
-                locationData.prefabSettings.socketDirectory,
                 locationData.prefabSettings.tileDirectory,
                 HexCellUtil.OrganizeByLayer(locationData.cluster.prototypes),
-                // locationData.cluster.prototypesByLayer_X4 != null ?
-                //     locationData.cluster.prototypesByLayer_X4
-                //     : HexCellUtil.OrganizeByLayer(locationData.cluster.prototypes),
+
+                cellLookup_ByLayer_BySize_ByWorldSpace,
 
                 locationData.prefabSettings,
                 folder

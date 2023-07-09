@@ -9,6 +9,316 @@ namespace WFCSystem
 {
     public static class HexCellUtil
     {
+
+        public static void Evaluate_SubCellNeighbors(
+            List<HexagonCellPrototype> neighborsToEvaluate,
+            Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>> cellLookup_ByLayer,
+            bool enableLog = false
+        )
+        {
+            if (neighborsToEvaluate.Count < 2) return;
+
+            foreach (HexagonCellPrototype cell in neighborsToEvaluate)
+            {
+                int currentLayer = cell.layer;
+                if (cellLookup_ByLayer.ContainsKey(currentLayer) == false)
+                {
+                    continue;
+                }
+
+                int currentSize = cell.size;
+
+                Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.GenerateNeighborLookupCoordinatesBySide(cell.center, currentSize);
+                HashSet<string> foundUids = new HashSet<string>();
+                int sideNeighborsFound = 0;
+
+                foreach (var kvp in neighborLookupsBySide)
+                {
+                    Vector2 neighborLookup = kvp.Value;
+                    HexagonCellPrototype neighbor = cellLookup_ByLayer[currentLayer].ContainsKey(neighborLookup)
+                                                            ? cellLookup_ByLayer[currentLayer][neighborLookup]
+                                                            : null;
+
+                    if (neighbor != null && neighbor.uid != cell.uid && foundUids.Contains(neighbor.uid) == false)
+                    {
+                        cell.AssignSideNeighbor(neighbor, kvp.Key);
+
+                        foundUids.Add(neighbor.uid);
+
+                        sideNeighborsFound++;
+                        continue;
+                    }
+                }
+
+                if (sideNeighborsFound < 6)
+                {
+                    cell.SetEdgeCell(true, EdgeCellType.Default);
+                    // HexagonCellPrototype.EvaluateForEdge(cell, EdgeCellType.Default, true);
+                }
+
+                if (sideNeighborsFound == 0 || sideNeighborsFound > 8) Debug.LogError("cell neighbors found: " + sideNeighborsFound);
+                if (enableLog) Debug.Log("cell neighbors found: " + sideNeighborsFound + ", isEdge: " + cell.IsEdge());
+            }
+        }
+
+
+        public static void Evaluate_SubCellNeighbors(
+            List<HexagonCellPrototype> neighborsToEvaluate,
+            HexagonCellPrototype worldspaceCell,
+            Dictionary<Vector2, Dictionary<int, Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>>>> cellLookup_ByLayer_BySize_ByWorldSpace,
+            int cellLayerOffset,
+            bool enableLog = false
+        )
+        {
+            if (neighborsToEvaluate.Count > 2)
+            {
+                List<Vector2> worldspaceNeighborLookups = HexCoreUtil.GenerateNeighborLookupCoordinates(worldspaceCell.center, worldspaceCell.size);
+
+                foreach (HexagonCellPrototype cell in neighborsToEvaluate)
+                {
+                    int currentLayer = HexCoreUtil.Calculate_CurrentLayer(cellLayerOffset, (int)cell.center.y);
+                    int currentSize = cell.size;
+
+                    Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.GenerateNeighborLookupCoordinatesBySide(cell.center, currentSize);
+                    Vector2 worldspaceLookup = cell.GetWorldSpaceLookup();
+                    HashSet<string> foundUids = new HashSet<string>();
+                    int sideNeighborsFound = 0;
+
+                    if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup].ContainsKey(currentSize) == false)
+                    {
+                        // Debug.LogError("currentSize not found: " + currentSize);
+                        continue;
+                    }
+                    else if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize].ContainsKey(currentLayer) == false)
+                    {
+                        // Debug.LogError("currentLayer not found: " + currentLayer + ", cell.center.y: " + (int)cell.center.y);
+                        continue;
+                    }
+
+                    foreach (var kvp in neighborLookupsBySide)
+                    {
+                        Vector2 neighborLookup = kvp.Value;
+                        HexagonCellPrototype neighbor = cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][currentLayer].ContainsKey(neighborLookup)
+                                                                ? cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceLookup][currentSize][currentLayer][neighborLookup]
+                                                                : null;
+
+                        if (neighbor != null && neighbor.uid != cell.uid && foundUids.Contains(neighbor.uid) == false)
+                        {
+                            cell.AssignSideNeighbor(neighbor, kvp.Key);
+                            foundUids.Add(neighbor.uid);
+
+                            sideNeighborsFound++;
+                            continue;
+                        }
+
+                        // try
+                        // {
+                        foreach (Vector2 worldspaceNeighborLookup in worldspaceNeighborLookups)
+                        {
+                            if (cellLookup_ByLayer_BySize_ByWorldSpace.ContainsKey(worldspaceNeighborLookup) == false) continue;
+                            if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceNeighborLookup].ContainsKey(currentSize) == false)
+                            {
+                                continue;
+                            }
+                            else if (cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceNeighborLookup][currentSize].ContainsKey(currentLayer) == false)
+                            {
+                                continue;
+                            }
+
+                            neighbor = cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceNeighborLookup][currentSize][currentLayer].ContainsKey(neighborLookup)
+                                                                   ? cellLookup_ByLayer_BySize_ByWorldSpace[worldspaceNeighborLookup][currentSize][currentLayer][neighborLookup]
+                                                                   : null;
+
+                            if (neighbor != null && neighbor.uid != cell.uid && foundUids.Contains(neighbor.uid) == false)
+                            {
+                                cell.AssignSideNeighbor(neighbor, kvp.Key);
+                                foundUids.Add(neighbor.uid);
+
+                                sideNeighborsFound++;
+                                continue;
+                            }
+                        }
+                        // }
+                        // catch (System.Exception)
+                        // {
+                        //     Debug.LogError("cell - currentlayer: " + currentLayer + ", size: " + currentSize);
+                        //     throw;
+                        // }
+
+                    }
+
+                    if (sideNeighborsFound < 6)
+                    {
+                        cell.SetEdgeCell(true, EdgeCellType.Default);
+                        // HexagonCellPrototype.EvaluateForEdge(cell, EdgeCellType.Default, true);
+                        // }
+                        // else
+                        // {
+                        //     int sideNeighborCount = cell.neighborsBySide.ToList().FindAll(n => n != null).Count;
+                        //     Debug.Log("sideNeighborCount: " + sideNeighborCount);
+                    }
+
+                    if (sideNeighborsFound == 0 || sideNeighborsFound > 8) Debug.LogError("cell neighbors found: " + sideNeighborsFound);
+                    if (enableLog) Debug.Log("cell neighbors found: " + sideNeighborsFound + ", isEdge: " + cell.IsEdge());
+                }
+            }
+        }
+
+        public static void Evaluate_WorldCellNeighbors(
+            List<HexagonCellPrototype> neighborsToEvaluate,
+            Dictionary<Vector2, Dictionary<Vector2, HexagonCellPrototype>> cellLookups_ByParentCell,
+            int parentCellSize,
+            bool enableLog = false
+        )
+        {
+            if (neighborsToEvaluate.Count > 2)
+            {
+                foreach (HexagonCellPrototype cell in neighborsToEvaluate)
+                {
+                    int neighborsFound = 0;
+                    Vector2 cellParentLookup = cell.GetParentLookup();
+                    List<Vector2> parentNeighborLookups = HexCoreUtil.GenerateNeighborLookupCoordinates(new Vector3(cellParentLookup.x, 0, cellParentLookup.y), parentCellSize);
+                    Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.GenerateNeighborLookupCoordinatesBySide(cell.center, cell.size);
+
+                    HashSet<string> foundUids = new HashSet<string>();
+
+                    foreach (var kvp in neighborLookupsBySide)
+                    {
+                        Vector2 neighborLookup = kvp.Value;
+                        HexagonCellPrototype neighbor = cellLookups_ByParentCell[cellParentLookup].ContainsKey(neighborLookup)
+                                                                ? cellLookups_ByParentCell[cellParentLookup][neighborLookup]
+                                                                : null;
+
+                        if (neighbor != null && neighbor.uid != cell.uid && foundUids.Contains(neighbor.uid) == false)
+                        {
+                            cell.AssignSideNeighbor(neighbor, kvp.Key);
+
+                            foundUids.Add(neighbor.uid);
+
+                            neighborsFound++;
+                            continue;
+                        }
+
+                        foreach (Vector2 parentNeighborLookup in parentNeighborLookups)
+                        {
+                            if (cellLookups_ByParentCell.ContainsKey(parentNeighborLookup) == false) continue;
+
+                            neighbor = cellLookups_ByParentCell[parentNeighborLookup].ContainsKey(neighborLookup)
+                                                                   ? cellLookups_ByParentCell[parentNeighborLookup][neighborLookup]
+                                                                   : null;
+
+                            if (neighbor != null && neighbor.uid != cell.uid && foundUids.Contains(neighbor.uid) == false)
+                            {
+                                cell.AssignSideNeighbor(neighbor, kvp.Key);
+
+                                foundUids.Add(neighbor.uid);
+
+                                neighborsFound++;
+                                continue;
+                            }
+                        }
+                    }
+                    HexagonCellPrototype.EvaluateForEdge(cell, EdgeCellType.Default, true);
+
+                    if (neighborsFound == 0 || neighborsFound > 8) Debug.LogError("cell neighbors found: " + neighborsFound);
+                    if (enableLog) Debug.Log("cell neighbors found: " + neighborsFound);
+                }
+            }
+        }
+
+        public static void Evaluate_WorldCellNeighbors(List<HexagonCellPrototype> neighborsToEvaluate, Dictionary<Vector2, HexagonCellPrototype> cellLookups, bool enableLog = false)
+        {
+            if (neighborsToEvaluate.Count > 1)
+            {
+                foreach (HexagonCellPrototype cell in neighborsToEvaluate)
+                {
+                    int neighborsFound = 0;
+                    HashSet<string> foundUids = new HashSet<string>();
+                    Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.GenerateNeighborLookupCoordinatesBySide(cell.center, cell.size);
+
+                    foreach (var kvp in neighborLookupsBySide)
+                    {
+                        Vector2 neighborLookup = kvp.Value;
+                        HexagonCellPrototype neighbor = cellLookups.ContainsKey(neighborLookup)
+                                                                ? cellLookups[neighborLookup]
+                                                                : null;
+
+                        if (neighbor != null && neighbor.uid != cell.uid && foundUids.Contains(neighbor.uid) == false)
+                        {
+                            cell.AssignSideNeighbor(neighbor, kvp.Key);
+
+                            foundUids.Add(neighbor.uid);
+
+                            neighborsFound++;
+                        }
+                    }
+                    HexagonCellPrototype.EvaluateForEdge(cell, EdgeCellType.Default, true);
+
+                    if (neighborsFound == 0 || neighborsFound > 8) Debug.LogError("cell neighbors found: " + neighborsFound);
+                    if (enableLog) Debug.Log("cell neighbors found: " + neighborsFound);
+                }
+            }
+        }
+
+        public static void Evaluate_WorldCellNeighbors(Dictionary<Vector2, HexagonCellPrototype> neighborsToEvaluate, bool enableLog = false)
+        {
+            if (neighborsToEvaluate.Count > 1)
+            {
+                foreach (HexagonCellPrototype cell in neighborsToEvaluate.Values)
+                {
+                    int neighborsFound = 0;
+                    HashSet<string> foundUids = new HashSet<string>();
+                    Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.GenerateNeighborLookupCoordinatesBySide(cell.center, cell.size);
+
+                    foreach (var kvp in neighborLookupsBySide)
+                    {
+                        Vector2 neighborLookup = kvp.Value;
+                        HexagonCellPrototype neighbor = neighborsToEvaluate.ContainsKey(neighborLookup)
+                                                                ? neighborsToEvaluate[neighborLookup]
+                                                                : null;
+
+                        if (neighbor != null && neighbor.uid != cell.uid && foundUids.Contains(neighbor.uid) == false)
+                        {
+                            cell.AssignSideNeighbor(neighbor, kvp.Key);
+
+                            foundUids.Add(neighbor.uid);
+
+                            neighborsFound++;
+                        }
+                    }
+                    HexagonCellPrototype.EvaluateForEdge(cell, EdgeCellType.Default, true);
+
+                    if (neighborsFound == 0 || neighborsFound > 8) Debug.LogError("cell neighbors found: " + neighborsFound);
+                    if (enableLog) Debug.Log("cell neighbors found: " + neighborsFound);
+                }
+            }
+        }
+
+        public static bool IsCellInBeteenNeighborsOfStatus(HexagonCellPrototype cell, CellStatus status, Dictionary<Vector2, HexagonCellPrototype> _cellsLookup)
+        {
+            List<Vector3> neighborPoints = HexCoreUtil.GenerateHexCenterPoints_X6(cell.center, cell.size);
+            for (int i = 0; i < neighborPoints.Count; i++)
+            {
+                Vector2 neighborLookup_A = HexCoreUtil.Calculate_CenterLookup(neighborPoints[i], cell.size);
+                if (!_cellsLookup.ContainsKey(neighborLookup_A) || _cellsLookup[neighborLookup_A].size != cell.size) continue;
+                HexagonCellPrototype neighborA = _cellsLookup[neighborLookup_A];
+
+                if (neighborA != null && neighborA.GetCellStatus() == status)
+                {
+                    for (int step = 0; step < 3; step++)
+                    {
+                        Vector2 neighborLookup_B = HexCoreUtil.Calculate_CenterLookup(neighborPoints[(i + (2 + step)) % 6], cell.size);
+
+                        if (!_cellsLookup.ContainsKey(neighborLookup_B) || _cellsLookup[neighborLookup_B].size != cell.size) continue;
+                        HexagonCellPrototype neighborB = _cellsLookup[neighborLookup_B];
+
+                        if (neighborB != null && neighborB.GetCellStatus() == status) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
         public static int CalculateExpandedHexRadius(int cellSize, int radiusMult)
         {
             int radius = cellSize;
@@ -18,41 +328,6 @@ namespace WFCSystem
             }
             return radius;
         }
-
-
-        // public static void EvaluateSideNeighbors(HexagonCell cell, float offset = 0.33f)
-        // {
-        //     HexagonCell[] neighborsBySide = new HexagonCell[6];
-        //     HashSet<string> added = new HashSet<string>();
-
-        //     cell.RecalculateEdgePoints();
-
-        //     for (int side = 0; side < 6; side++)
-        //     {
-        //         Vector3 sidePoint = cell._sides[side];
-
-        //         for (int neighbor = 0; neighbor < cell._neighbors.Count; neighbor++)
-        //         {
-        //             if (cell._neighbors[neighbor].GetLayer() != cell.GetLayer() || added.Contains(cell._neighbors[neighbor].id)) continue;
-
-        //             cell._neighbors[neighbor].RecalculateEdgePoints();
-
-        //             for (int neighborSide = 0; neighborSide < 6; neighborSide++)
-        //             {
-        //                 Vector3 neighborSidePoint = cell._neighbors[neighbor]._sides[neighborSide];
-
-        //                 if (Vector2.Distance(new Vector2(sidePoint.x, sidePoint.z), new Vector2(neighborSidePoint.x, neighborSidePoint.z)) <= offset)
-        //                 {
-        //                     cell._neighborsBySide[side] = cell._neighbors[neighbor];
-        //                     added.Add(_neighbors[neighbor].id);
-        //                     break;
-        //                 }
-        //             }
-        //         }
-        //     }
-        //     cell._neighborsBySide = _neighborsBySide;
-        // }
-
 
         public static void SetTunnelCells(List<HexagonCellPrototype> cellsToAssign)
         {
@@ -120,7 +395,7 @@ namespace WFCSystem
                 return true;
             }
 
-            List<HexagonCell> allSideNeighbors = cell._neighbors.FindAll(c => c.GetLayer() == cell.GetLayer());
+            List<HexagonCell> allSideNeighbors = cell._neighbors.FindAll(c => c.GetGridLayer() == cell.GetGridLayer());
             bool isConnectorCell = allSideNeighbors.Find(n => n.GetParenCellId() != cell.GetParenCellId());
 
             if (scopeToParentCell) allSideNeighbors = allSideNeighbors.FindAll(n => n.GetParenCellId() == cell.GetParenCellId());
@@ -129,7 +404,7 @@ namespace WFCSystem
             int totalNeighborCount = cell._neighbors.Count;
             bool isEdge = false;
 
-            if (sideNeighborCount < 6 || (isMultilayerCellGrid && totalNeighborCount < 7) || (cell.GetLayer() > 0 && cell.layeredNeighbor[0] != null && cell.layeredNeighbor[0]._neighbors.Count < 7))
+            if (sideNeighborCount < 6 || (isMultilayerCellGrid && totalNeighborCount < 7) || (cell.GetGridLayer() > 0 && cell.layeredNeighbor[0] != null && cell.layeredNeighbor[0]._neighbors.Count < 7))
             {
                 cell.SetEdgeCell(true, isConnectorCell ? EdgeCellType.Connector : EdgeCellType.Default);
                 isEdge = true;
@@ -153,7 +428,7 @@ namespace WFCSystem
         public static List<HexagonCell> GetEdgeCells(List<HexagonCell> cells, bool assignToName = true, bool scopeToParentCell = false)
         {
             List<HexagonCell> edgeCells = new List<HexagonCell>();
-            bool hasMultilayerCells = cells.Any(c => c.GetLayer() > 0);
+            bool hasMultilayerCells = cells.Any(c => c.GetGridLayer() > 0);
 
             foreach (HexagonCell cell in cells)
             {
@@ -173,7 +448,7 @@ namespace WFCSystem
         {
             if (cell == null) return false;
 
-            List<HexagonCell> allSideNeighbors = cell._neighbors.FindAll(c => c.GetLayer() == cell.GetLayer());
+            List<HexagonCell> allSideNeighbors = cell._neighbors.FindAll(c => c.GetGridLayer() == cell.GetGridLayer());
             // bool isConnectorCell = allSideNeighbors.Find(n => n.GetParenCellId() != cell.GetParenCellId());
             // if (scopeToParentCell) allSideNeighbors = allSideNeighbors.FindAll(n => n.GetParenCellId() == cell.GetParenCellId());
             int sideNeighborCount = allSideNeighbors.Count; //cell.GetSideNeighborCount(scopeToParentCell);
@@ -199,14 +474,14 @@ namespace WFCSystem
                     for (int j = 0; j < cells.Count; j++)
                     {
                         //skip if the hexagontile is the current tile
-                        if (cells[j] == cell || cells[j].GetLayer() != cell.GetLayer())
+                        if (cells[j] == cell || cells[j].GetGridLayer() != cell.GetGridLayer())
                             continue;
 
                         Vector3 distA = cell.transform.TransformPoint(cell.transform.position);
                         Vector3 distB = cell.transform.TransformPoint(cells[j].transform.position);
 
                         float distance = Vector3.Distance(distA, distB);
-                        if (distance > cell.GetSize() * HexagonCell.neighborSearchCenterDistMult) continue;
+                        if (distance > cell.GetSize() * HexagonCellPrototype.neighborSearchCenterDistMult) continue;
 
                         //loop through the _cornerPoints of the neighboring tile
                         for (int k = 0; k < cells[j]._cornerPoints.Length; k++)
@@ -224,6 +499,124 @@ namespace WFCSystem
                 cell.SetNeighborsBySide(offset);
             }
         }
+
+        public static void PopulateNeighborsFromCornerPoints(List<HexagonCellPrototype> cells, float offset = 0.33f)
+        {
+            int duplicatesFound = 0;
+            for (int ixA = 0; ixA < cells.Count; ixA++)
+            {
+                HexagonCellPrototype cellA = cells[ixA];
+                if (cellA.GetCellStatus() == CellStatus.Remove) continue;
+
+                for (int ixB = 0; ixB < cells.Count; ixB++)
+                {
+                    HexagonCellPrototype cellB = cells[ixB];
+                    if (ixB == ixA || cellB.GetCellStatus() == CellStatus.Remove || cellA.layer != cellB.layer) continue;
+
+                    float distance = Vector3.Distance(cellA.center, cellB.center);
+                    if (distance > cellA.size * HexagonCellPrototype.neighborSearchCenterDistMult) continue;
+
+                    if (distance < 1f)
+                    {
+                        cellB.SetCellStatus(CellStatus.Remove);
+                        duplicatesFound++;
+                        // Debug.LogError("Duplicate Cells: " + cellA.id + ", uid: " + cellA.uid + ", and " + cellB.id + ", uid: " + cellB.uid + "\n total cells: " + cells.Count);
+                        continue;
+                    }
+
+                    bool found = false;
+
+                    for (int crIXA = 0; crIXA < cellA.cornerPoints.Length; crIXA++)
+                    {
+                        if (found) break;
+
+                        Vector3 cornerA = cellA.cornerPoints[crIXA];
+
+                        for (int crIXB = 0; crIXB < cellB.cornerPoints.Length; crIXB++)
+                        {
+                            Vector3 cornerB = cellB.cornerPoints[crIXB];
+
+                            Vector2 posA = new Vector2(cornerA.x, cornerA.z);
+                            Vector2 posB = new Vector2(cornerB.x, cornerB.z);
+
+                            if (Vector2.Distance(posA, posB) <= offset)
+                            {
+                                if (cellA.neighbors.Contains(cellB) == false) cellA.neighbors.Add(cellB);
+                                if (cellB.neighbors.Contains(cellA) == false) cellB.neighbors.Add(cellA);
+                                found = true;
+                                break;
+                            }
+
+                        }
+                    }
+                }
+                // cellA.EvaluateNeighborsBySide(offset);
+            }
+            if (duplicatesFound > 0) Debug.LogError("Duplicate Cells found and marked for removal: " + duplicatesFound);
+        }
+
+        public static void PopulateNeighborsFromCornerPoints(List<HexagonCellPrototype> cells, Transform transform, float offset = 0.33f)
+        {
+            int duplicatesFound = 0;
+            for (int ixA = 0; ixA < cells.Count; ixA++)
+            {
+                HexagonCellPrototype cellA = cells[ixA];
+                if (cellA.GetCellStatus() == CellStatus.Remove) continue;
+
+                for (int ixB = 0; ixB < cells.Count; ixB++)
+                {
+                    HexagonCellPrototype cellB = cells[ixB];
+                    if (ixB == ixA || cellB.GetCellStatus() == CellStatus.Remove || cellA.layer != cellB.layer) continue;
+
+                    Vector3 cellPosA = transform.TransformVector(cellA.center);
+                    Vector3 cellPosB = transform.TransformVector(cellB.center);
+
+                    float distance = Vector3.Distance(cellPosA, cellPosB);
+                    if (distance > cellA.size * HexagonCellPrototype.neighborSearchCenterDistMult) continue;
+
+                    if (distance < 1f)
+                    {
+                        cellB.SetCellStatus(CellStatus.Remove);
+                        duplicatesFound++;
+                        // Debug.LogError("Duplicate Cells: " + cellA.id + ", uid: " + cellA.uid + ", and " + cellB.id + ", uid: " + cellB.uid + "\n total cells: " + cells.Count);
+                        continue;
+                    }
+
+                    bool found = false;
+
+                    for (int crIXA = 0; crIXA < cellA.cornerPoints.Length; crIXA++)
+                    {
+                        if (found) break;
+
+                        Vector3 cornerA = transform.TransformVector(cellA.cornerPoints[crIXA]);
+
+                        for (int crIXB = 0; crIXB < cellB.cornerPoints.Length; crIXB++)
+                        {
+                            Vector3 cornerB = transform.TransformVector(cellB.cornerPoints[crIXB]);
+
+                            Vector2 posA = new Vector2(cornerA.x, cornerA.z);
+                            Vector2 posB = new Vector2(cornerB.x, cornerB.z);
+
+                            if (Vector2.Distance(posA, posB) <= offset)
+                            {
+                                if (cellA.neighbors.Contains(cellB) == false) cellA.neighbors.Add(cellB);
+                                if (cellB.neighbors.Contains(cellA) == false) cellB.neighbors.Add(cellA);
+                                found = true;
+                                break;
+                            }
+
+                        }
+                    }
+                }
+                // cellA.EvaluateNeighborsBySide(offset);
+            }
+            if (duplicatesFound > 0) Debug.LogError("Duplicate Cells found and marked for removal: " + duplicatesFound);
+        }
+
+
+
+
+
 
         public static (HexagonCell, float) GetClosestCell(List<HexagonCell> cells, Vector2 position)
         {
@@ -294,16 +687,28 @@ namespace WFCSystem
         }
 
 
-        public static List<HexagonCellPrototype> ExtractCellsByLayer(Dictionary<int, List<HexagonCellPrototype>> cellsByLayer)
+        public static List<HexagonCellPrototype> ExtractCellsByLayer(Dictionary<int, List<HexagonCellPrototype>> cellsByLayer, bool logIncompatibilities = true)
         {
             List<HexagonCellPrototype> cells = new List<HexagonCellPrototype>();
 
             foreach (var kvp in cellsByLayer)
             {
-                cells.AddRange(kvp.Value);
+                int currentLayer = kvp.Key;
+                List<HexagonCellPrototype> layerCells = kvp.Value;
+
+                foreach (HexagonCellPrototype cell in layerCells)
+                {
+                    if (logIncompatibilities) Debug.LogError("ExtractCellsByLayer - L: " + currentLayer + ", cell: " + cell.LogStats());
+                    int sideNeighborCount = cell.neighborsBySide.ToList().FindAll(n => n != null).Count;
+                    Debug.Log("sideNeighborCount: " + sideNeighborCount);
+
+                    cells.Add(cell);
+                }
+                // cells.AddRange(kvp.Value);
             }
             return cells;
         }
+
         public static List<HexagonCell> ExtractCellsByLayer(Dictionary<int, List<HexagonCell>> cellsByLayer)
         {
             List<HexagonCell> cells = new List<HexagonCell>();
@@ -316,13 +721,31 @@ namespace WFCSystem
         }
 
 
+        public static Dictionary<int, List<HexagonCellPrototype>> OrganizeByLayer(Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>> cellLookup_ByLayer
+        )
+        {
+            Dictionary<int, List<HexagonCellPrototype>> cellsByLayer = new Dictionary<int, List<HexagonCellPrototype>>();
+
+            foreach (var kvp in cellLookup_ByLayer)
+            {
+                int layer = kvp.Key;
+                if (cellsByLayer.ContainsKey(layer) == false) cellsByLayer.Add(layer, new List<HexagonCellPrototype>());
+
+                foreach (HexagonCellPrototype cell in cellLookup_ByLayer[layer].Values)
+                {
+                    cellsByLayer[layer].Add(cell);
+                }
+            }
+            return cellsByLayer;
+        }
+
         public static Dictionary<int, List<HexagonCellPrototype>> OrganizeByLayer(List<HexagonCellPrototype> cells)
         {
             Dictionary<int, List<HexagonCellPrototype>> cellsByLayer = new Dictionary<int, List<HexagonCellPrototype>>();
 
             foreach (HexagonCellPrototype cell in cells)
             {
-                int layer = cell.GetLayer();
+                int layer = cell.GetGridLayer();
 
                 if (cellsByLayer.ContainsKey(layer) == false)
                 {
@@ -340,7 +763,7 @@ namespace WFCSystem
 
             foreach (HexagonCell cell in cells)
             {
-                int layer = cell.GetLayer();
+                int layer = cell.GetGridLayer();
 
                 if (cellsByLayer.ContainsKey(layer) == false)
                 {

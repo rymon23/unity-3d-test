@@ -85,6 +85,8 @@ namespace WFCSystem
         [SerializeField] private TileContext _tileContext;
         public TileContext GetTileContext() => _tileContext;
 
+        public HexCellSizes GetSize() => (HexCellSizes)size;
+
         [Header("Layer Settings")]
         public bool baseLayerOnly;
         public bool noBaseLayer;

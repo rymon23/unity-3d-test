@@ -37,16 +37,8 @@ namespace WFCSystem
         RoadLarge,
     }
 
-    public enum HexagonSide
-    {
-        Front = 0,
-        FrontRight,
-        BackRight,
-        Back,
-        BackLeft,
-        FrontLeft,
-    }
-
+    public enum HexagonSide { Front = 0, FrontRight, BackRight, Back, BackLeft, FrontLeft, }
+    public enum HexagonTileSide { Front = 0, FrontRight, BackRight, Back, BackLeft, FrontLeft, Top, Bottom, }
     public enum MirroredSideState
     {
         Unset = 0,
@@ -94,9 +86,9 @@ namespace WFCSystem
     {
 
 
-        public static HashSet<int> GetTileSizes(List<HexagonTileCore> tiles)
+        public static HashSet<HexCellSizes> GetTileSizes(List<HexagonTileCore> tiles)
         {
-            HashSet<int> sizesFound = new HashSet<int>();
+            HashSet<HexCellSizes> sizesFound = new HashSet<HexCellSizes>();
             foreach (var tile in tiles)
             {
                 sizesFound.Add(tile.GetSize());
@@ -104,7 +96,5 @@ namespace WFCSystem
             return sizesFound;
         }
 
-
     }
-
 }

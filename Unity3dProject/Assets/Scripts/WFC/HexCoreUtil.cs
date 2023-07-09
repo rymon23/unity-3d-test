@@ -72,14 +72,8 @@ namespace WFCSystem
             return data;
         }
 
-        public static int Calculate_CurrentLayer(int layerOffset, int currentElevation)
-        {
-            return Mathf.FloorToInt(currentElevation / layerOffset);
-        }
-        public static int Calculate_CurrentLayer(int layerOffset, Vector3 position)
-        {
-            return Calculate_CurrentLayer(layerOffset, (int)position.y);
-        }
+        public static int Calculate_CurrentLayer(float layerOffset, float currentElevation) => Mathf.FloorToInt((int)currentElevation / (int)layerOffset);
+        public static int Calculate_CurrentLayer(int layerOffset, Vector3 position) => Calculate_CurrentLayer(layerOffset, (int)position.y);
 
         public static bool IsAnyHexPointWithinPolygon(Vector3 point, int pointSize, Vector3[] polygonCorners)
         {
@@ -106,6 +100,7 @@ namespace WFCSystem
             }
             else return Calculate_CenterLookup_WithDynamicRound(position, size);
         }
+
 
         public static Vector2 Calculate_CenterLookup_WithDynamicRound(Vector2 position, int size)
         {
@@ -455,12 +450,21 @@ namespace WFCSystem
             int cornerB = Mathf.Abs((int)(cornerA + 1)) % 6;
             return (cornerA, cornerB);
         }
-        // public static (int, int) GetCornersFromSide(HexagonSide side)
-        // {
-        //     int cornerA = Mathf.Abs((int)(side)) % 12;
-        //     int cornerB = Mathf.Abs((int)(cornerA + 1)) % 12;
-        //     return (cornerA, cornerB);
-        // }
+        public static Vector2Int GetCornersFromSide_Default(HexagonSide side) // Stays Btw 0 - 6
+        {
+            int cornerA = Mathf.Abs((int)(side + 1)) % 6;
+            return new Vector2Int(cornerA, Mathf.Abs((int)(cornerA + 1)) % 6);
+        }
+
+        public static HexagonSide NextSide(HexagonSide side, bool clockwise)
+        {
+            int _side = (int)side;
+            return clockwise ? (HexagonSide)((_side + 1) % 6) : (HexagonSide)((_side + 5) % 6);
+        }
+        public static HexagonSide OppositeSide(HexagonSide side)
+        {
+            return (HexagonSide)(((int)side + 3) % 6);
+        }
 
         public static (HexagonCorner, HexagonCorner) GetCornersFromSide(HexagonSide side)
         {
@@ -504,6 +508,39 @@ namespace WFCSystem
             Vector3 sidePoint = Vector3.Lerp(cornerPoints[i], cornerPoints[(i + 1) % 6], 0.5f);
             Vector3 direction = (sidePoint - center).normalized;
             return (center + direction * (Vector2.Distance(new Vector2(sidePoint.x, sidePoint.z), new Vector2(center.x, center.z)) * 2f));
+            // Dictionary<HexagonSide, Vector2> temp = GenerateNeighborLookupCoordinatesBySide(center, size);
+            // Vector2 s = temp[side];
+            // return new Vector3(s.x, center.y, s.y);
+        }
+
+        public static List<Vector2> GenerateNeighborLookupCoordinates(Vector3 center, int size)
+        {
+            Vector3[] cornerPoints = GenerateHexagonPoints(center, size);
+            List<Vector2> results = new List<Vector2>();
+            for (int i = 0; i < 6; i++)
+            {
+                Vector3 sidePoint = Vector3.Lerp(cornerPoints[i], cornerPoints[(i + 1) % 6], 0.5f);
+                Vector3 direction = (sidePoint - center).normalized;
+                float edgeDistance = Vector2.Distance(new Vector2(sidePoint.x, sidePoint.z), new Vector2(center.x, center.z));
+
+                sidePoint = center + direction * (edgeDistance * 2f);
+                results.Add(Calculate_CenterLookup(sidePoint, size));
+            }
+            return results;
+        }
+        public static Dictionary<HexagonSide, Vector2> GenerateNeighborLookupCoordinatesBySide(Vector3 center, int size)
+        {
+            Vector3[] cornerPoints = GenerateHexagonPoints(center, size);
+            Dictionary<HexagonSide, Vector2> results = new Dictionary<HexagonSide, Vector2>();
+            for (int i = 0; i < 6; i++)
+            {
+                Vector3 sidePoint = Vector3.Lerp(cornerPoints[i], cornerPoints[(i + 1) % 6], 0.5f);
+                Vector3 direction = (sidePoint - center).normalized;
+                float edgeDistance = Vector2.Distance(new Vector2(sidePoint.x, sidePoint.z), new Vector2(center.x, center.z));
+                sidePoint = center + direction * (edgeDistance * 2f);
+                results.Add((HexagonSide)((i + 5) % 6), Calculate_CenterLookup(sidePoint, size));
+            }
+            return results;
         }
 
         public static List<Vector3> GenerateHexCenterPoints_X7(Vector3 center, int size)
@@ -514,13 +551,30 @@ namespace WFCSystem
             };
             for (int i = 0; i < 6; i++)
             {
-                // Get Side
                 Vector3 sidePoint = Vector3.Lerp(cornerPoints[i], cornerPoints[(i + 1) % 6], 0.5f);
                 Vector3 direction = (sidePoint - center).normalized;
                 float edgeDistance = Vector2.Distance(new Vector2(sidePoint.x, sidePoint.z), new Vector2(center.x, center.z));
 
                 sidePoint = center + direction * (edgeDistance * 2f);
+                results.Add(sidePoint);
+            }
+            return results;
+        }
 
+        public static List<Vector3> GenerateHexCenterPoints_X3(Vector3 center, int size, bool useOdds = false)
+        {
+            Vector3[] cornerPoints = GenerateHexagonPoints(center, size);
+            List<Vector3> results = new List<Vector3>();
+            for (int i = 0; i < 6; i++)
+            {
+                if (useOdds && (i != 1 && i != 3 && i != 5)) continue;
+                if (useOdds == false && (i == 1 || i == 3 || i == 5)) continue;
+
+                Vector3 sidePoint = Vector3.Lerp(cornerPoints[i], cornerPoints[(i + 1) % 6], 0.5f);
+                Vector3 direction = (sidePoint - center).normalized;
+                float edgeDistance = Vector2.Distance(new Vector2(sidePoint.x, sidePoint.z), new Vector2(center.x, center.z));
+
+                sidePoint = center + direction * (edgeDistance * 2f);
                 results.Add(sidePoint);
             }
             return results;
@@ -532,7 +586,6 @@ namespace WFCSystem
             List<Vector3> results = new List<Vector3>();
             for (int i = 0; i < 6; i++)
             {
-                // Get Side
                 Vector3 sidePoint = Vector3.Lerp(cornerPoints[i], cornerPoints[(i + 1) % 6], 0.5f);
                 Vector3 direction = (sidePoint - center).normalized;
                 float edgeDistance = Vector2.Distance(new Vector2(sidePoint.x, sidePoint.z), new Vector2(center.x, center.z));
@@ -542,6 +595,19 @@ namespace WFCSystem
                 results.Add(sidePoint);
             }
             // Debug.Log("total points: " + results.Count);
+            return results;
+        }
+
+        public static List<Vector3> Generate_RandomHexNeighborCenters(Vector3 center, int size, int max, bool shuffle)
+        {
+            List<Vector3> allNeighborPoints = GenerateHexCenterPoints_X6(center, size);
+            VectorUtil.Shuffle(allNeighborPoints);
+            int count = Mathf.Clamp(max, 1, allNeighborPoints.Count);
+            List<Vector3> results = new List<Vector3>();
+            for (int i = 0; i < count; i++)
+            {
+                results.Add(allNeighborPoints[i]);
+            }
             return results;
         }
 
@@ -800,6 +866,12 @@ namespace WFCSystem
                 hexagonSides[(i + 5) % 6] = side; // Places index 0 at the front side
             }
             return hexagonSides;
+        }
+
+        public static Vector3[] GetSideCorners(HexagonCellPrototype cell, HexagonSide side)
+        {
+            Vector2Int cornerIX = HexCoreUtil.GetCornersFromSide_Default(side);
+            return new Vector3[2] { cell.cornerPoints[cornerIX.x], cell.cornerPoints[cornerIX.y] };
         }
 
         public static HexagonSide GetRelativeHexagonSideOnSharedRotation(HexagonSide side)

@@ -11,6 +11,8 @@ namespace WFCSystem
         [SerializeField] private LocationMarkerPrefabOption locationMarkerPrefab;
         [SerializeField] private List<LocationNeighborBufferRule> locationNeighborBufferRules;
         public LocationMarkerPrefabOption GetSettings() => locationMarkerPrefab;
+        public bool HasTileSize(HexCellSizes size) => (locationMarkerPrefab.tileDirectory != null) ? locationMarkerPrefab.tileDirectory.HasTileSize(size) : false;
+
         public List<LocationNeighborBufferRule> GetNeighborBufferRules() => locationNeighborBufferRules;
         public Color color = Color.green;
         public bool ShouldPreassign() => ShouldPreassignLocationPrefab(GetSettings());

@@ -7,52 +7,81 @@ using System.Linq;
 
 namespace WFCSystem
 {
+    public enum TileObjectType { Unset = 0, TileDirectory = 1, SocketDirectory, TileClusterPrefab }
+
     [CreateAssetMenu(fileName = "New Tile Directory", menuName = "Tile Directory")]
     public class TileDirectory : ScriptableObject
     {
         [System.Serializable]
-        public struct TileEntry
-        {
-            public HexagonTile tilePrefab;
-            public int id;
-            public float probability;
-        }
-
-
-        [System.Serializable]
-        public struct MicroTileEntry
+        public struct Option_Tile
         {
             public HexagonTileCore tilePrefab;
-            public int id;
-            public float probability;
+            public int id { get; private set; }
+            public void SetId(int value)
+            {
+                id = value;
+            }
+            [Range(0f, 1f)] public float probabilityWeight;
         }
 
         [System.Serializable]
-        public struct TileClusterEntry
+        public struct Option_TileClusterPrefab
         {
-            public HexagonTileCluster tileClusterPrefab;
-            public int id;
-            public float probability;
+            public TileClusterPrefab tileClusterPrefab;
+            public int id { get; private set; }
+            public void SetId(int value)
+            {
+                id = value;
+            }
+            [Range(0f, 1f)] public float probabilityWeight;
         }
+
+        [Header("Socket Directory")]
+        [SerializeField] private HexagonSocketDirectory socketDirectory;
+        public HexagonSocketDirectory GetSocketDirectory() => socketDirectory;
 
         [Header("Tile Prefabs")]
-        [SerializeField] private MicroTileEntry[] microTileEntries;
+        [SerializeField] private List<Option_Tile> tileOptions;
+
+        [Header("Tile Cluster Prefabs")]
+        [SerializeField] private List<Option_TileClusterPrefab> tileClusterPrefabOptions;
+        [Header(" ")]
+
+        [Header(" ")]
+        [SerializeField] private bool revaluate_Options;
+        [SerializeField] private bool auto_revaluate;
+        [Header(" ")]
+        [SerializeField] private bool revaluate_DirectoryAssets;
+        [Header(" ")]
 
         [Header("Auto-Fill")]
-        [SerializeField] private TileContext tileContext;
         [SerializeField] private bool autoFillFromFolder;
+        [Header(" ")]
+        [SerializeField] private List<HexCellSizes> filter_TileSizes;
+        [SerializeField] private List<TileSeries> filter_TileSeries;
+        [SerializeField]
+        private List<TileSeries> exclude_TileSeries = new List<TileSeries>() {
+            TileSeries._Template_
+        };
 
+        [SerializeField]
+        private List<string> exclude_partialNames = new List<string>() {
+            "TH_X12__Any"
+        };
 
-        [SerializeField] private List<int> tileSizes;
-        public bool HasMicroTiles() => GetTileSizes().Any(s => s < (int)HexCellSizes.Default);
-        public List<int> GetTileSizes()
+        [SerializeField] private TileContext tileContext;
+        [Header(" ")]
+        [Header(" ")]
+        [SerializeField] private List<HexCellSizes> tileSizes;
+        public bool HasTileSize(HexCellSizes size) => GetTileSizes().Any(s => s == size);
+        public List<HexCellSizes> GetTileSizes()
         {
-            tileSizes = GetTileSizes(ExtractHexTiles());
+            tileSizes = GetTileSizes(ExtractTiles());
             return tileSizes;
         }
-        public static List<int> GetTileSizes(List<HexagonTileCore> tiles)
+        public static List<HexCellSizes> GetTileSizes(List<HexagonTileCore> tiles)
         {
-            List<int> sizesFound = new List<int>();
+            List<HexCellSizes> sizesFound = new List<HexCellSizes>();
             foreach (var tile in tiles)
             {
                 if (sizesFound.Contains(tile.GetSize())) continue;
@@ -62,127 +91,117 @@ namespace WFCSystem
         }
 
 
+        [SerializeField] private List<TileClusterPrefab> assets_tileClusterPrefabs = new List<TileClusterPrefab>();
+        [SerializeField] private List<GameObject> assets_tilePrefabs = new List<GameObject>();
 
-        [Header("Cluster Tile Prefabs")]
-        [SerializeField] private TileClusterEntry[] tileClusterEntries;
-        [SerializeField] private TileEntry[] tileEntries;
-        [SerializeField] private VerticalTileEntry[] verticalTileEntries;
+        [SerializeField]
+        private string[] _assetPaths = {
+            "Assets/Prefabs/WFC",
+            // "Assets/Prefabs/WFC/HexTiles",
+            };
 
-        [SerializeField] private bool revaluate;
-        private int currentSize = 0;
 
-        public List<GameObject> tilePrefabs = new List<GameObject>();
+        private int _tileOptionsLength;
+        private int _tileClusterPrefabOptionsLength;
 
-        public Dictionary<int, HexagonTile> CreateTileDictionary()
+
+        public List<HexagonTileCore> GetTiles(bool enableLog)
         {
-            Dictionary<int, HexagonTile> tileDictionary = new Dictionary<int, HexagonTile>();
-            for (int i = 0; i < tileEntries.Length; i++)
+            if (tileOptions.Count == 0)
             {
-                tileDictionary.Add(tileEntries[i].id, tileEntries[i].tilePrefab);
+                Debug.LogError("No tileOptions, " + this.name);
+                return null;
             }
-            return tileDictionary;
+
+            List<HexagonTileCore> tiles = new List<HexagonTileCore>();
+            for (int i = 0; i < tileOptions.Count; i++)
+            {
+                tiles.Add(tileOptions[i].tilePrefab);
+            }
+
+            if (enableLog) Debug.Log("Tiles found: " + tiles.Count);
+
+            return tiles;
         }
-        public Dictionary<int, HexagonTileCore> CreateHexTileDictionary()
+        public Dictionary<int, HexagonTileCore> CreateTileDictionary()
         {
             Dictionary<int, HexagonTileCore> tileDictionary = new Dictionary<int, HexagonTileCore>();
-            for (int i = 0; i < microTileEntries.Length; i++)
+            for (int i = 0; i < tileOptions.Count; i++)
             {
-                tileDictionary.Add(microTileEntries[i].id, microTileEntries[i].tilePrefab);
+
+                tileDictionary.Add(tileOptions[i].id, tileOptions[i].tilePrefab);
             }
             return tileDictionary;
         }
 
-        public List<HexagonTileCore> ExtractHexTiles()
+        public Dictionary<int, TileClusterPrefab> CreateTileClusterPrefabDictionary()
+        {
+            Dictionary<int, TileClusterPrefab> tileDictionary = new Dictionary<int, TileClusterPrefab>();
+            for (int i = 0; i < tileClusterPrefabOptions.Count; i++)
+            {
+                tileDictionary.Add(tileClusterPrefabOptions[i].id, tileClusterPrefabOptions[i].tileClusterPrefab);
+            }
+            return tileDictionary;
+        }
+
+        public List<HexagonTileCore> ExtractTiles()
         {
             List<HexagonTileCore> result = new List<HexagonTileCore>();
-            for (int i = 0; i < microTileEntries.Length; i++)
+            for (int i = 0; i < tileOptions.Count; i++)
             {
-                result.Add(microTileEntries[i].tilePrefab);
+                result.Add(tileOptions[i].tilePrefab);
             }
             return result;
         }
 
-        public Dictionary<int, HexagonTileCluster> CreateTileClusterDictionary()
+        private void Evaluate_TileOptions()
         {
-            Dictionary<int, HexagonTileCluster> tileDictionary = new Dictionary<int, HexagonTileCluster>();
-            for (int i = 0; i < tileClusterEntries.Length; i++)
+            HashSet<int> foundIds = new HashSet<int>();
+            List<Option_Tile> new_tileOptions = new List<Option_Tile>();
+            foreach (var item in tileOptions)
             {
-                tileDictionary.Add(tileClusterEntries[i].id, tileClusterEntries[i].tileClusterPrefab);
+                if (item.tilePrefab == null) continue;
+
+                int hashCode = item.tilePrefab.GetHashCode();
+                if (foundIds.Contains(hashCode)) continue;
+
+                item.SetId(hashCode);
+                foundIds.Add(hashCode);
+
+                new_tileOptions.Add(item);
             }
-            return tileDictionary;
+            tileOptions = new_tileOptions;
         }
 
-        public Dictionary<int, VerticalTile> CreateVerticalTileDictionary()
+        private void Evaluate_TileClusterPrefabOptions()
         {
-            Dictionary<int, VerticalTile> tileDictionary = new Dictionary<int, VerticalTile>();
-            for (int i = 0; i < verticalTileEntries.Length; i++)
+            HashSet<int> foundIds = new HashSet<int>();
+            List<Option_TileClusterPrefab> new_tileClusterPrefabOptions = new List<Option_TileClusterPrefab>();
+            foreach (var item in tileClusterPrefabOptions)
             {
-                tileDictionary.Add(verticalTileEntries[i].id, verticalTileEntries[i].tilePrefab);
+                int hashCode = item.tileClusterPrefab.GetHashCode();
+                if (item.tileClusterPrefab == null || foundIds.Contains(hashCode)) continue;
+
+                item.SetId(hashCode);
+                foundIds.Add(hashCode);
+
+                new_tileClusterPrefabOptions.Add(item);
             }
-            return tileDictionary;
+            tileClusterPrefabOptions = new_tileClusterPrefabOptions;
         }
+
 
         private void EvaluateTiles()
         {
-            // Hex Tiles
-            for (int i = 0; i < tileEntries.Length; i++)
-            {
-                if (tileEntries[i].tilePrefab == null)
-                {
-                    tileEntries[i].id = -1;
-                    continue;
-                }
-                tileEntries[i].tilePrefab.id = i;
-                tileEntries[i].id = i;
-            }
-
-            // Micro Hex Tiles
-            for (int i = 0; i < microTileEntries.Length; i++)
-            {
-                if (microTileEntries[i].tilePrefab == null)
-                {
-                    microTileEntries[i].id = -1;
-                    continue;
-                }
-                microTileEntries[i].tilePrefab.SetId(i);
-                microTileEntries[i].id = i;
-            }
-
-            // Hex Tile Clusters
-            for (int i = 0; i < tileClusterEntries.Length; i++)
-            {
-                if (tileClusterEntries[i].tileClusterPrefab == null)
-                {
-                    tileClusterEntries[i].id = -1;
-                    continue;
-                }
-                tileClusterEntries[i].id = i;
-                tileClusterEntries[i].tileClusterPrefab.id = i;
-            }
-
-            // Vertical Tiles
-            for (int i = 0; i < verticalTileEntries.Length; i++)
-            {
-                if (verticalTileEntries[i].tilePrefab == null)
-                {
-                    verticalTileEntries[i].id = -1;
-                    continue;
-                }
-                verticalTileEntries[i].tilePrefab.SetID(i);
-                verticalTileEntries[i].id = i;
-            }
+            Evaluate_TileOptions();
+            Evaluate_TileClusterPrefabOptions();
         }
 
-        [SerializeField]
-        private string[] _assetPaths = {
-        "Assets/Prefabs/WFC",
-        // "Assets/Prefabs/WFC/HexTiles",
-        };
+
 
         private void CheckForAssets()
         {
-            // Get Tiles
-            List<GameObject> found1 = new List<GameObject>();
+            List<GameObject> found = new List<GameObject>();
             string[] guids = AssetDatabase.FindAssets("t:GameObject", _assetPaths);
             foreach (string guid in guids)
             {
@@ -190,14 +209,27 @@ namespace WFCSystem
                 GameObject go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
 
                 IHexagonTile tile = (go != null) ? go.GetComponent<IHexagonTile>() : null;
-                if (tile != null) found1.Add(go);
+                if (tile != null) found.Add(go);
             }
-            tilePrefabs = found1;
+            assets_tilePrefabs = found;
+        }
+
+        private void CheckForTileClusterPrefabs()
+        {
+            List<TileClusterPrefab> found = new List<TileClusterPrefab>();
+            string[] guids = AssetDatabase.FindAssets("t:TileClusterPrefab", _assetPaths);
+            foreach (string guid in guids)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                TileClusterPrefab go = AssetDatabase.LoadAssetAtPath<TileClusterPrefab>(path);
+                if (go != null) found.Add(go);
+            }
+            assets_tileClusterPrefabs = found;
         }
 
         private void AutoFillFromFolder()
         {
-            List<MicroTileEntry> newTileEntries = new List<MicroTileEntry>();
+            List<Option_Tile> new_tileOptions = new List<Option_Tile>();
             string[] guids = AssetDatabase.FindAssets("t:GameObject", _assetPaths);
             foreach (string guid in guids)
             {
@@ -205,55 +237,101 @@ namespace WFCSystem
                 GameObject go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
 
                 HexagonTileCore hexTile = (go != null) ? go.GetComponent<HexagonTileCore>() : null;
+                bool filter_Size = (filter_TileSizes != null && filter_TileSizes.Count > 0);
+                bool filter_Series = (filter_TileSeries != null && filter_TileSeries.Count > 0);
+                bool exclude_Series = (exclude_TileSeries != null && exclude_TileSeries.Count > 0);
+                bool exclude_partials = (exclude_partialNames != null && exclude_partialNames.Count > 0);
+
                 if (hexTile != null)
                 {
-                    if (hexTile.GetTileContext() == tileContext)
+
+                    HexagonCellManager cellManager = go.GetComponent<HexagonCellManager>();
+                    if (cellManager != null)
                     {
-                        MicroTileEntry entry = new MicroTileEntry();
-                        entry.tilePrefab = hexTile;
-                        newTileEntries.Add(entry);
+                        Debug.LogError("excluded on cellManager detected: " + hexTile.name);
+                        continue;
                     }
-                    // }
-                    // else
-                    // {
-                    //     Debug.Log("hexTile is null");
+
+                    if (socketDirectory != null && hexTile.GetSocketDirectory() != socketDirectory)
+                    {
+                        Debug.LogError("tile socketDirectory does not match: " + hexTile.GetSocketDirectory().name);
+                        continue;
+                    }
+                    if (filter_Size && filter_TileSizes.Contains(hexTile.GetSize()) == false)
+                    {
+                        Debug.LogError("size: " + hexTile.GetSize() + " - " + hexTile.name);
+                        continue;
+                    }
+
+                    if (exclude_Series && exclude_TileSeries.Contains(hexTile.GetSeries()))
+                    {
+                        Debug.LogError("excluded series: " + hexTile.GetSeries());
+                        continue;
+                    }
+
+                    if (filter_Series && filter_TileSeries.Contains(hexTile.GetSeries()) == false)
+                    {
+                        Debug.LogError("series: " + hexTile.GetSeries());
+                        continue;
+                    }
+
+                    if (exclude_partials && exclude_partialNames.Contains(hexTile.name))
+                    {
+                        Debug.LogError("excluded on name: " + hexTile.name);
+                        continue;
+                    }
+
+                    // if (hexTile.GetTileContext() != tileContext) continue;
+
+                    Option_Tile entry = new Option_Tile();
+                    entry.tilePrefab = hexTile;
+                    new_tileOptions.Add(entry);
                 }
             }
 
-            if (newTileEntries.Count > 0) microTileEntries = newTileEntries.ToArray();
+            Debug.Log("Tiles found: " + new_tileOptions.Count);
+
+            if (new_tileOptions.Count > 0) tileOptions = new_tileOptions;
         }
 
 
         private void OnValidate()
         {
-            CheckForAssets();
+            if (revaluate_DirectoryAssets)
+            {
+                revaluate_DirectoryAssets = false;
 
+                CheckForAssets();
+                CheckForTileClusterPrefabs();
+            }
 
             if (autoFillFromFolder)
             {
                 autoFillFromFolder = false;
                 AutoFillFromFolder();
-                revaluate = true;
+                revaluate_Options = true;
             }
-            if (revaluate || tileEntries != null && tileEntries.Length != currentSize)
+
+            if (revaluate_Options
+            || (
+                auto_revaluate && (
+                    _tileOptionsLength != tileOptions.Count ||
+                    _tileClusterPrefabOptionsLength != tileClusterPrefabOptions.Count
+                    )
+                )
+            )
             {
-                revaluate = false;
-                currentSize = tileEntries.Length;
+                revaluate_Options = false;
 
                 EvaluateTiles();
+                _tileOptionsLength = tileOptions.Count;
+                _tileClusterPrefabOptionsLength = tileClusterPrefabOptions.Count;
 
                 GetTileSizes();
+
+                GetTiles(true);
             }
-
         }
 
-
-        [System.Serializable]
-        public struct VerticalTileEntry
-        {
-            public VerticalTile tilePrefab;
-            public int id;
-            public float probability;
-        }
     }
 }

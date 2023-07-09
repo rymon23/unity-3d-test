@@ -404,7 +404,7 @@ namespace WFCSystem
             Dictionary<int, List<HexagonCellPrototype>> newPrototypesByLayer = HexagonCellPrototype.GenerateGridsByLayer(
                             centerPos,
                             radius,
-                            cellSize,
+                            (HexCellSizes)cellSize,
                             cellLayers,
                             cellLayerElevation,
                             null,
@@ -414,20 +414,6 @@ namespace WFCSystem
                             useGridErosion,
                             isTile
                         );
-
-
-            // Dictionary<int, List<HexagonCellPrototype>> newPrototypesByLayer = HexagonCellPrototype.GenerateGridsByLayer(
-            //     centerPos,
-            //     radius,
-            //     cellSize,
-            //     cellLayers,
-            //     cellLayerElevation,
-            //     null,
-            //     0,
-            //     transform,
-            //     null,
-            //     useGridErosion
-            // );
 
             List<HexagonCellPrototype> _allPrototypesList = new List<HexagonCellPrototype>();
 
@@ -452,7 +438,7 @@ namespace WFCSystem
         {
             List<HexagonCellPrototype> gridEdges = GetAllPrototypeEdgesOfType(EdgeCellType.Default);
             gridEdges.AddRange(neighborCellGridEdges);
-            HexagonCellPrototype.PopulateNeighborsFromCornerPoints(gridEdges, transform);
+            HexCellUtil.PopulateNeighborsFromCornerPoints(gridEdges, transform);
         }
 
 
@@ -659,10 +645,10 @@ namespace WFCSystem
         public void GenerateCellCluster_Random_Underground(int maxMembers = 22, GameObject tunnelMeshParentGameObject = null)
         {
             List<HexagonCellPrototype> availableUnderGroundStartCells = GetAllPrototypesOfCellStatus(CellStatus.UnderGround).FindAll
-                (c => c.IsPreAssigned() == false && c.GetLayer() >= 1
+                (c => c.IsPreAssigned() == false && c.GetGridLayer() >= 1
                     && c.layerNeighbors[1] != null && c.layerNeighbors[1].IsGround() && c.layerNeighbors[1].IsPreAssigned() == false && c.layerNeighbors[1].HasPreassignedNeighbor() == false
-                    && c.GetGetNeighborsWithStatus(CellStatus.UnderGround).FindAll(n => n.IsPreAssigned() == false).Count > 1
-                ).OrderByDescending(x => x.GetGetNeighborsWithStatus(CellStatus.UnderGround).Count).ToList();
+                    && c.GetNeighborsWithStatus(CellStatus.UnderGround).FindAll(n => n.IsPreAssigned() == false).Count > 1
+                ).OrderByDescending(x => x.GetNeighborsWithStatus(CellStatus.UnderGround).Count).ToList();
 
 
             if (availableUnderGroundStartCells.Count == 0)
@@ -672,7 +658,7 @@ namespace WFCSystem
             }
 
             List<HexagonCellPrototype> availableGroundCells = GetAllPrototypesOfCellStatus(CellStatus.GenericGround).FindAll
-                (c => c.IsPreAssigned() == false && c.GetLayer() >= 1 && availableUnderGroundStartCells.Contains(c.layerNeighbors[0]));
+                (c => c.IsPreAssigned() == false && c.GetGridLayer() >= 1 && availableUnderGroundStartCells.Contains(c.layerNeighbors[0]));
 
             if (availableGroundCells.Count == 0)
             {
@@ -724,10 +710,10 @@ namespace WFCSystem
                 (c =>
                     c.IsUnderGround() &&
                     c.IsPreAssigned() == false &&
-                    c.GetLayer() >= 1 &&
+                    c.GetGridLayer() >= 1 &&
                     c.layerNeighbors[1] != null && c.layerNeighbors[1].IsGround() && c.layerNeighbors[1].IsPreAssigned() == false && c.layerNeighbors[1].HasPreassignedNeighbor() == false
-                    && c.GetGetNeighborsWithStatus(CellStatus.UnderGround).FindAll(n => n.IsPreAssigned() == false).Count > 1
-                ).OrderByDescending(x => x.GetGetNeighborsWithStatus(CellStatus.UnderGround).Count).ToList();
+                    && c.GetNeighborsWithStatus(CellStatus.UnderGround).FindAll(n => n.IsPreAssigned() == false).Count > 1
+                ).OrderByDescending(x => x.GetNeighborsWithStatus(CellStatus.UnderGround).Count).ToList();
 
             if (availableUnderGroundStartCells.Count == 0)
             {
@@ -736,7 +722,7 @@ namespace WFCSystem
             }
 
             // List<HexagonCellPrototype> availableGroundCells = GetAllPrototypesOfCellStatus(CellStatus.GenericGround).FindAll
-            //     (c => c.IsPreAssigned() == false && c.GetLayer() >= 1 && availableUnderGroundStartCells.Contains(c.layerNeighbors[0]));
+            //     (c => c.IsPreAssigned() == false && c.GetGridLayer() >= 1 && availableUnderGroundStartCells.Contains(c.layerNeighbors[0]));
             // if (availableGroundCells.Count == 0)
             // {
             //     Debug.LogError("NO availableGroundCells");
@@ -780,18 +766,18 @@ namespace WFCSystem
 
         public static HexagonCellCluster GenerateCluster_UnderGroundTunnel(HexagonCellCluster existingCluster, int maxMembers = 15, CellSearchPriority searchPriority = CellSearchPriority.SideNeighbors)
         {
-            Debug.Log("existingCluster.prototypes: " + existingCluster.prototypes.Count);
+            // Debug.Log("existingCluster.prototypes: " + existingCluster.prototypes.Count);
 
             List<HexagonCellPrototype> availableGroundStartCells = existingCluster.prototypes.FindAll
                 (c =>
                     c.IsGround() &&
                     c.layerNeighbors[0] != null &&
                     c.layerNeighbors[0].IsUnderGround() //&& 
-                                                        // c.GetLayer() >= 1 &&
+                                                        // c.GetGridLayer() >= 1 &&
                                                         // c.layerNeighbors[0].IsPreAssigned() == false &&
                                                         // c.layerNeighbors[0].HasPreassignedNeighbor() == false &&
-                                                        // c.GetGetNeighborsWithStatus(CellStatus.UnderGround).FindAll(n => n.IsPreAssigned() == false).Count > 1
-                ); //.OrderByDescending(x => x.GetGetNeighborsWithStatus(CellStatus.UnderGround).Count).ToList();
+                                                        // c.GetNeighborsWithStatus(CellStatus.UnderGround).FindAll(n => n.IsPreAssigned() == false).Count > 1
+                ); //.OrderByDescending(x => x.GetNeighborsWithStatus(CellStatus.UnderGround).Count).ToList();
 
             if (availableGroundStartCells.Count == 0)
             {
@@ -818,7 +804,7 @@ namespace WFCSystem
                     continue;
                 }
 
-                Debug.LogError("newTunnelPath.Count: " + newTunnelPath.Count + ", maxMembers: " + maxMembers + ",  searchPriority: " + searchPriority);
+                // Debug.LogError("newTunnelPath.Count: " + newTunnelPath.Count + ", maxMembers: " + maxMembers + ",  searchPriority: " + searchPriority);
 
                 HexCellUtil.SetTunnelCells(newTunnelPath);
 
@@ -846,8 +832,8 @@ namespace WFCSystem
         public void GenerateCellClusters_Cave(int maxMembers = 9, GameObject tunnelMeshParentGameObject = null)
         {
             List<HexagonCellPrototype> availableUnderGroundCells = GetAllPrototypesOfCellStatus(CellStatus.UnderGround).FindAll
-                (c => c.IsPreAssigned() == false && c.GetLayer() >= 1 && c.layerNeighbors[1] != null
-                    && c.GetGetNeighborsWithStatus(CellStatus.GenericGround).FindAll(n => n.IsPreAssigned() == false).Count > 1
+                (c => c.IsPreAssigned() == false && c.GetGridLayer() >= 1 && c.layerNeighbors[1] != null
+                    && c.GetNeighborsWithStatus(CellStatus.GenericGround).FindAll(n => n.IsPreAssigned() == false).Count > 1
                 );
 
             if (availableUnderGroundCells.Count == 0)
@@ -862,14 +848,14 @@ namespace WFCSystem
 
             foreach (var item in availableUnderGroundCells)
             {
-                List<HexagonCellPrototype> groundNeighbors = item.GetGetNeighborsWithStatus(CellStatus.GenericGround).FindAll(n => n.IsPreAssigned() == false && item.IsSameLayer(n));
+                List<HexagonCellPrototype> groundNeighbors = item.GetNeighborsWithStatus(CellStatus.GenericGround).FindAll(n => n.IsPreAssigned() == false && item.IsSameLayer(n));
                 if (groundNeighbors.Count == 0)
                 {
                     Debug.LogError("GenerateCellClusters_Cave - NO groundNeighbors");
                     continue;
                 }
 
-                List<HexagonCellPrototype> underGroundNeighbors = item.GetGetNeighborsWithStatus(CellStatus.UnderGround).FindAll(n => n.IsPreAssigned() == false);
+                List<HexagonCellPrototype> underGroundNeighbors = item.GetNeighborsWithStatus(CellStatus.UnderGround).FindAll(n => n.IsPreAssigned() == false);
                 if (underGroundNeighbors.Count == 0)
                 {
                     Debug.LogError("GenerateCellClusters_Cave - NO underGroundNeighbors");
@@ -1041,7 +1027,7 @@ namespace WFCSystem
             tunnelMesh.RecalculateBounds();
 
             Vector3 position = transform.position;
-            position.y = 0;
+            // position.y = 0;
             GameObject tunnelMeshGameObject = MeshUtil.InstantiatePrefabWithMesh(meshObjectPrefab, tunnelMesh, position);
 
             return tunnelMeshGameObject;
@@ -1219,6 +1205,7 @@ namespace WFCSystem
 
         public static HexagonCellCluster Generate_ClusterSubGridFromPrototypesByLayer(
             Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>> prototypesByLayer,
+            Dictionary<Vector2, Dictionary<int, Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>>>> cellLookup_ByLayer_BySize_ByWorldSpace,
             CellClusterType clusterType,
             bool keepAllPrototypes,
             List<CellStatus> focusCellsIgnoresStatus = null
@@ -1240,18 +1227,19 @@ namespace WFCSystem
                     layerMembers.Add(pair.Value);
                 }
 
-                HexagonCellPrototype.ResetNeighbors(layerMembers, EdgeCellType.Default);
                 if (keepAllPrototypes)
                 {
                     finalMembers.AddRange(layerMembers);
                 }
                 else finalMembers.AddRange(layerMembers.FindAll(p => focusCellsIgnoresStatus.Contains(p.GetCellStatus()) == false));
+
+                // HexagonCellPrototype.ResetNeighbors(finalMembers, EdgeCellType.Default);
             }
 
             if (finalMembers != null && finalMembers.Count > 1)
             {
                 return new HexagonCellCluster(
-                        finalMembers[0].GetId(),
+                        finalMembers[0].Get_Uid(),
                         finalMembers,
                         clusterType,
                         ClusterGroundCellLayerRule.Unset);
@@ -1415,11 +1403,11 @@ namespace WFCSystem
                 List<HexagonCellPrototype> stackCells = HexagonCellPrototype.GetAllCellsInLayerStack(prototype);
                 foreach (var item in stackCells)
                 {
-                    if (prototypesByLayer.ContainsKey(item.GetLayer()) == false)
+                    if (prototypesByLayer.ContainsKey(item.GetGridLayer()) == false)
                     {
-                        prototypesByLayer.Add(item.GetLayer(), new List<HexagonCellPrototype>());
+                        prototypesByLayer.Add(item.GetGridLayer(), new List<HexagonCellPrototype>());
                     }
-                    prototypesByLayer[item.GetLayer()].Add(item);
+                    prototypesByLayer[item.GetGridLayer()].Add(item);
                 }
             }
             return prototypesByLayer;
@@ -1508,7 +1496,7 @@ namespace WFCSystem
                         hostIds.Add(item.uid);
                         filteredHosts.Add(item);
 
-                        if (highestGroundLayer < item.GetLayer()) highestGroundLayer = item.GetLayer();
+                        if (highestGroundLayer < item.GetGridLayer()) highestGroundLayer = item.GetGridLayer();
                     }
                     else
                     {
@@ -1519,7 +1507,7 @@ namespace WFCSystem
 
                 int topLayerTarget = highestGroundLayer + layers;
 
-                Dictionary<int, List<HexagonCellPrototype>> newPrototypesByLayer = HexagonGrid.Generate_ProtoypeGrid_FromHosts(filteredHosts, 4, layers, cellLayerElevation, gameObject.transform, true, useEvenTopLayer, topLayerTarget);
+                Dictionary<int, List<HexagonCellPrototype>> newPrototypesByLayer = HexGridUtil.Generate_ProtoypeGrid_FromHosts(filteredHosts, HexCellSizes.X_4, layers, cellLayerElevation, gameObject.transform, true, useEvenTopLayer, topLayerTarget);
                 foreach (var kvp in newPrototypesByLayer)
                 {
                     HexagonCellPrototype.EvaluateCellNeighborsAndEdgesInLayerList(kvp.Value, EdgeCellType.Default, transform, true);
@@ -1560,7 +1548,7 @@ namespace WFCSystem
                     hostIds.Add(item.uid);
                     filteredHosts.Add(item);
 
-                    if (highestGroundLayer < item.GetLayer()) highestGroundLayer = item.GetLayer();
+                    if (highestGroundLayer < item.GetGridLayer()) highestGroundLayer = item.GetGridLayer();
                 }
                 else
                 {
@@ -1574,7 +1562,7 @@ namespace WFCSystem
 
             int topLayerTarget = highestGroundLayer + cellLayers;
 
-            Dictionary<int, List<HexagonCellPrototype>> newPrototypesByLayer = HexagonGrid.Generate_ProtoypeGrid_FromHosts(filteredHosts, 4, cellLayers, cellLayerElevation, gameObject.transform, true, useEvenTopLayer, topLayerTarget);
+            Dictionary<int, List<HexagonCellPrototype>> newPrototypesByLayer = HexGridUtil.Generate_ProtoypeGrid_FromHosts(filteredHosts, HexCellSizes.X_4, cellLayers, cellLayerElevation, gameObject.transform, true, useEvenTopLayer, topLayerTarget);
             int count = 0;
             foreach (var kvp in newPrototypesByLayer)
             {
@@ -2028,7 +2016,7 @@ namespace WFCSystem
             else if (randomizeCellLayers) cellLayers = CalculateRandomLayers();
 
             // cellPrototypesByLayer = Generate_ClusterOfMicroCellGridProtoypesFromHosts(parentCell, allClusteredCells, cellLayers, cellLayerElevation);
-            cellPrototypesByLayer_V2 = HexagonGrid.Generate_MicroCellGridProtoypes_FromHosts(parentCell, allClusteredCells, cellLayers, cellLayerElevation);
+            cellPrototypesByLayer_V2 = HexGridUtil.Generate_MicroCellGridProtoypes_FromHosts(parentCell, allClusteredCells, cellLayers, cellLayerElevation);
         }
 
         public bool InitializeMicroClusterGrid(HexagonCell parentCell, List<HexagonCell> allUnassisngedCells, int cellLayers, int cellLayerElevation = 4)
@@ -2051,7 +2039,7 @@ namespace WFCSystem
             allClusteredCells.AddRange(childCells);
 
             // cellPrototypesByLayer = Generate_ClusterOfMicroCellGridProtoypesFromHosts(parentCell, childCells, cellLayers, cellLayerElevation);
-            cellPrototypesByLayer_V2 = HexagonGrid.Generate_MicroCellGridProtoypes_FromHosts(parentCell, childCells, cellLayers, cellLayerElevation);
+            cellPrototypesByLayer_V2 = HexGridUtil.Generate_MicroCellGridProtoypes_FromHosts(parentCell, childCells, cellLayers, cellLayerElevation);
             return true;
         }
 
@@ -2129,7 +2117,7 @@ namespace WFCSystem
                     {
                         for (int i = 0; i < prevLayerHexagonCells.Count; i++)
                         {
-                            if (prevLayerHexagonCells[i].GetLayer() < hexCell.GetLayer() && prevLayerHexagonCells[i].id == cellPrototype.bottomNeighborId)
+                            if (prevLayerHexagonCells[i].GetGridLayer() < hexCell.GetGridLayer() && prevLayerHexagonCells[i].id == cellPrototype.bottomNeighborId)
                             {
                                 hexCell._neighbors.Add(prevLayerHexagonCells[i]);
                                 hexCell.SetBottomNeighbor(prevLayerHexagonCells[i]); // set bottom neighbor
