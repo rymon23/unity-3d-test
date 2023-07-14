@@ -8,7 +8,48 @@ namespace ProceduralBase
 {
     // public enum CubeCorners { TopLeftFront, TopRightFront, BottomLeftFront, BottomRightFront, TopLeftBack, TopRightBack, BottomLeftBack, BottomRightBack }
     public enum SurfaceBlockSide { Front = 0, Right, Back, Left, Top, Bottom, }
-    public enum SurfaceBlockState { Unset = 0, Edge = 1, Corner, Base, Top, Entry, Ignore, Highlight, TileEdge }
+    public enum SurfaceBlockState { Unset = 0, Edge = 1, Corner, Base, Top, Entry, Ignore, Highlight, TileEdge, TileInnerEdge }
+    public enum SocketFace { Blank, OpenFace, ClosedFace }
+    public enum BoundsShape { Cube = 0, Sphere, Pyramid, Cone }
+
+    public class BoundsShapeBlock
+    {
+        public BoundsShape shape { get; private set; }
+        public Vector3[] edgePoints { get; private set; }
+        public Vector3 Center { get; private set; }
+        public BoundsShapeBlock(Vector3 _center, float _radius, int densityMultiplier = 6)
+        {
+            Center = _center;
+            edgePoints = GenerateSphereEdgePoints(_center, _radius, densityMultiplier).ToArray();
+            shape = BoundsShape.Sphere;
+        }
+
+        public static List<Vector3> GenerateSphereEdgePoints(Vector3 center, float radius, int densityMultiplier)
+        {
+            List<Vector3> edgePoints = new List<Vector3>();
+
+            int density = Mathf.Max(4, densityMultiplier);
+
+            float angleIncrement = 360f / density;
+            float currentAngle = 0f;
+
+            while (currentAngle < 360f)
+            {
+                float radianAngle = currentAngle * Mathf.Deg2Rad;
+
+                float x = center.x + radius * Mathf.Cos(radianAngle);
+                float y = center.y + radius * Mathf.Sin(radianAngle);
+                float z = center.z;
+
+                Vector3 point = new Vector3(x, y, z);
+                edgePoints.Add(point);
+
+                currentAngle += angleIncrement;
+            }
+            return edgePoints;
+        }
+    }
+
 
     public class SurfaceBlock
     {
@@ -23,15 +64,14 @@ namespace ProceduralBase
         public float size;
         public bool isEdge;
         public bool isTileEdge { get; private set; }
-        public bool ignore;
+        public bool isTileInnerEdge { get; private set; }
+        public bool ignore { get; private set; }
         public bool isEntry;
 
         public SurfaceBlock[] neighbors = new SurfaceBlock[6] { null, null, null, null, null, null };
         public Vector3[] corners { get; private set; } = new Vector3[8];
         public void SetCorners(Vector3[] _value)
-        {
-            corners = _value;
-        }
+        { corners = _value; }
 
         public void SetIgnored(bool value)
         {
@@ -46,7 +86,33 @@ namespace ProceduralBase
             if (isTileEdge && states.Contains(SurfaceBlockState.TileEdge) == false) states.Add(SurfaceBlockState.TileEdge);
             else if (!isTileEdge && states.Contains(SurfaceBlockState.TileEdge)) states.Remove(SurfaceBlockState.TileEdge);
         }
+        public void SetTileInnerEdge(bool value)
+        {
+            isTileInnerEdge = value;
+            if (isTileInnerEdge && states.Contains(SurfaceBlockState.TileInnerEdge) == false) states.Add(SurfaceBlockState.TileInnerEdge);
+            else if (!isTileInnerEdge && states.Contains(SurfaceBlockState.TileInnerEdge)) states.Remove(SurfaceBlockState.TileInnerEdge);
+        }
+        public bool IsTileEdge()
+        {
+            if (owner == null) return false;
+            for (var i = 0; i < neighbors.Length; i++)
+            {
+                if (neighbors[i] != null && neighbors[i].owner != owner) return true;
+            }
+            return false;
+        }
+        public bool IsTileInnerEdge()
+        {
+            if (owner == null) return false;
+            for (var i = 0; i < neighbors.Length; i++)
+            {
+                if (neighbors[i] != null && neighbors[i].owner != owner && neighbors[i].owner != null) return true;
+            }
+            return false;
+        }
 
+        public bool IsTileTopEdge() => (neighbors[(int)SurfaceBlockSide.Top] == null || neighbors[(int)SurfaceBlockSide.Top].owner != owner);
+        public bool IsTileBottomEdge() => (neighbors[(int)SurfaceBlockSide.Bottom] == null || neighbors[(int)SurfaceBlockSide.Bottom].owner != owner);
         public SurfaceBlock GetNeighborOnSide(SurfaceBlockSide side) => neighbors[(int)side];
 
         public List<SurfaceBlockState> states = new List<SurfaceBlockState>();
@@ -56,16 +122,6 @@ namespace ProceduralBase
             foreach (var item in states)
             {
                 if (filterOnStates.Contains(item)) return true;
-            }
-            return false;
-        }
-
-        public bool IsTileEdge()
-        {
-            if (owner == null) return false;
-            for (var i = 0; i < neighbors.Length; i++)
-            {
-                if (neighbors[i] != null && !neighbors[i].ignore && neighbors[i].owner != owner) return true;
             }
             return false;
         }
@@ -102,6 +158,58 @@ namespace ProceduralBase
                 numSidesWithoutNeighbors++;
 
             return numSidesWithoutNeighbors == 2;
+        }
+
+
+        public static (Vector3, SocketFace) GetFaceProfie(SurfaceBlock block, SurfaceBlock foreignNeighbor)
+        {
+            Vector3 faceLookupRaw = VectorUtil.GetPointBetween(block.Position, foreignNeighbor.Position);
+            Vector3 faceLookup = VectorUtil.PointLookupDefault(faceLookupRaw);
+            // Vector3 faceLookup = VectorUtil.CenterPointAtZero(faceLookupRaw, block.owner.center);
+
+            if (block.ignore) return (faceLookup, SocketFace.Blank);
+            if (foreignNeighbor.ignore) return (faceLookup, SocketFace.ClosedFace);
+            return (faceLookup, SocketFace.OpenFace);
+        }
+
+        public static bool AreFacesCompatible(SocketFace faceA, SocketFace faceB)
+        {
+            if (faceA == SocketFace.Blank && faceB == SocketFace.Blank) return true;
+            if (faceA == SocketFace.OpenFace && faceB == SocketFace.OpenFace) return true;
+            if (
+                faceA == SocketFace.Blank && faceB == SocketFace.ClosedFace ||
+                faceB == SocketFace.Blank && faceA == SocketFace.ClosedFace
+            ) return true;
+
+            return false;
+        }
+
+        public static SurfaceBlockSide GetNeighborsRelativeSide(SurfaceBlockSide side)
+        {
+            // Assumes the same rotation
+            switch (side)
+            {
+                case (SurfaceBlockSide.Front):
+                    return SurfaceBlockSide.Back;
+
+                case (SurfaceBlockSide.Back):
+                    return SurfaceBlockSide.Front;
+
+                case (SurfaceBlockSide.Bottom):
+                    return SurfaceBlockSide.Top;
+
+                case (SurfaceBlockSide.Top):
+                    return SurfaceBlockSide.Bottom;
+
+                case (SurfaceBlockSide.Left):
+                    return SurfaceBlockSide.Right;
+
+                case (SurfaceBlockSide.Right):
+                    return SurfaceBlockSide.Left;
+
+                default:
+                    return side;
+            }
         }
 
         public Vector3[] GetCornersOnSide(SurfaceBlockSide side)
@@ -146,43 +254,12 @@ namespace ProceduralBase
                     sideCorners[3] = corners[3];
                     break;
             }
-            //Front
-            // Gizmos.DrawSphere(cubePTs[1], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[2], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[5], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[6], 0.2f);
-            //Back
-            // Gizmos.DrawSphere(cubePTs[0], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[3], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[4], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[7], 0.2f);
-            //Bottom
-            // Gizmos.DrawSphere(cubePTs[0], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[1], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[2], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[3], 0.2f);
-            //Top
-            // Gizmos.DrawSphere(cubePTs[4], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[5], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[6], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[7], 0.2f);
-            //Right
-            // Gizmos.DrawSphere(cubePTs[0], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[1], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[4], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[5], 0.2f);
-            //Left
-            // Gizmos.DrawSphere(cubePTs[2], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[3], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[6], 0.2f);
-            // Gizmos.DrawSphere(cubePTs[7], 0.2f);
             return sideCorners;
         }
 
         public static Vector3[] CreateCorners(Vector3 centerPos, float size)
         {
             Vector3[] new_corners = new Vector3[8];
-
             // Calculate half size for convenience
             float halfSize = size * 0.5f;
             // Calculate the 8 corner points of the cube
@@ -198,13 +275,11 @@ namespace ProceduralBase
             return new_corners;
         }
 
-
         public static SurfaceBlock[,,] CreateSurfaceBlocks(Vector3 origin, int gridSizeX, int gridSizeY, int gridSizeZ, float size, Bounds gridBounds, List<Bounds> structureBounds)
         {
             (Vector3[,,] points, float spacing) = VectorUtil.Generate3DGrid(gridBounds, gridSizeX, gridSizeY, origin.y);
             return SurfaceBlock.CreateSurfaceBlocks(points, structureBounds, spacing);
         }
-
 
         public static SurfaceBlock[,,] CreateSurfaceBlocks(Vector3[,,] pointsMatrix, List<Bounds> bounds, float size)
         {
@@ -300,30 +375,7 @@ namespace ProceduralBase
             return neighborCenters;
         }
 
-        public void DrawNeighbors()
-        {
-            for (var i = 0; i < neighbors.Length; i++)
-            {
-                if (neighbors[i] != null && !neighbors[i].ignore)
-                {
-                    // Gizmos.color = Color.green;
-                    // Gizmos.DrawWireSphere(neighbors[i].Position, 0.2f);
-                    // Debug.Log("neighbor found on side: " + (SurfaceBlockSide)i);
-                }
-                else
-                {
-                    // Debug.Log("No neighbor on side: " + (SurfaceBlockSide)i);
-                    Gizmos.color = Color.white;
-                    Vector3[] sideCorners = GetCornersOnSide((SurfaceBlockSide)i);
-                    Gizmos.DrawLine(sideCorners[0], sideCorners[1]);
-                    Gizmos.DrawLine(sideCorners[1], sideCorners[3]);
-                    Gizmos.DrawLine(sideCorners[3], sideCorners[2]);
-                    Gizmos.DrawLine(sideCorners[2], sideCorners[0]);
-                    Gizmos.DrawLine(sideCorners[0], sideCorners[3]);
-                    Gizmos.DrawLine(sideCorners[2], sideCorners[1]);
-                }
-            }
-        }
+
 
         public static Dictionary<HexagonCellPrototype, List<SurfaceBlock>> GetSurfaceBlocksByCell(SurfaceBlock[,,] blockGrid, Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>> cellsByLayer, float layerElevation)
         {
@@ -378,7 +430,7 @@ namespace ProceduralBase
                     for (int z = 0; z < gridSizeZ; z++)
                     {
                         SurfaceBlock block = blockGrid[x, y, z];
-                        if (block != null && !block.ignore)
+                        if (block != null)
                         {
                             foreach (var cell in cells)
                             {
@@ -412,14 +464,174 @@ namespace ProceduralBase
                     for (int z = 0; z < gridSizeZ; z++)
                     {
                         SurfaceBlock block = blockGrid[x, y, z];
-                        if (block == null || block.ignore || block.owner == null) continue;
+                        if (block == null || block.owner == null) continue;
 
                         block.SetTileEdge(block.IsTileEdge());
+                        block.SetTileInnerEdge(block.IsTileInnerEdge());
                     }
                 }
             }
             return resultsByCell;
         }
+
+        public static Dictionary<HexagonCellPrototype, Dictionary<HexagonTileSide, List<SurfaceBlock>>> GetTileInnerEdgesByCellSide(Dictionary<HexagonCellPrototype, List<SurfaceBlock>> resultsByCell)
+        {
+            Dictionary<HexagonCellPrototype, Dictionary<HexagonTileSide, List<SurfaceBlock>>> tileInnerEdgesByCellSide = new Dictionary<HexagonCellPrototype, Dictionary<HexagonTileSide, List<SurfaceBlock>>>();
+            Dictionary<HexagonCellPrototype, Dictionary<HexagonTileSide, Dictionary<Vector3, SocketFace>>> tileSocketProfileBySide = new Dictionary<HexagonCellPrototype, Dictionary<HexagonTileSide, Dictionary<Vector3, SocketFace>>>();
+
+            foreach (var cell in resultsByCell.Keys)
+            {
+                if (tileInnerEdgesByCellSide.ContainsKey(cell) == false) tileInnerEdgesByCellSide.Add(cell, new Dictionary<HexagonTileSide, List<SurfaceBlock>>());
+
+                if (tileSocketProfileBySide.ContainsKey(cell) == false) tileSocketProfileBySide.Add(cell, new Dictionary<HexagonTileSide, Dictionary<Vector3, SocketFace>>());
+
+                HashSet<SurfaceBlock> added = new HashSet<SurfaceBlock>();
+                Dictionary<HexagonCellPrototype, List<SurfaceBlock>> edgeByNeighborOwnerCell = new Dictionary<HexagonCellPrototype, List<SurfaceBlock>>();
+
+                foreach (var block in resultsByCell[cell])
+                {
+                    if (added.Contains(block)) continue;
+
+                    if (!block.isTileInnerEdge) continue;
+
+                    Dictionary<SurfaceBlockSide, SocketFace> blockSocketsBySide = new Dictionary<SurfaceBlockSide, SocketFace>();
+
+                    for (var _blockSide = 0; _blockSide < block.neighbors.Length; _blockSide++)
+                    {
+                        SurfaceBlock neighbor = block.neighbors[_blockSide];
+                        if (neighbor != null && neighbor.owner != block.owner && neighbor.owner != null)
+                        {
+                            if (edgeByNeighborOwnerCell.ContainsKey(neighbor.owner) == false) edgeByNeighborOwnerCell.Add(neighbor.owner, new List<SurfaceBlock>());
+                            edgeByNeighborOwnerCell[neighbor.owner].Add(block);
+                            // SurfaceBlockSide blockSide = (SurfaceBlockSide)_blockSide;
+                        }
+                    }
+                    added.Add(block);
+                }
+
+                List<HexagonTileSide> neighborSides = cell.GetNeighborSidesX8(Filter_CellType.Any);
+                foreach (HexagonTileSide side in neighborSides)
+                {
+                    int _side = (int)side;
+                    HexagonCellPrototype neighbor = null;
+
+                    if (side == HexagonTileSide.Top || side == HexagonTileSide.Bottom)
+                    {
+                        neighbor = (side == HexagonTileSide.Bottom) ? cell.layerNeighbors[0] : cell.layerNeighbors[1];
+                        // Debug.Log("Side: " + side);
+                        // if (cell.layerNeighbors[1] == null && cell.layerNeighbors[0] == null)
+                        // {
+                        //     Debug.LogError("No layerNeighbors!");
+                        //     cell.Highlight(true);
+                        // }
+                        // else if (neighbor == null)
+                        // {
+                        //     Debug.LogError("neighbor NOT found, Side: " + side);
+                        // }
+                    }
+                    else
+                    {
+                        neighbor = cell.neighborsBySide[_side];
+                    }
+
+                    if (tileInnerEdgesByCellSide[cell].ContainsKey(side) == false) tileInnerEdgesByCellSide[cell].Add(side, new List<SurfaceBlock>());
+
+                    if (neighbor != null && edgeByNeighborOwnerCell.ContainsKey(neighbor))
+                    {
+                        tileInnerEdgesByCellSide[cell][side] = edgeByNeighborOwnerCell[neighbor];
+                        // if (side == HexagonTileSide.Top || side == HexagonTileSide.Bottom) Debug.Log("Added list for Side: " + side);
+                    }
+                    // else
+                    // {
+                    //     if (neighbor != null && (side == HexagonTileSide.Top || side == HexagonTileSide.Bottom)) Debug.LogError("Neighbor key not found on Side: " + side);
+                    // }
+                }
+            }
+
+            return tileInnerEdgesByCellSide;
+        }
+
+        public static Dictionary<HexagonCellPrototype, Dictionary<HexagonTileSide, TileSocketProfile>> Generate_CellTileSocketProfiles(Dictionary<HexagonCellPrototype, Dictionary<HexagonTileSide, List<SurfaceBlock>>> tileInnerEdgesByCellSide)
+        {
+            Dictionary<HexagonCellPrototype, Dictionary<HexagonTileSide, TileSocketProfile>> cellTileSocketProfiles = new Dictionary<HexagonCellPrototype, Dictionary<HexagonTileSide, TileSocketProfile>>();
+
+            foreach (var cell in tileInnerEdgesByCellSide.Keys)
+            {
+                if (cellTileSocketProfiles.ContainsKey(cell) == false) cellTileSocketProfiles.Add(cell, new Dictionary<HexagonTileSide, TileSocketProfile>());
+
+                cell.tileSocketProfileBySide = new Dictionary<HexagonTileSide, TileSocketProfile>();
+
+                // List<HexagonTileSide> neighborSides = cell.GetNeighborSidesX8(Filter_CellType.Any);
+                HexagonCellPrototype[] neighborTileSides = cell.GetNeighborTileSides();
+
+                for (int _side = 0; _side < neighborTileSides.Length; _side++)
+                // foreach (HexagonTileSide side in neighborSides)
+                {
+                    HexagonTileSide side = (HexagonTileSide)_side;
+                    HexagonCellPrototype neighbor = neighborTileSides[_side];
+                    // if (side == HexagonTileSide.Top || side == HexagonTileSide.Bottom)
+                    // {
+                    //     neighbor = (side == HexagonTileSide.Bottom) ? cell.layerNeighbors[0] : cell.layerNeighbors[1];
+                    // }
+                    // else neighbor = cell.neighborsBySide[_side];
+
+                    if (tileInnerEdgesByCellSide[cell].ContainsKey(side))
+                    {
+                        TileSocketProfile new_tileSocketProfile = TileSocketProfile.Generate_TileSocketProfile(tileInnerEdgesByCellSide[cell][side], neighbor);
+                        if (cellTileSocketProfiles[cell].ContainsKey(side) == false) cellTileSocketProfiles[cell].Add(side, new_tileSocketProfile);
+
+                        cell.tileSocketProfileBySide.Add(side, new_tileSocketProfile);
+
+                        if (cellTileSocketProfiles.ContainsKey(neighbor) == false)
+                        {
+                            cellTileSocketProfiles.Add(neighbor, new Dictionary<HexagonTileSide, TileSocketProfile>());
+
+
+                            HexagonTileSide relativeSide = HexCoreUtil.GetRelativeHexagonSide(side);
+                            TileSocketProfile neighbor_tileSocketProfile = TileSocketProfile.Generate_TileSocketProfile(tileInnerEdgesByCellSide[neighbor][relativeSide], cell);
+                            cellTileSocketProfiles[neighbor].Add(relativeSide, neighbor_tileSocketProfile);
+
+
+                            if (neighbor.tileSocketProfileBySide == null) neighbor.tileSocketProfileBySide = new Dictionary<HexagonTileSide, TileSocketProfile>();
+                            neighbor.tileSocketProfileBySide.Add(relativeSide, neighbor_tileSocketProfile);
+
+                            TileSocketProfile.IsCompatible(new_tileSocketProfile, neighbor_tileSocketProfile);
+                        }
+                    }
+                    else
+                    {
+                        if (cellTileSocketProfiles[cell].ContainsKey(side) == false)
+                        {
+                            GlobalSockets defaultSocketId = GlobalSockets.Empty_Space;
+                            if (neighbor != null)
+                            {
+                                defaultSocketId = GlobalSockets.InnerCell_Generic;
+                            }
+                            else
+                            {
+                                if (side == HexagonTileSide.Bottom)
+                                {
+                                    defaultSocketId = GlobalSockets.Structure_Bottom;
+                                }
+                                else if (side == HexagonTileSide.Top)
+                                {
+                                    defaultSocketId = GlobalSockets.Structure_Top;
+                                }
+                                else
+                                {
+                                    defaultSocketId = GlobalSockets.Structure_Outer;
+                                }
+                            }
+                            cellTileSocketProfiles[cell].Add(side, new TileSocketProfile(defaultSocketId));
+                            cell.tileSocketProfileBySide.Add(side, new TileSocketProfile(defaultSocketId));
+                        }
+                    }
+                }
+
+            }
+            return cellTileSocketProfiles;
+        }
+
 
         public static Dictionary<HexagonCellPrototype, Dictionary<HexagonTileSide, List<Vector3>>> GetIntersectionPointsBySideByCell(Dictionary<HexagonCellPrototype, List<SurfaceBlock>> resultsByCell)
         {
@@ -434,22 +646,115 @@ namespace ProceduralBase
                 float cellRadius = cell.size * 1.01f;
 
                 // reset cell side edge sockets
-                cell.sideEdgeSocket = new Dictionary<HexagonTileSide, List<HexSideEdgeSocket>>();
+                if (cell.tileSocketProfileBySide == null)
+                {
+                    cell.tileSocketProfileBySide = new Dictionary<HexagonTileSide, TileSocketProfile>() {
+                        { HexagonTileSide.Front,  new TileSocketProfile(cell) },
+                        { HexagonTileSide.FrontRight,   new TileSocketProfile(cell) },
+                        { HexagonTileSide.BackRight,   new TileSocketProfile(cell) },
+                        { HexagonTileSide.Back,   new TileSocketProfile(cell) },
+                        { HexagonTileSide.BackLeft,   new TileSocketProfile(cell) },
+                        { HexagonTileSide.FrontLeft,   new TileSocketProfile(cell) },
+                        { HexagonTileSide.Top,   new TileSocketProfile(cell) },
+                        { HexagonTileSide.Bottom,  new TileSocketProfile(cell) }
+                    };
+                }
 
                 foreach (HexagonTileSide side in neighborSides)
                 {
-                    if (side == HexagonTileSide.Top || side == HexagonTileSide.Bottom) continue;
-
                     if (intersectionPointsBySideByCell[cell].ContainsKey(side) == false) intersectionPointsBySideByCell[cell].Add(side, new List<Vector3>());
 
-                    if (cell.sideEdgeSocket.ContainsKey(side) == false) cell.sideEdgeSocket.Add(side, new List<HexSideEdgeSocket>());
+                    if (cell.tileSocketProfileBySide.ContainsKey(side) == false) cell.tileSocketProfileBySide.Add(side, new TileSocketProfile(cell));
 
                     int _side = (int)side;
-                    Vector3[] corners = HexCoreUtil.GetSideCorners(cell, (HexagonSide)side);
                     HashSet<Vector3> addedLookups = new HashSet<Vector3>();
+
+                    HexagonCellPrototype neighbor = null;
+
+                    if (side == HexagonTileSide.Top || side == HexagonTileSide.Bottom)
+                    {
+                        neighbor = (side == HexagonTileSide.Top) ? cell.layerNeighbors[1] : cell.layerNeighbors[0];
+                        if (neighbor != null && neighbor.tileSocketProfileBySide == null) neighbor.tileSocketProfileBySide = new Dictionary<HexagonTileSide, TileSocketProfile>();
+
+                        foreach (var block in resultsByCell[cell])
+                        {
+                            if (block.ignore) continue;
+
+                            bool tileEdgeFound = false;
+                            Vector3[] blockCorners = null;
+
+                            if (side == HexagonTileSide.Top && block.IsTileTopEdge())
+                            {
+                                blockCorners = block.GetCornersOnSide(SurfaceBlockSide.Top);
+                                tileEdgeFound = true;
+                            }
+                            else if (side == HexagonTileSide.Bottom && block.IsTileBottomEdge())
+                            {
+                                blockCorners = block.GetCornersOnSide(SurfaceBlockSide.Bottom);
+                                tileEdgeFound = true;
+                            }
+
+                            if (!tileEdgeFound) continue;
+
+                            foreach (var item in blockCorners)
+                            {
+                                if (item == Vector3.zero) continue;
+                                Vector3 intersectionPoint = item;
+
+                                Vector3 lookup = VectorUtil.PointLookupDefault(intersectionPoint);
+                                if (addedLookups.Contains(lookup)) continue;
+
+                                if (VectorUtil.DistanceXZ(intersectionPoint, cell.center) < cellRadius)
+                                {
+                                    addedLookups.Add(lookup);
+
+                                    if (intersectionPointsLookup.ContainsKey(lookup) == false)
+                                    {
+                                        intersectionPointsLookup.Add(lookup, intersectionPoint);
+                                    }
+                                    else intersectionPoint = intersectionPointsLookup[lookup];
+
+                                    intersectionPointsBySideByCell[cell][side].Add(lookup);
+                                    cell.tileSocketProfileBySide[side].AddValue(lookup, intersectionPoint);
+
+                                    if (neighbor != null)
+                                    {
+                                        HexagonTileSide relativeSide = (side == HexagonTileSide.Top) ? HexagonTileSide.Bottom : HexagonTileSide.Top;
+                                        if (neighbor.tileSocketProfileBySide.ContainsKey(relativeSide) == false) neighbor.tileSocketProfileBySide.Add(relativeSide, new TileSocketProfile(neighbor));
+                                        neighbor.tileSocketProfileBySide[relativeSide].AddValue(lookup, intersectionPoint);
+                                    }
+                                }
+                            }
+                        }
+                        continue;
+                    }
+
+                    Vector3[] corners = HexCoreUtil.GetSideCorners(cell, (HexagonSide)side);
+
+                    neighbor = cell.neighborsBySide[_side];
+                    if (neighbor != null && neighbor.tileSocketProfileBySide == null) neighbor.tileSocketProfileBySide = new Dictionary<HexagonTileSide, TileSocketProfile>();
+
+                    if (neighbor != null)
+                    {
+                        // Dont add sockets for empty side 
+                        if (resultsByCell.ContainsKey(neighbor) == false || CanGenerateTileMeshForCell(resultsByCell[neighbor], null) == false)
+                        {
+                            cell.tileSocketProfileBySide[side].SetDefaultID((int)GlobalSockets.InnerCell_Generic);
+                            int _relativeSide = (int)HexCoreUtil.GetRelativeHexagonSide((HexagonSide)_side);
+                            if (_relativeSide != -1)
+                            {
+                                HexagonTileSide relativeSide = (HexagonTileSide)_relativeSide;
+                                if (neighbor.tileSocketProfileBySide.ContainsKey(relativeSide) == false) neighbor.tileSocketProfileBySide.Add(relativeSide, new TileSocketProfile(neighbor));
+                                neighbor.tileSocketProfileBySide[relativeSide].SetDefaultID((int)GlobalSockets.InnerCell_Generic);
+                            }
+                            continue;
+                        }
+                    }
 
                     foreach (var block in resultsByCell[cell])
                     {
+                        if (block.ignore) continue;
+
                         List<int> outOfBounds = block.GetOutOfBoundsCorners();
                         if (outOfBounds == null || outOfBounds.Count == 0) continue;
 
@@ -475,10 +780,23 @@ namespace ProceduralBase
                                 }
                                 else intersectionPoint = intersectionPointsLookup[lookup];
 
-                                intersectionPointsBySideByCell[cell][side].Add(intersectionPoint);
+                                intersectionPointsBySideByCell[cell][side].Add(lookup);
+                                cell.tileSocketProfileBySide[side].AddValue(lookup, intersectionPoint);
 
-                                HexSideEdgeSocket edgeSocket = new HexSideEdgeSocket(intersectionPoint, HexTileGrid.Calculate_LerpStepOfPoint(intersectionPoint, corners[0], corners[1]));
-                                cell.sideEdgeSocket[side].Add(edgeSocket);
+                                if (neighbor != null)
+                                {
+                                    int _relativeSide = (int)HexCoreUtil.GetRelativeHexagonSide((HexagonSide)_side);
+                                    if (_relativeSide == -1)
+                                    {
+                                        Debug.LogError("_relativeSide:  " + _relativeSide + ",  for side: " + side);
+                                    }
+                                    else
+                                    {
+                                        HexagonTileSide relativeSide = (HexagonTileSide)_relativeSide;
+                                        if (neighbor.tileSocketProfileBySide.ContainsKey(relativeSide) == false) neighbor.tileSocketProfileBySide.Add(relativeSide, new TileSocketProfile(neighbor));
+                                        neighbor.tileSocketProfileBySide[relativeSide].AddValue(lookup, intersectionPoint);
+                                    }
+                                }
                             }
                         }
                     }
@@ -578,11 +896,11 @@ namespace ProceduralBase
 
         public static void DrawGrid(SurfaceBlock[,,] blockGrid, HexagonCellPrototype _highlightedCell = null)
         {
+            Dictionary<string, Color> customColors = UtilityHelpers.CustomColorDefaults();
             int gridSizeX = blockGrid.GetLength(0);
             int gridSizeY = blockGrid.GetLength(1);
             int gridSizeZ = blockGrid.GetLength(2);
-
-            bool doOnce = false;
+            // bool doOnce = false;
 
             for (int x = 0; x < gridSizeX; x++)
             {
@@ -591,43 +909,55 @@ namespace ProceduralBase
                     for (int z = 0; z < gridSizeZ; z++)
                     {
                         SurfaceBlock block = blockGrid[x, y, z];
-                        if (block != null && !block.ignore)
+                        if (block != null)
                         {
                             if (_highlightedCell != null && block.owner != _highlightedCell) continue;
 
-                            Gizmos.color = Color.gray;
-                            Gizmos.DrawWireSphere(block.Position, 0.15f);
-
-                            if (!doOnce && y == gridSizeY - 1)
-                            // if (!doOnce )
+                            if (!block.ignore)
                             {
-                                doOnce = true;
+                                Gizmos.color = Color.gray;
+                                Gizmos.DrawWireSphere(block.Position, 0.15f);
 
-                                Gizmos.color = Color.black;
-                                Gizmos.DrawSphere(block.Position, 0.2f);
+                                block.DrawNeighbors();
 
-                                Gizmos.color = Color.red;
-                                Vector3[] neighborCenters = GenerateNeighborCenters(block.Position, block.size * 2);
-                                Gizmos.DrawSphere(neighborCenters[(int)SurfaceBlockSide.Bottom], 0.3f);
-                            }
-                            block.DrawNeighbors();
-
-                            if (block.IsCorner())
-                            {
-                                Gizmos.color = Color.blue;
-                                Gizmos.DrawSphere(block.Position, 0.3f);
+                                if (block.isTileEdge)
+                                {
+                                    Gizmos.color = Color.yellow;
+                                    Gizmos.DrawWireSphere(block.Position, 0.25f);
+                                }
                             }
 
-                            if (block.isEntry)
-                            {
-                                Gizmos.color = Color.green;
-                                Gizmos.DrawSphere(block.Position, 0.3f);
-                            }
-                            if (block.isTileEdge)
-                            {
-                                Gizmos.color = Color.yellow;
-                                Gizmos.DrawSphere(block.Position, 0.3f);
-                            }
+                            // if (block.isTileInnerEdge)
+                            // {
+                            //     Gizmos.color = customColors["orange"];
+                            //     Gizmos.DrawSphere(block.Position, 0.25f);
+                            // }
+
+                            // if (!doOnce && y == gridSizeY - 1)
+                            // // if (!doOnce )
+                            // {
+                            //     doOnce = true;
+
+                            //     Gizmos.color = Color.black;
+                            //     Gizmos.DrawSphere(block.Position, 0.2f);
+
+                            //     Gizmos.color = Color.red;
+                            //     Vector3[] neighborCenters = GenerateNeighborCenters(block.Position, block.size * 2);
+                            //     Gizmos.DrawSphere(neighborCenters[(int)SurfaceBlockSide.Bottom], 0.3f);
+                            // }
+
+                            // if (block.IsCorner())
+                            // {
+                            //     Gizmos.color = Color.blue;
+                            //     Gizmos.DrawSphere(block.Position, 0.3f);
+                            // }
+                            // if (block.isEntry)
+                            // {
+                            //     Gizmos.color = Color.green;
+                            //     Gizmos.DrawSphere(block.Position, 0.3f);
+                            // }
+
+
                             // else
                             // {
                             //     if (block.isEdge)
@@ -645,31 +975,64 @@ namespace ProceduralBase
         }
 
 
+        public static bool CanGenerateTileMeshForCell(List<SurfaceBlock> cellSurfaceBlocks, List<SurfaceBlockState> filterOnStates)
+        {
+            bool bFilterOnStates = filterOnStates != null;
+            foreach (var block in cellSurfaceBlocks)
+            {
+                if (block != null && block.isEdge && !block.ignore)
+                {
+                    if (bFilterOnStates && block.HasFilteredState(filterOnStates) == false) continue;
+
+                    return true;
+                }
+            }
+            return false;
+        }
 
         public static Dictionary<HexagonCellPrototype, GameObject> Generate_MeshObjectsByCell(
             Dictionary<HexagonCellPrototype, List<SurfaceBlock>> resultsByCell,
             GameObject prefab,
             Transform transform,
             List<SurfaceBlockState> filterOnStates,
-            Transform folder
+            bool disableObject,
+            Transform folder,
+            bool resetTransform,
+            string nameHeader = "Building_"
         )
         {
             Dictionary<HexagonCellPrototype, GameObject> objectsByCell = new Dictionary<HexagonCellPrototype, GameObject>();
+            int ix = 0;
             foreach (var cell in resultsByCell.Keys)
             {
-                GameObject gameObject = Generate_MeshObject(resultsByCell[cell], prefab, transform, filterOnStates, folder);
+                GameObject gameObject = Generate_MeshObject(resultsByCell[cell], prefab, transform, cell.center, filterOnStates, folder);
                 if (gameObject != null)
                 {
                     objectsByCell.Add(cell, gameObject);
 
-                    gameObject.name = "SurfaceBlock_Tile";
+                    gameObject.name = "Tile_X" + cell.size + "_" + nameHeader + "_" + ix;
                     if (cell.isEdgeCell) gameObject.name += "_Edge";
+
+                    if (resetTransform)
+                    {
+                        gameObject.transform.position = Vector3.zero;
+                        // gameObject.transform.rotation = Quaternion.identity;
+                        // gameObject.transform.localPosition = Vector3.zero;
+                    }
+
+                    if (disableObject) gameObject.SetActive(false);
+
+                    ix++;
+                }
+                else
+                {
+                    objectsByCell.Add(cell, null);
                 }
             }
             return objectsByCell;
         }
 
-        public static GameObject Generate_MeshObject(List<SurfaceBlock> surfaceBlocks, GameObject prefab, Transform transform, List<SurfaceBlockState> filterOnStates, Transform folder)
+        public static GameObject Generate_MeshObject(List<SurfaceBlock> surfaceBlocks, GameObject prefab, Transform transform, Vector3 centerPosition, List<SurfaceBlockState> filterOnStates, Transform folder)
         {
             if (!prefab)
             {
@@ -694,7 +1057,10 @@ namespace ProceduralBase
             if (meshes.Count == 0) return null;
 
             Mesh finalMesh = MeshUtil.GenerateMeshFromVertexSurfaces(meshes);
-            result = MeshUtil.InstantiatePrefabWithMesh(prefab, finalMesh, transform.position);
+            MeshUtil.CenterMeshAtZero(finalMesh, centerPosition);
+
+            // result = MeshUtil.InstantiatePrefabWithMesh(prefab, finalMesh, Vector3.zero);
+            result = MeshUtil.InstantiatePrefabWithMesh(prefab, finalMesh, centerPosition);
 
             if (folder != null) result.transform.SetParent(folder);
             return result;
@@ -748,11 +1114,12 @@ namespace ProceduralBase
                 {
                     SurfaceBlockSide side = (SurfaceBlockSide)i;
                     Vector3[] sideCorners = GetCornersOnSide(side);
+                    int vetexLength = sideCorners.Length;
 
                     Mesh surfaceMesh = new Mesh();
-                    surfaceMesh.vertices = VectorUtil.InversePointsToArray(sideCorners.ToList(), transform);
-
-                    int vetexLength = sideCorners.Length;
+                    // surfaceMesh.vertices = VectorUtil.InversePointsToLocal_ToArray(sideCorners.ToList(), transform);
+                    // surfaceMesh.vertices = VectorUtil.TransformPointsToWorldPos_ToArray(sideCorners.ToList(), transform);
+                    surfaceMesh.vertices = sideCorners;
 
                     if (
                         side == SurfaceBlockSide.Front ||
@@ -963,62 +1330,30 @@ namespace ProceduralBase
             }
         }
 
-        // public void DrawSurfaceBlock()
-        // {
-        //     if (neighbors[(int)SurfaceBlockSide.Front] == null)
-        //     {
-        //         Vector3[] frontCorners = GetCornersOnSide(SurfaceBlockSide.Front);
-        //         Gizmos.DrawLine(frontCorners[0], frontCorners[1]);
-        //         Gizmos.DrawLine(frontCorners[1], frontCorners[3]);
-        //         Gizmos.DrawLine(frontCorners[3], frontCorners[2]);
-        //         Gizmos.DrawLine(frontCorners[2], frontCorners[0]);
-        //     }
-
-        //     if (neighbors[(int)SurfaceBlockSide.Right] == null)
-        //     {
-        //         Vector3[] rightCorners = GetCornersOnSide(SurfaceBlockSide.Right);
-        //         Gizmos.DrawLine(rightCorners[0], rightCorners[1]);
-        //         Gizmos.DrawLine(rightCorners[1], rightCorners[3]);
-        //         Gizmos.DrawLine(rightCorners[3], rightCorners[2]);
-        //         Gizmos.DrawLine(rightCorners[2], rightCorners[0]);
-        //     }
-
-        //     if (neighbors[(int)SurfaceBlockSide.Back] == null)
-        //     {
-        //         Vector3[] backCorners = GetCornersOnSide(SurfaceBlockSide.Back);
-        //         Gizmos.DrawLine(backCorners[0], backCorners[1]);
-        //         Gizmos.DrawLine(backCorners[1], backCorners[3]);
-        //         Gizmos.DrawLine(backCorners[3], backCorners[2]);
-        //         Gizmos.DrawLine(backCorners[2], backCorners[0]);
-        //     }
-
-        //     if (neighbors[(int)SurfaceBlockSide.Left] == null)
-        //     {
-        //         Vector3[] leftCorners = GetCornersOnSide(SurfaceBlockSide.Left);
-        //         Gizmos.DrawLine(leftCorners[0], leftCorners[1]);
-        //         Gizmos.DrawLine(leftCorners[1], leftCorners[3]);
-        //         Gizmos.DrawLine(leftCorners[3], leftCorners[2]);
-        //         Gizmos.DrawLine(leftCorners[2], leftCorners[0]);
-        //     }
-
-        //     if (neighbors[(int)SurfaceBlockSide.Top] == null)
-        //     {
-        //         Vector3[] topCorners = GetCornersOnSide(SurfaceBlockSide.Top);
-        //         Gizmos.DrawLine(topCorners[0], topCorners[1]);
-        //         Gizmos.DrawLine(topCorners[1], topCorners[2]);
-        //         Gizmos.DrawLine(topCorners[2], topCorners[3]);
-        //         Gizmos.DrawLine(topCorners[3], topCorners[0]);
-        //     }
-
-        //     if (neighbors[(int)SurfaceBlockSide.Bottom] == null)
-        //     {
-        //         Vector3[] bottomCorners = GetCornersOnSide(SurfaceBlockSide.Bottom);
-        //         Gizmos.DrawLine(bottomCorners[0], bottomCorners[1]);
-        //         Gizmos.DrawLine(bottomCorners[1], bottomCorners[2]);
-        //         Gizmos.DrawLine(bottomCorners[2], bottomCorners[3]);
-        //         Gizmos.DrawLine(bottomCorners[3], bottomCorners[0]);
-        //     }
-        // }
+        public void DrawNeighbors()
+        {
+            for (var i = 0; i < neighbors.Length; i++)
+            {
+                if (neighbors[i] != null && !neighbors[i].ignore)
+                {
+                    // Gizmos.color = Color.green;
+                    // Gizmos.DrawWireSphere(neighbors[i].Position, 0.2f);
+                    // Debug.Log("neighbor found on side: " + (SurfaceBlockSide)i);
+                }
+                else
+                {
+                    // Debug.Log("No neighbor on side: " + (SurfaceBlockSide)i);
+                    Gizmos.color = Color.white;
+                    Vector3[] sideCorners = GetCornersOnSide((SurfaceBlockSide)i);
+                    Gizmos.DrawLine(sideCorners[0], sideCorners[1]);
+                    Gizmos.DrawLine(sideCorners[1], sideCorners[3]);
+                    Gizmos.DrawLine(sideCorners[3], sideCorners[2]);
+                    Gizmos.DrawLine(sideCorners[2], sideCorners[0]);
+                    Gizmos.DrawLine(sideCorners[0], sideCorners[3]);
+                    Gizmos.DrawLine(sideCorners[2], sideCorners[1]);
+                }
+            }
+        }
 
         // public static SurfaceBlock[,,] CreateSurfaceBlocks(Vector3[,,] pointsMatrix, float size)
         // {
@@ -1163,7 +1498,6 @@ namespace ProceduralBase
             centerLookups = new_centerLookups;
             cornerLookups = new_cornerLookups;
         }
-
 
     }
 }

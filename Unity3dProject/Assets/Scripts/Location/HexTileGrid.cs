@@ -7,7 +7,6 @@ using ProceduralBase;
 
 namespace WFCSystem
 {
-
     public enum Option_CellGridType { Defualt = 0, RandomConsecutive = 1, ConsecutiveHost }
 
     public class HexTileGrid : MonoBehaviour
@@ -22,6 +21,9 @@ namespace WFCSystem
         List<Vector3> edgeSockPoints = new List<Vector3>();
         Dictionary<Vector3, Node> nodes = null;
 
+
+        List<HexagonTileTemplate> generatedTiles = null;
+
         HexagonCellPrototype entranceCell = null;
         HexagonSide entranceSide;
         Bounds entranceBounds;
@@ -30,7 +32,7 @@ namespace WFCSystem
         List<List<SurfaceBlock>> surfaceBlockClusters = null;
         Dictionary<HexagonCellPrototype, Dictionary<HexagonTileSide, List<Vector3>>> intersectionPointsBySideByCell = null;
         Dictionary<HexagonCellPrototype, List<SurfaceBlock>> surfaceBlocksByCell = null;
-
+        Dictionary<HexagonCellPrototype, Dictionary<HexagonTileSide, List<SurfaceBlock>>> tileInnerEdgesByCellSide = null;
         [SerializeField] private bool showCellGrids;
         [SerializeField] private CellDisplay_Type cellDisplayType = CellDisplay_Type.DrawCenterAndLines;
         [SerializeField] private bool showHighlights;
@@ -39,10 +41,15 @@ namespace WFCSystem
         [SerializeField] private HexCellSizes gridFilter_size = HexCellSizes.Default;
         [Header(" ")]
         [SerializeField] private bool showGridBounds;
+        [SerializeField] private bool showSurfaceBlocks = true;
         [SerializeField] private bool showSurfaceBlockGrid = true;
+        [SerializeField] private bool showSurfaceBlockEdgeSockets = true;
+        [Header(" ")]
+        [SerializeField] private bool highlight_SurfaceBlockEdgeSide;
+        [SerializeField] private HexagonTileSide highlightSide;
+        [Header(" ")]
+
         [SerializeField] private bool showNodes = true;
-        [SerializeField] private bool showIntersectionNodes = true;
-        [SerializeField] private bool showStructureEdgeSockets = true;
         [SerializeField] private bool showStructureBounds;
         [SerializeField] private bool showEdgeLines;
         [SerializeField] private bool showRawBoundsEdge;
@@ -65,8 +72,8 @@ namespace WFCSystem
         }
 
         [Header(" ")]
-        [Range(0, 128)][SerializeField] private int _highlightedEdgeCell;
-        private HexagonCellPrototype _highlightedCell = null;
+        [Range(0, 128)][SerializeField] private int _highlightedCell;
+        private HexagonCellPrototype _currentHighlightedCell = null;
 
         [Header(" ")]
 
@@ -109,16 +116,20 @@ namespace WFCSystem
         [SerializeField] private float centerPosYOffset = 0;
         [SerializeField] private bool resetPrototypes;
         [Header(" ")]
-        [SerializeField] private bool generate_meshTemplate;
+        // [SerializeField] 
+        private bool generate_meshTemplate;
+        [Header(" ")]
         [SerializeField] private bool generate_surfaceMeshTemplate;
         [Header(" ")]
+        [SerializeField] private bool generate_tiles;
+        [SerializeField] private bool instantiateOnGenerate;
+        [Header(" ")]
         [SerializeField] private bool execute_WFC;
+        [SerializeField] private bool allowRotations;
         [Header(" ")]
         [SerializeField] private TileDirectory tileDirectory;
         [SerializeField] private LocationMarkerPrefabOption locationPrefabOption;
         [SerializeField] private GameObject prefab;
-
-        // private WFC_Core wfc;
 
         #region Saved State
         Vector3 _lastPosition;
@@ -143,6 +154,7 @@ namespace WFCSystem
         }
         public Transform folder_Main { get; private set; } = null;
         public Transform folder_MeshObject { get; private set; } = null;
+        public Transform folder_GeneratedTiles { get; private set; } = null;
         public Transform[] _testPTs;
 
         #region Core / Init
@@ -150,7 +162,6 @@ namespace WFCSystem
         private bool _shouldUpdate;
         private void OnValidate()
         {
-
             if (
                 _gridSizeXZ != gridSizeXZ ||
                 _gridSizeY != gridSizeY
@@ -166,7 +177,6 @@ namespace WFCSystem
             }
 
             if (
-                execute_WFC ||
                 generate_meshTemplate ||
                 cellLookup_ByLayer_BySize == null || cellLookup_ByLayer_BySize.Count == 0
                 || resetPrototypes == true
@@ -212,26 +222,21 @@ namespace WFCSystem
             if (_shouldUpdate)
             {
                 _shouldUpdate = false;
-
                 // Debug.LogError("Update!");
                 RecalculateEdgePoints();
                 Generate();
             }
 
-            if (baseEdges != null)
+            if (allBaseCells != null)
             {
-                if (_highlightedEdgeCell == baseEdges.Count) _highlightedEdgeCell = 0;
-                _highlightedEdgeCell = Mathf.Clamp(_highlightedEdgeCell, 0, baseEdges.Count - 1);
+                int count = allBaseCells.Count;
+                if (_highlightedCell == count) _highlightedCell = 0;
+                _highlightedCell = Mathf.Clamp(_highlightedCell, 0, count - 1);
             }
-            else _highlightedEdgeCell = -1;
+            else _highlightedCell = -1;
 
-            if (execute_WFC)
-            {
-                execute_WFC = false;
-                Execute_WFC();
-            }
 
-            if (generate_surfaceMeshTemplate)
+            if (generate_surfaceMeshTemplate || generate_tiles)
             {
                 generate_surfaceMeshTemplate = false;
 
@@ -245,15 +250,32 @@ namespace WFCSystem
                     //         // SurfaceBlockState.Corner,
                     //     };
 
+                    // Debug.Log("Distance From World Center: " + Vector3.Distance(transform.position, Vector3.zero));
                     Dictionary<HexagonCellPrototype, GameObject> gameObjectsByCell = SurfaceBlock.Generate_MeshObjectsByCell(
                         surfaceBlocksByCell,
                         prefab,
                         transform,
                         null,
-                        folder_MeshObject
+                        false,
+                        folder_GeneratedTiles,
+                        true
                     );
+
+                    if (generate_tiles)
+                    {
+                        generatedTiles = HexagonTileTemplate.Generate_Tiles(gameObjectsByCell, folder_Main, instantiateOnGenerate);
+                        // generatedTiles = HexagonTileTemplate.Generate_Tiles_With_WFC_DryRun(gameObjectsByCell, tileDirectory.GetSocketDirectory(), false);
+                        // Debug.Log("Tiles generated: " + generatedTiles.Count);
+                    }
                 }
 
+                generate_tiles = false;
+            }
+
+            if (execute_WFC)
+            {
+                execute_WFC = false;
+                Execute_WFC();
             }
         }
 
@@ -275,15 +297,22 @@ namespace WFCSystem
 
         public void Evalaute_Folder()
         {
-            if (folder_Main == null)
-            {
-                folder_Main = new GameObject("Tile Folder" + this.gameObject.name).transform;
-                folder_Main.transform.SetParent(this.transform);
-            }
             if (folder_MeshObject == null)
             {
                 folder_MeshObject = new GameObject("Template Folder" + this.gameObject.name).transform;
                 folder_MeshObject.transform.SetParent(this.transform);
+            }
+            if (folder_GeneratedTiles == null)
+            {
+                folder_GeneratedTiles = new GameObject("Generated Tiles" + this.gameObject.name).transform;
+                folder_GeneratedTiles.transform.SetParent(this.transform);
+                // folder_GeneratedTiles.transform.position = Vector3.zero;
+                // folder_GeneratedTiles.transform.localPosition = Vector3.zero;
+            }
+            if (folder_Main == null)
+            {
+                folder_Main = new GameObject("WFC Tile" + this.gameObject.name).transform;
+                folder_Main.transform.SetParent(this.transform);
             }
         }
 
@@ -302,15 +331,28 @@ namespace WFCSystem
 
             Evalaute_Folder();
 
-            WFC_Core wfc = new WFC_Core(
-                    tileDirectory,
-                    HexCellUtil.OrganizeByLayer(cellLookup_ByLayer_BySize[(int)cellSize]),
-                    locationPrefabOption,
-                    folder_Main
-                );
-
-            wfc.ExecuteWFC();
-
+            if (generatedTiles != null && generatedTiles.Count > 0)
+            {
+                WFC_Template wfc = new WFC_Template(
+                        generatedTiles,
+                        HexCellUtil.OrganizeByLayer(cellLookup_ByLayer_BySize[(int)cellSize]),
+                        tileDirectory.GetSocketDirectory(),
+                        locationPrefabOption,
+                        folder_Main,
+                        allowRotations
+                    );
+                wfc.ExecuteWFC();
+            }
+            else
+            {
+                WFC_Core wfc = new WFC_Core(
+                        tileDirectory,
+                        HexCellUtil.OrganizeByLayer(cellLookup_ByLayer_BySize[(int)cellSize]),
+                        locationPrefabOption,
+                        folder_Main
+                    );
+                wfc.ExecuteWFC();
+            }
             return true;
         }
 
@@ -617,10 +659,7 @@ namespace WFCSystem
 
             cellLookup_ByLayer_BySize = new_cellLookup_ByLayer_BySize;
 
-
-
             return baseLayer;
-
             // int attempts = 3;
             // bool failed = false;
             // do
@@ -651,11 +690,10 @@ namespace WFCSystem
                 {
                     new_baseEdges.Add(cell);
 
-
                     new_edgeCellConnectorPoints.Add(cell, new Dictionary<HexagonSide, Vector3>());
                     new_edgeCellConnectorStep.Add(cell, new Dictionary<HexagonSide, int>());
 
-                    cell.sideEdgeSocket = new Dictionary<HexagonTileSide, List<HexSideEdgeSocket>>();
+                    // cell.sideEdgeSocket = new Dictionary<HexagonTileSide, List<HexSideEdgeSocket>>();
 
                     List<HexagonSide> neighborSides = cell.GetNeighborSides(Filter_CellType.Edge);
 
@@ -663,7 +701,7 @@ namespace WFCSystem
 
                     foreach (HexagonSide side in availablePointsBySide.Keys)
                     {
-                        HexagonSide relativeSide = HexCoreUtil.GetRelativeHexagonSideOnSharedRotation(side);
+                        HexagonSide relativeSide = HexCoreUtil.GetRelativeHexagonSide(side);
                         HexagonCellPrototype sideNeighbor = cell.neighborsBySide[(int)side];
 
                         int desiredStep = -1;
@@ -677,63 +715,19 @@ namespace WFCSystem
                         // desiredStep = desiredStep > -1 ? desiredStep : Calculate_RandomSocketEdgeStep();
 
                         new_edgeCellConnectorStep[cell].Add(side, desiredStep);
-
-                        // cell.sideEdgeSocket.Add(side, new List<HexSideEdgeSocket>());
-                        // HexSideEdgeSocket edgeSocket = new HexSideEdgeSocket();
-                        // edgeSocket.step = desiredStep;
-                        // edgeSocket.point = Calculate_SocketEdgePoint(cell, desiredStep, side);
-                        // cell.sideEdgeSocket[side].Add(edgeSocket);
-
-                        // int point_Variant = UnityEngine.Random.Range(0, availablePointsBySide[side].Length);
-                        // Vector3 item = availablePointsBySide[side][point_Variant];
-                        // new_edgeCellConnectorPoints[cell].Add(side, item);
-
                     }
-
-
-                    if (entranceCell == null)
-                    {
-                        List<HexagonSide> emptySides = cell.GetNeighborSides(Filter_CellType.NullValue);
-                        cell.SetEntryCell(true);
-                        entranceCell = cell;
-                        entranceSide = emptySides[UnityEngine.Random.Range(0, emptySides.Count)];
-
-                        Vector3[] boundsCorners = HexCoreUtil.GenerateHexagonPoints(cell.center, cell.size * model_cellBoundsSizeMult_entrance);
-                        Bounds bounds = VectorUtil.CalculateBounds_V2(boundsCorners.ToList());
-                        entranceBounds = bounds;
-                        // structureBounds.Add(bounds);
-
-                        // List<Vector3> boundsCorners = new List<Vector3>();
-                        // Vector3[] cornersOuter = HexCoreUtil.GetSideCorners(cell, entranceSide);
-                        // Vector3[] cornersOpposite = HexCoreUtil.GetSideCorners(cell, HexCoreUtil.OppositeSide(entranceSide));
-                        // float lerpMult = 0.5f;
-                        // Vector3[] cornersInner = new Vector3[2];
-                        // cornersInner[0] = Vector3.Lerp(cornersOuter[0], cornersOpposite[0], lerpMult);
-                        // cornersInner[1] = Vector3.Lerp(cornersOuter[1], cornersOpposite[1], lerpMult);
-
-                        // boundsCorners.AddRange(cornersOuter);
-                        // boundsCorners.AddRange(cornersInner);
-                        // Bounds bounds = VectorUtil.CalculateBounds_V2(boundsCorners.ToList());
-                        // entranceBounds = bounds;
-                        // structureBounds.Add(bounds);
-                    }
-
-                    // if (setEntry)
+                    // if (entranceCell == null)
                     // {
+                    //     List<HexagonSide> emptySides = cell.GetNeighborSides(Filter_CellType.NullValue);
+                    //     cell.SetEntryCell(true);
+                    //     entranceCell = cell;
+                    //     entranceSide = emptySides[UnityEngine.Random.Range(0, emptySides.Count)];
+
+                    //     Vector3[] boundsCorners = HexCoreUtil.GenerateHexagonPoints(cell.center, cell.size * model_cellBoundsSizeMult_entrance);
+                    //     Bounds bounds = VectorUtil.CalculateBounds_V2(boundsCorners.ToList());
+                    //     entranceBounds = bounds;
+                    //     // structureBounds.Add(bounds);
                     // }
-
-                    // Generate_HexSideStructures(cell, model_layersMax, model_layerOffeset);
-                    // cell.sideEdgeStructures = new Dictionary<HexagonSide, HexSideStructure>();
-                    // Dictionary<HexagonSide, Vector3[]> emptyPointsBySide = GenerateHexChildPointsOnSides(cell.center, cell.size, emptySides);
-                    // foreach (HexagonSide side in emptySides)
-                    // {
-                    //     Vector3 sidePoint = emptyPointsBySide[side][0];
-
-                    //     cell.sideEdgeStructures.Add(side, new HexSideStructure());
-                    //     cell.sideEdgeStructures[side].cornerFaces_outer.Add(sidePoint);
-                    // }
-
-                    // if (generate_meshTemplate) Create_MeshGameObject(cell, prefab);
                 }
                 else
                 {
@@ -785,19 +779,6 @@ namespace WFCSystem
                     }
 
                 }
-
-                // if (toAdd.Count >= 2) VectorUtil.SortPointsForNonOverlappingBorder(toAdd);
-                // if (toAdd.Count >= 2) VectorUtil.OrderPointsByClosestNeighbor_V3(toAdd, 1f);
-                // new_boundsEdgePoints.Add(toAdd[0]);
-                // for (int j = 1; j < toAdd.Count; j++)
-                // {
-                //     Vector3 last = toAdd[j - 1];
-                //     Vector3 point = toAdd[i];
-                //     if (VectorUtil.CheckCollisionOnSides(last, point))
-                //     {
-                //         new_boundsEdgePoints.Add(point);
-                //     }
-                // }
                 new_boundsEdgePoints.AddRange(toAdd);
             }
 
@@ -938,14 +919,12 @@ namespace WFCSystem
                 // if (generate_meshTemplate) Create_MeshGameObject(cell, prefab);
             }
 
-            _highlightedCell = null;
+            _currentHighlightedCell = null;
 
             edgeSockPoints = newEdgeSockPoints;
 
             edgeCellConnectorPoints = new_edgeCellConnectorPoints;
             edgeCellConnectorStep = new_edgeCellConnectorStep;
-
-            // Node.Generate_AllHexSideStructures(nodes, model_layersMax, model_layerOffeset);
 
             foreach (var cell in baseEdges)
             {
@@ -996,26 +975,6 @@ namespace WFCSystem
         Dictionary<string, Color> customColors = UtilityHelpers.CustomColorDefaults();
         private void OnDrawGizmos()
         {
-            // if (_testPTs != null)
-            // {
-            //     Gizmos.color = Color.red;
-            //     foreach (var item in _testPTs)
-            //     {
-            //         Gizmos.DrawSphere(item.position, 0.4f);
-            //     }
-            //     if (VectorUtil.HasAngleApproximate(_testPTs[0].position, _testPTs[1].position))
-            //     {
-            //         Gizmos.DrawLine(_testPTs[0].position, _testPTs[1].position);
-            //     }
-            // }
-            // Gizmos.color = Color.white;
-            // Vector3[] cubePTs = VectorUtil.CreateCube(transform.position, 1f);
-            // foreach (var item in cubePTs)
-            // {
-            //     Gizmos.DrawSphere(item, 0.2f);
-            // }
-
-
             if (_lastPosition != transform.position)
             {
                 resetPrototypes = true;
@@ -1027,14 +986,6 @@ namespace WFCSystem
                 foreach (var node in nodes.Values)
                 {
                     node.DrawLinesAndPoints();
-                }
-            }
-
-            if (showIntersectionNodes && nodes != null)
-            {
-                foreach (var node in nodes.Values)
-                {
-                    if (node.isIntersectionNode) node.DrawLinesAndPoints();
                 }
             }
 
@@ -1064,6 +1015,14 @@ namespace WFCSystem
                 }
                 VectorUtil.DrawPointLinesInGizmos(boundsEdgePoints);
             }
+
+            // if (showIntersectionNodes && nodes != null)
+            // {
+            //     foreach (var node in nodes.Values)
+            //     {
+            //         if (node.isIntersectionNode) node.DrawLinesAndPoints();
+            //     }
+            // }
 
             if (showStructureBounds && structureBounds != null)
             {
@@ -1100,7 +1059,7 @@ namespace WFCSystem
                 // }
             }
 
-            if (showSurfaceBlockGrid)
+            if (showSurfaceBlocks)
             {
                 if (gridStructureBounds != null)
                 {
@@ -1114,15 +1073,14 @@ namespace WFCSystem
                         // (Vector3[,,] points, float spacing) = VectorUtil.Generate3DGrid(gridStructureBounds, baseCellSize, gridSizeY, transform.position.y);
                         // (Vector3[,,] points, float spacing) = VectorUtil.Generate3DGrid(gridStructureBounds, gridSizeXZ, gridSizeY, transform.position.y);
                         surfaceBlocksGrid = SurfaceBlock.CreateSurfaceBlocks(points, structureBounds, spacing);
-                        surfaceBlocksGrid = SurfaceBlock.ClearInnerBlocks(surfaceBlocksGrid);
+                        // surfaceBlocksGrid = SurfaceBlock.ClearInnerBlocks(surfaceBlocksGrid);
 
                         SurfaceBlock.GetViableEntryways(surfaceBlocksGrid, baseEdges, 3);
 
                         surfaceBlocksByCell = SurfaceBlock.GetSurfaceBlocksByCell(surfaceBlocksGrid, cellLookup_ByLayer_BySize[(int)cellSize], cellLayerOffset);
-                        // Dictionary<HexagonCellPrototype, List<SurfaceBlock>> resultsByCell = SurfaceBlock.GetSurfaceBlocksByCell(surfaceBlocksGrid, allBaseCells);
-                        SurfaceBlock.EvaluateTileEdges(surfaceBlocksGrid);
+                        surfaceBlocksGrid = SurfaceBlock.ClearInnerBlocks(surfaceBlocksGrid);
 
-                        intersectionPointsBySideByCell = SurfaceBlock.GetIntersectionPointsBySideByCell(surfaceBlocksByCell);
+                        SurfaceBlock.EvaluateTileEdges(surfaceBlocksGrid);
 
                         List<SurfaceBlockState> filterOnStates = new List<SurfaceBlockState>() {
                             SurfaceBlockState.Entry,
@@ -1147,37 +1105,91 @@ namespace WFCSystem
                                 }
                             }
                         }
+                        tileInnerEdgesByCellSide = SurfaceBlock.GetTileInnerEdgesByCellSide(surfaceBlocksByCell);
+
+                        Dictionary<HexagonCellPrototype, Dictionary<HexagonTileSide, TileSocketProfile>> cellTileSocketProfiles =
+                            SurfaceBlock.Generate_CellTileSocketProfiles(tileInnerEdgesByCellSide);
+
+                        // intersectionPointsBySideByCell = SurfaceBlock.GetIntersectionPointsBySideByCell(surfaceBlocksByCell);
                     }
                     else
                     {
-                        SurfaceBlock.DrawGrid(surfaceBlocksGrid, showHighlightedCell ? _highlightedCell : null);
-
-                        if (surfaceBlockClusters != null && surfaceBlockClusters.Count > 0)
+                        if (showSurfaceBlockGrid)
                         {
-                            Gizmos.color = Color.red;
-                            foreach (var cluster in surfaceBlockClusters)
-                            {
-                                foreach (var item in cluster)
-                                {
-                                    Gizmos.DrawSphere(item.Position, 0.33f);
-                                }
-                            }
+                            SurfaceBlock.DrawGrid(surfaceBlocksGrid, showHighlightedCell ? _currentHighlightedCell : null);
                         }
 
-                        if (intersectionPointsBySideByCell != null)
+
+                        if (showSurfaceBlockEdgeSockets && surfaceBlocksByCell != null)
                         {
                             Gizmos.color = Color.magenta;
-                            foreach (var kvp in intersectionPointsBySideByCell.Values)
+                            if (tileInnerEdgesByCellSide != null)
                             {
-                                foreach (var points in kvp.Values)
+                                foreach (var cell in tileInnerEdgesByCellSide.Keys)
                                 {
-                                    foreach (var point in points)
+                                    if (showHighlightedCell && cell != _currentHighlightedCell) continue;
+
+                                    foreach (var side in tileInnerEdgesByCellSide[cell].Keys)
                                     {
-                                        Gizmos.DrawSphere(point, 0.1f);
+                                        if (highlight_SurfaceBlockEdgeSide && side != highlightSide) continue;
+
+                                        foreach (var block in tileInnerEdgesByCellSide[cell][side])
+                                        {
+                                            Gizmos.DrawSphere(block.Position, 0.3f);
+                                        }
                                     }
+
                                 }
                             }
+
+                            // Gizmos.color = Color.magenta;
+
+                            // foreach (var cell in surfaceBlocksByCell.Keys)
+                            // {
+                            //     if (showHighlightedCell == false || (showHighlightedCell && cell == _currentHighlightedCell))
+                            //     {
+                            //         if (cell.tileSocketProfileBySide == null) continue;
+
+                            //         foreach (var socketProfile in cell.tileSocketProfileBySide.Values)
+                            //         {
+                            //             if (socketProfile != null && socketProfile.sockets != null)
+                            //             {
+                            //                 foreach (var point in socketProfile.sockets.Keys)
+                            //                 {
+                            //                     Gizmos.DrawSphere(point, 0.1f);
+                            //                 }
+                            //             }
+                            //         }
+                            //     }
+                            // }
                         }
+
+                        // if (surfaceBlockClusters != null && surfaceBlockClusters.Count > 0)
+                        // {
+                        //     Gizmos.color = Color.red;
+                        //     foreach (var cluster in surfaceBlockClusters)
+                        //     {
+                        //         foreach (var item in cluster)
+                        //         {
+                        //             Gizmos.DrawSphere(item.Position, 0.33f);
+                        //         }
+                        //     }
+                        // }
+
+                        // if (showSurfaceBlockEdgeSockets && intersectionPointsBySideByCell != null)
+                        // {
+                        //     Gizmos.color = Color.magenta;
+                        //     foreach (var kvp in intersectionPointsBySideByCell.Values)
+                        //     {
+                        //         foreach (var points in kvp.Values)
+                        //         {
+                        //             foreach (var point in points)
+                        //             {
+                        //                 Gizmos.DrawSphere(point, 0.1f);
+                        //             }
+                        //         }
+                        //     }
+                        // }
                     }
                 }
             }
@@ -1207,7 +1219,7 @@ namespace WFCSystem
 
             if (showEdgeLines)
             {
-                if (baseEdges == null || baseEdges.Count == 0)
+                if (allBaseCells == null || allBaseCells.Count == 0)
                 {
                     showEdgeLines = false;
                 }
@@ -1215,21 +1227,21 @@ namespace WFCSystem
                 {
                     List<Vector3> edgeSocketPoints = new List<Vector3>();
 
-                    for (var i = 0; i < baseEdges.Count; i++)
+                    for (var i = 0; i < allBaseCells.Count; i++)
                     {
-                        HexagonCellPrototype edge = baseEdges[i];
+                        HexagonCellPrototype currentCell = allBaseCells[i];
 
-                        if (showHighlightedCell && _highlightedEdgeCell == i)
+                        if (showHighlightedCell && _highlightedCell == i)
                         {
-                            if (_highlightedCell != edge) _highlightedCell = edge;
+                            if (_currentHighlightedCell != currentCell) _currentHighlightedCell = currentCell;
 
                             Gizmos.color = customColors["purple"];
-                            Gizmos.DrawWireSphere(edge.center, 1f);
+                            Gizmos.DrawWireSphere(currentCell.center, 1f);
 
-                            if (edge.borderPoints != null)
+                            if (currentCell.borderPoints != null)
                             {
                                 Gizmos.color = customColors["orange"];
-                                foreach (var item in edge.borderPoints.Values)
+                                foreach (var item in currentCell.borderPoints.Values)
                                 {
                                     Gizmos.DrawSphere(item, 0.4f);
                                 }
@@ -1237,114 +1249,70 @@ namespace WFCSystem
                         }
                         else
                         {
-                            if (edge.isEntryCell)
-                            {
-                                Gizmos.color = Color.magenta;
-                                Gizmos.DrawWireSphere(edge.center, 0.5f);
-                            }
-                            else
-                            {
-                                Gizmos.color = Color.red;
-                                Gizmos.DrawWireSphere(edge.center, 0.33f);
-                            }
-                            // edgeSocketPoints.Add(edge.center);
-
-                            if (showStructureEdgeSockets)
-                            {
-                                Gizmos.color = Color.blue;
-                                foreach (var item in edge.sideEdgeSocket.Keys)
-                                {
-                                    Gizmos.DrawWireSphere(edge.sideEdgeSocket[item][0].point, 0.3f);
-                                }
-                            }
-
-                            // Gizmos.color = Color.green;
-                            // foreach (var item in edge.rawStructureBorderPoints)
+                            // if (edge.isEntryCell)
                             // {
-                            //     Gizmos.DrawWireSphere(item, 0.6f);
+                            //     Gizmos.color = Color.magenta;
+                            //     Gizmos.DrawWireSphere(edge.center, 0.5f);
+                            // }
+                            // else
+                            // {
+                            //     Gizmos.color = Color.red;
+                            //     Gizmos.DrawWireSphere(edge.center, 0.33f);
                             // }
 
-                            Gizmos.color = Color.black;
-                            foreach (var item in edge.borderSurfaceStructures)
-                            {
-                                item.DrawSurfacePoints();
-                            }
 
-                            List<HexagonSide> neighborSides = edge.GetNeighborSides(Filter_CellType.Edge);
+                            // Gizmos.color = Color.black;
+                            // foreach (var item in edge.borderSurfaceStructures)
+                            // {
+                            //     item.DrawSurfacePoints();
+                            // }
 
-                            foreach (HexagonSide side in neighborSides)
-                            {
-                                int _side = (int)side;
+                            // List<HexagonSide> neighborSides = edge.GetNeighborSides(Filter_CellType.Edge);
 
-                                int step = edgeCellConnectorStep[edge][side];
-                                Vector3 sidePoint = Calculate_SocketEdgePoint(edge, step, side);
-                                HexagonSide relativeSide = HexCoreUtil.GetRelativeHexagonSideOnSharedRotation(side);
+                            // foreach (HexagonSide side in neighborSides)
+                            // {
+                            //     int _side = (int)side;
 
-                                HexagonCellPrototype sideNeighbor = edge.neighborsBySide[(int)side];
-                                Vector3 sideNeighborPoint = Calculate_SocketEdgePoint(sideNeighbor, edgeCellConnectorStep[sideNeighbor][relativeSide], relativeSide);
+                            //     int step = edgeCellConnectorStep[edge][side];
+                            //     Vector3 sidePoint = Calculate_SocketEdgePoint(edge, step, side);
+                            //     HexagonSide relativeSide = HexCoreUtil.GetRelativeHexagonSideOnSharedRotation(side);
 
-                                edgeSocketPoints.Add(sidePoint);
+                            //     HexagonCellPrototype sideNeighbor = edge.neighborsBySide[(int)side];
+                            //     Vector3 sideNeighborPoint = Calculate_SocketEdgePoint(sideNeighbor, edgeCellConnectorStep[sideNeighbor][relativeSide], relativeSide);
 
-                                // Vector3 sidePoint = edgeCellConnectorPoints[edge][side];
-                                // HexagonSide relativeSide = HexCoreUtil.GetRelativeHexagonSideOnSharedRotation(side);
+                            //     edgeSocketPoints.Add(sidePoint);
+                            // }
 
-                                // HexagonCellPrototype sideNeighbor = edge.neighborsBySide[(int)side];
-                                // Vector3 sideNeighborPoint = edgeCellConnectorPoints[sideNeighbor][relativeSide];
+                            // List<HexagonSide> emptySides = edge.GetNeighborSides(Filter_CellType.NullValue);
 
-                                // Gizmos.color = Color.red;
-                                // Gizmos.DrawLine(sidePoint, sideNeighborPoint);
+                            // if (edge.isEntryCell)
+                            // {
+                            //     Dictionary<HexagonSide, Vector3[]> emptyPointsBySide = GenerateHexChildPointsOnSides(edge.center, edge.size, emptySides);
+                            //     foreach (HexagonSide side in emptySides)
+                            //     {
+                            //         Vector3 sidePoint = emptyPointsBySide[side][0];
+                            //         Gizmos.color = Color.blue;
+                            //         Gizmos.DrawSphere(sidePoint, 0.34f);
+                            //         // Gizmos.color = Color.yellow;
+                            //         // edge.sideEdgeStructures[side].DrawSurfacePoints();
+                            //     }
 
-                                // HexagonSide internalPointNeighborSide = (HexagonSide)((_side + 1) % 6);
-                                // if (edge.sideEdgeStructures.ContainsKey(internalPointNeighborSide) == false)
-                                // {
-                                //     internalPointNeighborSide = (HexagonSide)((_side + 5) % 6);
-                                //     if (edge.sideEdgeStructures.ContainsKey(internalPointNeighborSide))
-                                //     {
-                                //         Gizmos.DrawLine(sidePoint, edge.sideEdgeStructures[internalPointNeighborSide].cornerFaces_outer[0]);
-                                //     }
-                                // }
-                                // else
-                                // {
-                                //     Gizmos.DrawLine(sidePoint, edge.sideEdgeStructures[internalPointNeighborSide].cornerFaces_outer[0]);
-                                // }
+                            //     Vector3[] corners = HexCoreUtil.GetSideCorners(edge, entranceSide);
+                            //     Gizmos.color = Color.magenta;
+                            //     foreach (var item in corners)
+                            //     {
+                            //         Gizmos.DrawSphere(item, 0.24f);
+                            //     }
+                            //     List<Vector3> baseDoorwayPoints = Generate_DoorwayPoints(2, corners[0], corners[1]);
 
-                                // Gizmos.DrawLine(sidePoint, edge.center);
-
-                                // Gizmos.color = Color.green;
-                                // Gizmos.DrawSphere(sidePoint, 0.24f);
-                            }
-
-                            List<HexagonSide> emptySides = edge.GetNeighborSides(Filter_CellType.NullValue);
-
-                            if (edge.isEntryCell)
-                            {
-                                Dictionary<HexagonSide, Vector3[]> emptyPointsBySide = GenerateHexChildPointsOnSides(edge.center, edge.size, emptySides);
-                                foreach (HexagonSide side in emptySides)
-                                {
-                                    Vector3 sidePoint = emptyPointsBySide[side][0];
-                                    Gizmos.color = Color.blue;
-                                    Gizmos.DrawSphere(sidePoint, 0.34f);
-                                    // Gizmos.color = Color.yellow;
-                                    // edge.sideEdgeStructures[side].DrawSurfacePoints();
-                                }
-
-                                Vector3[] corners = HexCoreUtil.GetSideCorners(edge, entranceSide);
-                                Gizmos.color = Color.magenta;
-                                foreach (var item in corners)
-                                {
-                                    Gizmos.DrawSphere(item, 0.24f);
-                                }
-                                List<Vector3> baseDoorwayPoints = Generate_DoorwayPoints(2, corners[0], corners[1]);
-
-                                List<Vector3> allDoorwayPoints = VectorUtil.DuplicatePositionsToNewYPos(baseDoorwayPoints, model_layerOffeset, model_layersMax, true);
-                                foreach (var item in allDoorwayPoints)
-                                {
-                                    Gizmos.DrawSphere(item, 0.24f);
-                                }
+                            //     List<Vector3> allDoorwayPoints = VectorUtil.DuplicatePositionsToNewYPos(baseDoorwayPoints, model_layerOffeset, model_layersMax, true);
+                            //     foreach (var item in allDoorwayPoints)
+                            //     {
+                            //         Gizmos.DrawSphere(item, 0.24f);
+                            //     }
 
 
-                            }
-
+                            // }
 
                         }
 
@@ -1984,7 +1952,7 @@ namespace WFCSystem
             // Create a new mesh to represent the current surface
             Mesh surfaceMesh = new Mesh();
             // surfaceMesh.vertices = GetSurfacePoints(transform);
-            surfaceMesh.vertices = VectorUtil.InversePointsToArray(points, transform);
+            surfaceMesh.vertices = VectorUtil.InversePointsToLocal_ToArray(points, transform);
 
             if (surfaceType == MeshVertexSurfaceType.Bottom)
             {
@@ -2475,40 +2443,6 @@ namespace WFCSystem
 
             return orderedPoints;
         }
-        // public static List<Vector3> GetOrderedPoints(List<Node> nodes)
-        // {
-        //     List<Vector3> orderedPoints = new List<Vector3>();
-        //     HashSet<Vector3> added = new HashSet<Vector3>();
-        //     // Start with the first node in the list
-        //     Node currentNode = nodes[0];
-        //     // Keep track of the initial node to detect when the traversal completes
-        //     Node initialNode = currentNode;
-        //     int attempts = 999;
-        //     Node lastNode = currentNode;
-        //     do
-        //     {
-
-        //         if (added.Contains(currentNode.Position) == false)
-        //         {
-        //             orderedPoints.Add(currentNode.Position);
-        //             added.Add(currentNode.Position);
-        //             lastNode = currentNode;
-        //             //     currentNode = currentNode.GetClosestNodeInSet(lastNode, added);
-        //             // }
-        //             // else
-        //             // {
-        //             //     currentNode = currentNode.GetClosestNodeInSet(lastNode, added);
-        //         }
-
-        //         currentNode = added.Contains(currentNode.NeighborA.Position) ? currentNode.NeighborB : currentNode.NeighborA;
-        //         if (currentNode == null) currentNode = lastNode.GetClosestNodeInSet(lastNode, added);
-
-        //         attempts--;
-        //     }
-        //     while (currentNode != null && attempts > 0 && orderedPoints.Count < nodes.Count); // currentNode != initialNode);
-
-        //     return orderedPoints;
-        // }
 
         public Node GetClosestNodeInSet(Node outerNode, HashSet<Vector3> added)
         {

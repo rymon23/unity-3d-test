@@ -874,28 +874,57 @@ namespace WFCSystem
             return new Vector3[2] { cell.cornerPoints[cornerIX.x], cell.cornerPoints[cornerIX.y] };
         }
 
-        public static HexagonSide GetRelativeHexagonSideOnSharedRotation(HexagonSide side)
+
+        public static HexagonTileSide GetRotatedSide(HexagonSide side, int rotation)
+        {
+            int sideCount = 6;
+            int rotatedIndex = ((int)side + rotation) % sideCount;
+
+            return (HexagonTileSide)rotatedIndex;
+        }
+
+        public static HexagonTileSide GetRelativeHexagonSide(HexagonTileSide side)
+        {
+            // Assumes shared rotation
+            switch (side)
+            {
+                case (HexagonTileSide.Front):
+                    return HexagonTileSide.Back;
+                case (HexagonTileSide.FrontRight):
+                    return HexagonTileSide.BackLeft;
+                case (HexagonTileSide.Back):
+                    return HexagonTileSide.Front;
+                case (HexagonTileSide.FrontLeft):
+                    return HexagonTileSide.BackRight;
+                case (HexagonTileSide.BackRight):
+                    return HexagonTileSide.FrontLeft;
+                case (HexagonTileSide.BackLeft):
+                    return HexagonTileSide.FrontRight;
+                case (HexagonTileSide.Top):
+                    return HexagonTileSide.Bottom;
+                case (HexagonTileSide.Bottom):
+                    return HexagonTileSide.Top;
+                default:
+                    return HexagonTileSide.Front;
+            }
+        }
+
+        public static HexagonSide GetRelativeHexagonSide(HexagonSide side)
         {
             switch (side)
             {
                 case (HexagonSide.Front):
                     return HexagonSide.Back;
-
                 case (HexagonSide.FrontRight):
                     return HexagonSide.BackLeft;
-
                 case (HexagonSide.Back):
                     return HexagonSide.Front;
-
                 case (HexagonSide.FrontLeft):
                     return HexagonSide.BackRight;
-
                 case (HexagonSide.BackRight):
                     return HexagonSide.FrontLeft;
-
                 case (HexagonSide.BackLeft):
                     return HexagonSide.FrontRight;
-
                 default:
                     return HexagonSide.Front;
             }

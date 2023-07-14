@@ -121,6 +121,29 @@ public static class VectorUtil
         );
     }
 
+    public static Vector3 CalculateOffset(Vector3 point, Vector3 center) => (point - center);
+    public static Vector3 CalculateOffsetAbs(Vector3 point, Vector3 center)
+    {
+        Vector3 offset = point - center;
+        return new Vector3(Mathf.Abs(offset.x), Mathf.Abs(offset.y), Mathf.Abs(offset.z));
+    }
+
+
+    public static Vector3 GetPointBetween(Vector3 point1, Vector3 point2)
+    {
+        return (point1 + point2) / 2f;
+    }
+
+    public static Vector3 CenterPointAtZero(Vector3 point, Vector3 currentCenter)
+    {
+        // Calculate the offset required to move the current position to Vector3.zero
+        Vector3 offset = Vector3.zero - currentCenter;
+
+        Vector3 newPosition = point;
+        newPosition += offset;
+
+        return newPosition;
+    }
 
     public static Vector3 RoundVector3To1Decimal(Vector3 v)
     {
@@ -314,12 +337,21 @@ public static class VectorUtil
         rightPoint = position + (distance * right);
     }
 
-    public static Vector3[] InversePointsToArray(List<Vector3> points, Transform transform)
+    public static Vector3[] InversePointsToLocal_ToArray(List<Vector3> points, Transform transform)
     {
         Vector3[] worldPositions = new Vector3[points.Count];
         for (int i = 0; i < worldPositions.Length; i++)
         {
             worldPositions[i] = transform.InverseTransformPoint(points[i]);
+        }
+        return worldPositions;
+    }
+    public static Vector3[] TransformPointsToWorldPos_ToArray(List<Vector3> points, Transform transform)
+    {
+        Vector3[] worldPositions = new Vector3[points.Count];
+        for (int i = 0; i < worldPositions.Length; i++)
+        {
+            worldPositions[i] = transform.TransformPoint(points[i]);
         }
         return worldPositions;
     }

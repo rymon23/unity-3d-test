@@ -359,29 +359,29 @@ namespace WFCSystem
                                 neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(GlobalSockets.Path_Generic);
                                 neighborCornerSockets.topCorners = GetDefaultSideSocketSet(GlobalSockets.Path_Generic);
                             }
-                            else if (isLeveledCell)
-                            {
-                                GlobalSockets defaultSocketId;
+                            // else if (isLeveledCell)
+                            // {
+                            //     GlobalSockets defaultSocketId;
 
-                                if (isLeveledEdge)
-                                {
-                                    if (!sideNeighbor.isLeveledCell)
-                                    {
-                                        defaultSocketId = GlobalSockets.Unassigned_InnerCell;
-                                    }
-                                    else
-                                    {
-                                        defaultSocketId = sideNeighbor.isLeveledEdge ? GlobalSockets.Leveled_Edge_Part : defaultSocketId = GlobalSockets.Leveled_Inner;
-                                    }
-                                }
-                                else
-                                {
-                                    defaultSocketId = GlobalSockets.Leveled_Inner;
-                                }
-                                neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(defaultSocketId);
-                                neighborCornerSockets.topCorners = GetDefaultSideSocketSet(defaultSocketId);
+                            //     if (isLeveledEdge)
+                            //     {
+                            //         if (!sideNeighbor.isLeveledCell)
+                            //         {
+                            //             defaultSocketId = GlobalSockets.Unassigned_InnerCell;
+                            //         }
+                            //         else
+                            //         {
+                            //             defaultSocketId = sideNeighbor.isLeveledEdge ? GlobalSockets.Leveled_Edge_Part : defaultSocketId = GlobalSockets.Leveled_Inner;
+                            //         }
+                            //     }
+                            //     else
+                            //     {
+                            //         defaultSocketId = GlobalSockets.Leveled_Inner;
+                            //     }
+                            //     neighborCornerSockets.bottomCorners = GetDefaultSideSocketSet(defaultSocketId);
+                            //     neighborCornerSockets.topCorners = GetDefaultSideSocketSet(defaultSocketId);
 
-                            }
+                            // }
                             else
                             {
                                 GlobalSockets defaultSocketId;
@@ -389,14 +389,14 @@ namespace WFCSystem
                                 if (IsGridEdge())
                                 {
                                     // Edge Connectors
-                                    if (GetEdgeCellType() == EdgeCellType.Connector && (sideNeighbor.GetParenCellId() != GetParenCellId()))
-                                    {
-                                        defaultSocketId = GlobalSockets.Unset_Edge_Connector;
-                                    }
-                                    else
-                                    {
-                                        defaultSocketId = (useWalledEdgePreference && sideNeighbor.isEdgeCell) ? GlobalSockets.Unassigned_EdgeCell : GlobalSockets.Unassigned_InnerCell;
-                                    }
+                                    // if (GetEdgeCellType() == EdgeCellType.Connector && (sideNeighbor.GetParenCellId() != GetParenCellId()))
+                                    // {
+                                    //     defaultSocketId = GlobalSockets.Unset_Edge_Connector;
+                                    // }
+                                    // else
+                                    // {
+                                    defaultSocketId = (useWalledEdgePreference && sideNeighbor.isEdgeCell) ? GlobalSockets.Unassigned_EdgeCell : GlobalSockets.Unassigned_InnerCell;
+                                    // }
                                 }
                                 else
                                 {
@@ -616,6 +616,13 @@ namespace WFCSystem
             currentTile = (IHexagonTile)newTile;
             currentTileRotation = rotation;
             isCurrentTileInverted = inverted;
+        }
+
+        public void SetTile(HexagonTileTemplate newTile, int rotation, bool inverted = false)
+        {
+            // currentTile_V2 = newTile;
+            // currentTileRotation = rotation;
+            // isCurrentTileInverted = inverted;
         }
 
         // public void SetTile(HexagonTile newTile, int rotation)

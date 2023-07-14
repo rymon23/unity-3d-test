@@ -1,32 +1,106 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEditor;
 using ProceduralBase;
+using System.Linq;
 using WFCSystem;
 
 [System.Serializable]
 public class BuildingGenerator : MonoBehaviour
 {
-    [SerializeField] private Vector3[] points;
-    // [SerializeField] private Vector3[] doorwayPoints;
-    [SerializeField] private float width = 4;
-
-    [SerializeField] private float depth = 1;
-
-    [SerializeField] private float height = 3;
-    [SerializeField] private int resolution = 12;
-    [SerializeField] private int sideFeaturePoints = 4;
-    private void Start()
-    {
-        // GenerateBuildingPoints();
-    }
+    [Range(12, 128)][SerializeField] private float boundsSize = 25;
+    [Range(0.25f, 20f)][SerializeField] private float baseCellSize = 1f;
+    SurfaceBlock[,,] surfaceBlocksGrid;
+    // [SerializeField] private float width = 4;
+    // [SerializeField] private float depth = 1;
+    // [SerializeField] private float height = 3;
 
     private void OnValidate()
     {
-        // GenerateBuildingPoints();
+        if (
+             _lastPosition != transform.position
+            || _boundsSize != boundsSize
+            || _baseCellSize != baseCellSize
+            // || _cellLayerOffset != cellLayerOffset
+            // || _centerPosYOffset != centerPosYOffset
+            )
+        {
+            surfaceBlocksGrid = null;
 
-        // doorwayPoints = GenerateDoorwayPoints();
+            _lastPosition = transform.position;
+
+            boundsSize = UtilityHelpers.RoundToNearestStep(boundsSize, 2f);
+            _boundsSize = boundsSize;
+
+            baseCellSize = UtilityHelpers.RoundToNearestStep(baseCellSize, 0.25f);
+            _baseCellSize = baseCellSize;
+        }
+    }
+
+    #region Saved State
+    Vector3 _lastPosition;
+    float _boundsSize;
+    float _baseCellSize;
+
+    #endregion
+
+
+    private void OnDrawGizmos()
+    {
+        // Gizmos.color = Color.white;
+        // Vector3[] cubePTs = VectorUtil.CreateCube(transform.position, 2f);
+        // foreach (var item in cubePTs)
+        // {
+        //     Gizmos.DrawSphere(item, 0.2f);
+        // }
+        // Gizmos.DrawSphere(cubePTs[0], 0.2f);
+
+        // Vector3[] corners = VectorUtil.CreateCube(position, size);
+        // VectorUtil.DrawGridPointsGizmos(points);
+
+        // Vector3[] neighborCenters = GenerateNeighborCenters(transform.position, 2);
+        // foreach (var item in neighborCenters)
+        // {
+        //     Gizmos.DrawSphere(item, 0.2f);
+        // }
+        // Gizmos.DrawSphere(neighborCenters[(int)SurfaceBlockSide.Top], 0.2f);
+
+        if (surfaceBlocksGrid == null)
+        {
+            // Vector3[,,] points = Generate3DGrid(transform.position, 5, 5, 5, 1);
+            // Vector3[,,] points = VectorUtil.Generate3DGrid(transform.position, 5, 5, 5, 1);
+
+            Vector3[] boundsBlock = SurfaceBlock.CreateCorners(transform.position, boundsSize);
+            Bounds totalBounds = VectorUtil.CalculateBounds_V2(boundsBlock.ToList());
+            (
+                Vector3[,,] points,
+                float spacing
+            ) = VectorUtil.Generate3DGrid(totalBounds, baseCellSize, transform.position.y, boundsSize);
+
+            List<Bounds> structureBounds = new List<Bounds>() { totalBounds };
+            surfaceBlocksGrid = SurfaceBlock.CreateSurfaceBlocks(points, structureBounds, spacing);
+        }
+        else
+        {
+            SurfaceBlock.DrawGrid(surfaceBlocksGrid);
+        }
+
+        // (Vector3[] allPoints, Vector3[] archPoints, Vector3[] doorwayPoints) = GenerateArchAndDoorwayPoints(width, height, depth, resolution, transform);
+        // // (Vector3[] allPoints, Vector3[] archBottomPoints) = GenerateArchPoints(width, height, depth);
+        // // points = allPoints;
+        // Gizmos.color = Color.grey;
+
+        // // Draw lines between the points
+        // for (int i = 0; i < archPoints.Length - 1; i++)
+        // {
+        //     Gizmos.DrawLine(archPoints[i], archPoints[i + 1]);
+        // }
+        // // for (int i = 0; i < archBottomPoints.Length; i++)
+        // // {
+        // //     Gizmos.color = Color.red;
+        // //     Gizmos.DrawSphere(archBottomPoints[i], 0.2f);
+        // // }
+        // // Gizmos.color = Color.blue;
     }
 
 
@@ -59,27 +133,6 @@ public class BuildingGenerator : MonoBehaviour
         }
         return points;
     }
-
-    // private void OnDrawGizmos()
-    // {
-    //     if (doorwayPoints == null) return;
-
-    //     for (int i = 0; i < doorwayPoints.Length; i++)
-    //     {
-    //         // Draw a sphere at each point
-    //         Gizmos.DrawSphere(doorwayPoints[i], 0.1f);
-
-    //         // Draw lines connecting neighboring doorwayPoints
-    //         if (i < doorwayPoints.Length - 1)
-    //         {
-    //             Gizmos.DrawLine(doorwayPoints[i], doorwayPoints[i + 1]);
-    //         }
-    //         else if (i == doorwayPoints.Length - 1)
-    //         {
-    //             Gizmos.DrawLine(doorwayPoints[i], doorwayPoints[0]);
-    //         }
-    //     }
-    // }
 
     public static (Vector3[], Vector3[]) GenerateArchPoints(float width, float height, float depth, int resolution)
     {
@@ -168,296 +221,6 @@ public class BuildingGenerator : MonoBehaviour
 
         return (points, archPoints, doorwayPoints);
     }
-
-
-    // public (Vector3[], Vector3[]) GenerateArchAndDoorwayPoints(float width, float height, float depth)
-    // {
-    //     // Generate the points of the arch and bottom points
-    //     (Vector3[] archPoints, Vector3[] archBottomPoints) = GenerateArchPoints(width, height, depth);
-    //     // Generate the points of the doorway
-    //     Vector3[] doorwayPoints = GenerateDoorwayPoints(archBottomPoints, width, height);
-    //     // Rotate the doorway points so that it is front-facing on the gameobject transform
-    //     Vector3 forward = transform.forward;
-    //     Quaternion rotation = Quaternion.LookRotation(forward);
-    //     for (int i = 0; i < doorwayPoints.Length; i++)
-    //     {
-    //         doorwayPoints[i] = rotation * doorwayPoints[i];
-    //     }
-    //     return (archPoints, doorwayPoints);
-    // }
-
-
-    public void GenerateBuildingPoints()
-    {
-        // Create an empty array to store the points
-        points = new Vector3[8 + (sideFeaturePoints * 6)];
-
-        // Generate the points for the base of the building
-        points[0] = new Vector3(-width / 2, 0, depth / 2);
-        points[1] = new Vector3(width / 2, 0, depth / 2);
-        points[2] = new Vector3(width / 2, 0, -depth / 2);
-        points[3] = new Vector3(-width / 2, 0, -depth / 2);
-
-        // Generate the points for the top of the building
-        points[4] = new Vector3(-width / 2, height, depth / 2);
-        points[5] = new Vector3(width / 2, height, depth / 2);
-        points[6] = new Vector3(width / 2, height, -depth / 2);
-        points[7] = new Vector3(-width / 2, height, -depth / 2);
-
-        // Generate the points for the side features
-        for (int i = 0; i < sideFeaturePoints; i++)
-        {
-            float x = -width / 2 + (i + 1) * (width / (sideFeaturePoints + 1));
-            points[8 + (i * 2)] = new Vector3(x, 0, depth / 2);
-            points[8 + (i * 2) + 1] = new Vector3(x, height, depth / 2);
-        }
-    }
-
-
-    SurfaceBlock[,,] surfaceBlocksGrid;
-
-    private void OnDrawGizmos()
-    {
-
-        // List<Vector3> points = GenerateVerticalGrid(transform.position, 5, 5, 5);
-        // foreach (var pt in points)
-        // {
-        //     Gizmos.color = Color.blue;
-        //     Gizmos.DrawSphere(pt, 0.3f);
-
-
-        //     Gizmos.color = Color.white;
-        //     Vector3[] cubePTs = VectorUtil.CreateCube(pt, 5f);
-        //     foreach (var item in cubePTs)
-        //     {
-        //         Gizmos.DrawSphere(item, 0.2f);
-        //     }
-        // }
-
-        // Gizmos.color = Color.white;
-        // Vector3[] cubePTs = VectorUtil.CreateCube(transform.position, 2f);
-        // foreach (var item in cubePTs)
-        // {
-        //     Gizmos.DrawSphere(item, 0.2f);
-        // }
-        // Gizmos.DrawSphere(cubePTs[0], 0.2f);
-
-        //Front
-        // Gizmos.DrawSphere(cubePTs[1], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[2], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[5], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[6], 0.2f);
-
-        //Back
-        // Gizmos.DrawSphere(cubePTs[0], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[3], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[4], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[7], 0.2f);
-
-        //Bottom
-        // Gizmos.DrawSphere(cubePTs[0], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[1], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[2], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[3], 0.2f);
-
-        //Top
-        // Gizmos.DrawSphere(cubePTs[4], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[5], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[6], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[7], 0.2f);
-
-        //Right
-        // Gizmos.DrawSphere(cubePTs[0], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[1], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[4], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[5], 0.2f);
-
-        //Left
-        // Gizmos.DrawSphere(cubePTs[2], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[3], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[6], 0.2f);
-        // Gizmos.DrawSphere(cubePTs[7], 0.2f);
-
-
-        // Vector3[] corners = VectorUtil.CreateCube(position, size);
-        // VectorUtil.DrawGridPointsGizmos(points);
-
-        // Vector3[] neighborCenters = GenerateNeighborCenters(transform.position, 2);
-        // foreach (var item in neighborCenters)
-        // {
-        //     Gizmos.DrawSphere(item, 0.2f);
-        // }
-        // Gizmos.DrawSphere(neighborCenters[(int)SurfaceBlockSide.Top], 0.2f);
-
-        if (surfaceBlocksGrid == null)
-        {
-            // Vector3[,,] points = Generate3DGrid(transform.position, 5, 5, 5, 1);
-            // Vector3[,,] points = VectorUtil.Generate3DGrid(transform.position, 5, 5, 5, 1);
-            // surfaceBlocksGrid = SurfaceBlock.CreateSurfaceBlocks(points, 1);
-        }
-        else
-        {
-            SurfaceBlock.DrawGrid(surfaceBlocksGrid);
-        }
-
-
-        // (Vector3[] allPoints, Vector3[] archPoints, Vector3[] doorwayPoints) = GenerateArchAndDoorwayPoints(width, height, depth, resolution, transform);
-        // // (Vector3[] allPoints, Vector3[] archBottomPoints) = GenerateArchPoints(width, height, depth);
-        // // points = allPoints;
-        // Gizmos.color = Color.grey;
-
-        // // Draw lines between the points
-        // for (int i = 0; i < archPoints.Length - 1; i++)
-        // {
-        //     Gizmos.DrawLine(archPoints[i], archPoints[i + 1]);
-        // }
-        // // for (int i = 0; i < archBottomPoints.Length; i++)
-        // // {
-        // //     Gizmos.color = Color.red;
-        // //     Gizmos.DrawSphere(archBottomPoints[i], 0.2f);
-        // // }
-        // // Gizmos.color = Color.blue;
-
-
-        // // Draw a sphere at each point
-        // for (int i = 0; i < archPoints.Length; i++)
-        // {
-        //     Gizmos.DrawSphere(archPoints[i], 0.1f);
-        // }
-
-        // if (doorwayPoints != null && doorwayPoints.Length > 0)
-        // {
-        //     // Vector3[] doorwayPoints = GenerateDoorwayPoints(archBottomPoints, width, height);
-
-        //     for (int i = 1; i < doorwayPoints.Length; i++)
-        //     {
-        //         Vector3 currentPoint = doorwayPoints[i];
-        //         Vector3 nextPoint = doorwayPoints[(i + 1) % doorwayPoints.Length];
-        //         Gizmos.DrawLine(currentPoint, nextPoint);
-        //         Gizmos.DrawSphere(currentPoint, 0.1f);
-        //     }
-        // }
-    }
-
-    // private void OnDrawGizmos()
-    // {
-    //     (Vector3[] allPoints, Vector3[] bottomPoints) = GenerateArchPoints(width, height, depth);
-    //     points = allPoints;
-    //     // points = GenerateDoorwayPoints(bottomPoints, width, height);
-
-    //     if (points == null) return;
-
-    //     // Draw lines between the points
-    //     for (int i = 0; i < points.Length - 1; i++)
-    //     {
-    //         Gizmos.DrawLine(points[i], points[i + 1]);
-    //     }
-
-    //     // Draw a sphere at each point
-    //     for (int i = 0; i < points.Length; i++)
-    //     {
-    //         Gizmos.DrawSphere(points[i], 0.1f);
-    //     }
-
-
-    //     for (int i = 0; i < bottomPoints.Length; i++)
-    //     {
-    //         Gizmos.color = Color.red;
-    //         Gizmos.DrawSphere(bottomPoints[i], 0.2f);
-    //     }
-    // }
-
-    // private void GenerateBuildingPoints()
-    // {
-    //     // Create an empty array to store the points
-    //     points = new Vector3[8 + (4 * sideFeaturePoints)];
-
-    //     // Generate the points of the building
-    //     int i = 0;
-    //     points[i++] = new Vector3(-width / 2, 0, -depth / 2);
-    //     points[i++] = new Vector3(-width / 2, 0, depth / 2);
-    //     points[i++] = new Vector3(width / 2, 0, depth / 2);
-    //     points[i++] = new Vector3(width / 2, 0, -depth / 2);
-    //     points[i++] = new Vector3(-width / 2, height, -depth / 2);
-    //     points[i++] = new Vector3(-width / 2, height, depth / 2);
-    //     points[i++] = new Vector3(width / 2, height, depth / 2);
-    //     points[i++] = new Vector3(width / 2, height, -depth / 2);
-
-    //     // Add side feature points
-    //     float featureSpacing = depth / (sideFeaturePoints + 1);
-    //     for (int j = 1; j <= sideFeaturePoints; j++)
-    //     {
-    //         points[i++] = new Vector3(-width / 2, height / 2, -depth / 2 + (j * featureSpacing));
-    //         points[i++] = new Vector3(width / 2, height / 2, -depth / 2 + (j * featureSpacing));
-    //         points[i++] = new Vector3(-width / 2, height / 2, depth / 2 - (j * featureSpacing));
-    //         points[i++] = new Vector3(width / 2, height / 2, depth / 2 - (j * featureSpacing));
-    //     }
-    // }
-    // private void OnDrawGizmos()
-    // {
-    //     if (points == null)
-    //     {
-    //         GenerateBuildingPoints();
-    //     }
-    //     for (int i = 0; i < points.Length; i++)
-    //     {
-    //         if (i < points.Length - sideFeaturePoints) // for each side of the building
-    //         {
-    //             // Connect the lines between neighboring points
-    //             Gizmos.DrawLine(points[i], points[i + 1]);
-    //             Gizmos.DrawLine(points[i], points[i + sideFeaturePoints]);
-    //             Gizmos.DrawLine(points[i], points[i + sideFeaturePoints + 1]);
-    //         }
-    //         else if (i < points.Length - 1) // for the last side of the building
-    //         {
-    //             // Connect the lines between neighboring points
-    //             Gizmos.DrawLine(points[i], points[i + 1]);
-    //         }
-    //     }
-    // }
-
-
-    // private void GenerateBuildingPoints(float width, float depth, float height)
-    // {
-    //     // Create an empty array to store the points
-    //     // points = new Vector3[8];
-    //     points = new Vector3[8 + (4 * sideFeaturePoints)];
-
-
-    //     // Generate the points of the building
-    //     points[0] = new Vector3(-width / 2, 0, depth / 2);
-    //     points[1] = new Vector3(width / 2, 0, depth / 2);
-    //     points[2] = new Vector3(width / 2, 0, -depth / 2);
-    //     points[3] = new Vector3(-width / 2, 0, -depth / 2);
-    //     points[4] = new Vector3(-width / 2, height, depth / 2);
-    //     points[5] = new Vector3(width / 2, height, depth / 2);
-    //     points[6] = new Vector3(width / 2, height, -depth / 2);
-    //     points[7] = new Vector3(-width / 2, height, -depth / 2);
-
-
-    //     // Add the side feature points
-    //     for (int i = 0; i < sideFeaturePoints; i++)
-    //     {
-    //         float x = -size / 2 + (size / (sideFeaturePoints + 1)) * (i + 1);
-    //         points[8 + (i * 2)] = new Vector3(x, 0, -size / 2);
-    //         points[8 + (i * 2) + 1] = new Vector3(x, height, -size / 2);
-    //     }
-
-    // }
-    // private void OnDrawGizmos()
-    // {
-    //     if (points == null) return;
-
-    //     // Draw lines connecting the points
-    //     Gizmos.color = Color.black;
-    //     for (int i = 0; i < 4; i++)
-    //     {
-    //         Gizmos.DrawLine(points[i], points[(i + 1) % 4]);
-    //         Gizmos.DrawLine(points[i + 4], points[((i + 1) % 4) + 4]);
-    //         Gizmos.DrawLine(points[i], points[i + 4]);
-    //     }
-    // }
-
 
 
     public static List<Vector3> GenerateVerticalGrid(Vector3 origin, float gridSize, int numRows, int numColumns)

@@ -698,9 +698,9 @@ namespace WFCSystem
 
                 foreach (HexagonCellPrototype cell in layerCells)
                 {
-                    if (logIncompatibilities) Debug.LogError("ExtractCellsByLayer - L: " + currentLayer + ", cell: " + cell.LogStats());
+                    // if (logIncompatibilities) Debug.LogError("ExtractCellsByLayer - L: " + currentLayer + ", cell: " + cell.LogStats());
                     int sideNeighborCount = cell.neighborsBySide.ToList().FindAll(n => n != null).Count;
-                    Debug.Log("sideNeighborCount: " + sideNeighborCount);
+                    // Debug.Log("sideNeighborCount: " + sideNeighborCount);
 
                     cells.Add(cell);
                 }

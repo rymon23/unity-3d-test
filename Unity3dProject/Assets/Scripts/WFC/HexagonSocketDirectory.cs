@@ -20,9 +20,9 @@ namespace WFCSystem
         InnerCell_Generic = 6,
         Path_Generic = 7,
         Wall_Generic = 8,
-        Leveled_Inner = 9,
-        Leveled_Edge_Part = 10,
-        Unset_Edge_Connector = 11,
+        Structure_Bottom = 9,
+        Structure_Outer = 10,
+        Structure_Top = 11,
     }
 
     [System.Serializable]
@@ -157,27 +157,7 @@ namespace WFCSystem
 
         public static string GetSocketPrefix_Layered() => "L_";
         public static string GetSocketPrefix_Blank() => "__EMPTY_";
-        public static bool IsGlobalUnassignedSocket(int socektId) =>
-            (GlobalSockets)socektId == GlobalSockets.Unassigned_EdgeCell
-                || (GlobalSockets)socektId == GlobalSockets.Unassigned_InnerCell
-                || (GlobalSockets)socektId == GlobalSockets.Unset_Edge_Connector;
-
-        // public static Color[] GenerateUniqueColors(int length)
-        // {
-        //     Color[] generatedColors = new Color[length];
-
-        //     float hueIncrement = 0.1f;
-        //     float saturation = 0.7f;
-        //     float value = 0.8f;
-
-        //     for (int i = 0; i < length; i++)
-        //     {
-        //         float hue = (float)i / length + hueIncrement * i;
-        //         generatedColors[i] = Color.HSVToRGB(hue, saturation, value);
-        //     }
-
-        //     return generatedColors;
-        // }
+        public static bool IsGlobalUnassignedSocket(int socektId) => (GlobalSockets)socektId == GlobalSockets.Unassigned_EdgeCell || (GlobalSockets)socektId == GlobalSockets.Unassigned_InnerCell;
         public static Color[] GenerateUniqueColors(int length)
         {
             Color[] generatedColors = new Color[length];

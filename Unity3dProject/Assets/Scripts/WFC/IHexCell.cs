@@ -44,6 +44,7 @@ namespace WFCSystem
         public IHexagonTile GetTile();
         public HexagonTileCore GetCurrentTile();
         public void SetTile(HexagonTileCore newTile, int rotation, bool inverted = false);
+        public void SetTile(HexagonTileTemplate newTile, int rotation, bool inverted = false);
         public int GetTileRotation();
         public bool IsTileInverted();
 
