@@ -30,8 +30,9 @@ namespace ProceduralBase
     {
         public string id { get; private set; }
         public string uid { get; private set; }
-        public HexagonCellCluster cluster { get; private set; }
         public LocationType locationType;
+        public HexagonCellCluster cluster { get; private set; }
+        public HashSet<Vector2> cellMemberLookups { get; private set; }
         public Bounds bounds;
         public float radius { get; private set; }
         public Vector3 centerPosition;

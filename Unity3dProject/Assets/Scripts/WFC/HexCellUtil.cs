@@ -9,13 +9,39 @@ namespace WFCSystem
 {
     public static class HexCellUtil
     {
+        public static bool IsPointWithinCellCornerBounds(Vector3 point, HexagonCellPrototype cell)
+        {
+            Vector3[] corners = (cell.buildingNodeEdgePoints != null && cell.buildingNodeEdgePoints.Length > 1) ? cell.buildingNodeEdgePoints : cell.cornerPoints;
+            return VectorUtil.IsPointWithinPolygon(point, corners);
+        }
+
+        public static bool IsBlockWithinCellVerticalBounds(Vector2 blockBottom_Top, HexagonCellPrototype cell)
+        {
+            float verticalBottom = cell.center.y;
+            float verticalTop = cell.center.y + cell.layerOffset;
+
+            return (blockBottom_Top.y <= verticalTop && blockBottom_Top.x >= verticalBottom);
+        }
+
+        public static bool IsCellA_Within_CellB_VerticalBounds(HexagonCellPrototype cell_A, HexagonCellPrototype cell_B)
+        {
+            float cellB_verticalBottom = cell_B.center.y;
+            float cellB_verticalTop = cell_B.center.y + cell_B.layerOffset;
+
+            float cellA_verticalBottom = cell_A.center.y;
+            float cellA_verticalTop = cell_A.center.y + cell_A.layerOffset;
+
+            return (cellA_verticalBottom <= cellB_verticalTop && cellA_verticalBottom >= cellB_verticalBottom);
+        }
 
         public static void Evaluate_SubCellNeighbors(
             List<HexagonCellPrototype> neighborsToEvaluate,
             Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>> cellLookup_ByLayer,
-            bool enableLog = false
+            bool enableLog = false,
+            bool checkLayers = false
         )
         {
+            if (enableLog) Debug.Log("neighborsToEvaluate.Count: " + neighborsToEvaluate.Count);
             if (neighborsToEvaluate.Count < 2) return;
 
             foreach (HexagonCellPrototype cell in neighborsToEvaluate)
@@ -28,7 +54,7 @@ namespace WFCSystem
 
                 int currentSize = cell.size;
 
-                Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.GenerateNeighborLookupCoordinatesBySide(cell.center, currentSize);
+                Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.Generate_NeighborLookups_BySide(cell.center, currentSize);
                 HashSet<string> foundUids = new HashSet<string>();
                 int sideNeighborsFound = 0;
 
@@ -50,13 +76,56 @@ namespace WFCSystem
                     }
                 }
 
+                if (checkLayers)
+                {
+                    Vector2 cellLookup = cell.GetLookup();
+                    int[] neighborLayers = HexCoreUtil.Calculate_CellLayerNeighbors(cell.center, cell.layerOffset);
+
+
+                    HexagonCellPrototype bottomNeighbor = null;
+                    if (cellLookup_ByLayer.ContainsKey(neighborLayers[0]) && cellLookup_ByLayer[neighborLayers[0]].ContainsKey(cellLookup))
+                    {
+                        bottomNeighbor = cellLookup_ByLayer[neighborLayers[0]][cellLookup];
+                    }
+
+                    HexagonCellPrototype topNeighbor = null;
+                    if (cellLookup_ByLayer.ContainsKey(neighborLayers[1]) && cellLookup_ByLayer[neighborLayers[1]].ContainsKey(cellLookup))
+                    {
+                        topNeighbor = cellLookup_ByLayer[neighborLayers[1]][cellLookup];
+                    }
+
+                    if (cell.layerNeighbors[0] != null)
+                    {
+                        if (cell.layerNeighbors[0].layer != neighborLayers[0])
+                        {
+                            Debug.LogError("cell.layerNeighbors[0].layer != neighborLayers[0] - layer: " + cell.layerNeighbors[0].layer + ", neighborLayers[0]: " + neighborLayers[0]);
+                        }
+
+                        if (!cellLookup_ByLayer.ContainsKey(neighborLayers[0]) || !cellLookup_ByLayer[neighborLayers[0]].ContainsKey(cellLookup))
+                        {
+                            Debug.LogError("!cellLookup_ByLayer.ContainsKey(neighborLayers[0]) || !cellLookup_ByLayer[neighborLayers[0]].ContainsKey(cellLookup)");
+                        }
+                    }
+                    if (cell.layerNeighbors[1] != null)
+                    {
+                        if (cell.layerNeighbors[1].layer != neighborLayers[1])
+                        {
+                            Debug.LogError("cell.layerNeighbors[1].layer != neighborLayers[1] - layer: " + cell.layerNeighbors[1].layer + ", neighborLayers[1]: " + neighborLayers[1]);
+                        }
+                    }
+
+
+                    cell.layerNeighbors[0] = bottomNeighbor;
+                    cell.layerNeighbors[1] = topNeighbor;
+                }
+
                 if (sideNeighborsFound < 6)
                 {
                     cell.SetEdgeCell(true, EdgeCellType.Default);
                     // HexagonCellPrototype.EvaluateForEdge(cell, EdgeCellType.Default, true);
                 }
 
-                if (sideNeighborsFound == 0 || sideNeighborsFound > 8) Debug.LogError("cell neighbors found: " + sideNeighborsFound);
+                if (sideNeighborsFound > 8) Debug.LogError("cell neighbors found: " + sideNeighborsFound);
                 if (enableLog) Debug.Log("cell neighbors found: " + sideNeighborsFound + ", isEdge: " + cell.IsEdge());
             }
         }
@@ -72,14 +141,14 @@ namespace WFCSystem
         {
             if (neighborsToEvaluate.Count > 2)
             {
-                List<Vector2> worldspaceNeighborLookups = HexCoreUtil.GenerateNeighborLookupCoordinates(worldspaceCell.center, worldspaceCell.size);
+                Vector2[] worldspaceNeighborLookups = HexCoreUtil.Generate_NeighborLookups_X6(worldspaceCell.center, worldspaceCell.size);
 
                 foreach (HexagonCellPrototype cell in neighborsToEvaluate)
                 {
-                    int currentLayer = HexCoreUtil.Calculate_CurrentLayer(cellLayerOffset, (int)cell.center.y);
+                    int currentLayer = HexCoreUtil.Calculate_CellSnapLayer(cellLayerOffset, (int)cell.center.y);
                     int currentSize = cell.size;
 
-                    Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.GenerateNeighborLookupCoordinatesBySide(cell.center, currentSize);
+                    Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.Generate_NeighborLookups_BySide(cell.center, currentSize);
                     Vector2 worldspaceLookup = cell.GetWorldSpaceLookup();
                     HashSet<string> foundUids = new HashSet<string>();
                     int sideNeighborsFound = 0;
@@ -177,8 +246,8 @@ namespace WFCSystem
                 {
                     int neighborsFound = 0;
                     Vector2 cellParentLookup = cell.GetParentLookup();
-                    List<Vector2> parentNeighborLookups = HexCoreUtil.GenerateNeighborLookupCoordinates(new Vector3(cellParentLookup.x, 0, cellParentLookup.y), parentCellSize);
-                    Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.GenerateNeighborLookupCoordinatesBySide(cell.center, cell.size);
+                    Vector2[] parentNeighborLookups = HexCoreUtil.Generate_NeighborLookups_X6(new Vector3(cellParentLookup.x, 0, cellParentLookup.y), parentCellSize);
+                    Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.Generate_NeighborLookups_BySide(cell.center, cell.size);
 
                     HashSet<string> foundUids = new HashSet<string>();
 
@@ -234,7 +303,7 @@ namespace WFCSystem
                 {
                     int neighborsFound = 0;
                     HashSet<string> foundUids = new HashSet<string>();
-                    Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.GenerateNeighborLookupCoordinatesBySide(cell.center, cell.size);
+                    Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.Generate_NeighborLookups_BySide(cell.center, cell.size);
 
                     foreach (var kvp in neighborLookupsBySide)
                     {
@@ -268,7 +337,7 @@ namespace WFCSystem
                 {
                     int neighborsFound = 0;
                     HashSet<string> foundUids = new HashSet<string>();
-                    Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.GenerateNeighborLookupCoordinatesBySide(cell.center, cell.size);
+                    Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.Generate_NeighborLookups_BySide(cell.center, cell.size);
 
                     foreach (var kvp in neighborLookupsBySide)
                     {
@@ -294,7 +363,43 @@ namespace WFCSystem
             }
         }
 
-        public static bool IsCellInBeteenNeighborsOfStatus(HexagonCellPrototype cell, CellStatus status, Dictionary<Vector2, HexagonCellPrototype> _cellsLookup)
+        public static bool IsCellInBetweenNeighborsInLookup(HexagonCellPrototype cell, Dictionary<Vector2, HexagonCellPrototype> _cellsLookup, Dictionary<Vector2, HexagonCellPrototype> found)
+        {
+            Vector2[] neighborLookups = HexCoreUtil.Generate_NeighborLookups_X6(cell.center, cell.size);
+
+            for (int i = 0; i < neighborLookups.Length; i++)
+            {
+                Vector2 neighborLookup_A = neighborLookups[i];
+
+                if (!_cellsLookup.ContainsKey(neighborLookup_A) || _cellsLookup[neighborLookup_A].size != cell.size) continue;
+
+                HexagonCellPrototype neighborA = _cellsLookup[neighborLookup_A];
+
+                if (neighborA != null)
+                {
+                    for (int step = 0; step < 3; step++)
+                    {
+                        Vector2 neighborLookup_B = neighborLookups[(i + (2 + step)) % 6];
+
+                        if (!_cellsLookup.ContainsKey(neighborLookup_B) || _cellsLookup[neighborLookup_B].size != cell.size) continue;
+                        HexagonCellPrototype neighborB = _cellsLookup[neighborLookup_B];
+
+                        if (neighborB != null)
+                        {
+                            if (found != null)
+                            {
+                                if (found.ContainsKey(neighborLookup_A) == false) found.Add(neighborLookup_A, _cellsLookup[neighborLookup_A]);
+                                if (found.ContainsKey(neighborLookup_B) == false) found.Add(neighborLookup_B, _cellsLookup[neighborLookup_B]);
+                            }
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        public static bool IsCellInBetweenNeighborsOfStatus(HexagonCellPrototype cell, CellStatus status, Dictionary<Vector2, HexagonCellPrototype> _cellsLookup)
         {
             List<Vector3> neighborPoints = HexCoreUtil.GenerateHexCenterPoints_X6(cell.center, cell.size);
             for (int i = 0; i < neighborPoints.Count; i++)

@@ -9,6 +9,47 @@ namespace WFCSystem
     public static class HexGridUtil
     {
 
+        public static Dictionary<Vector2, Vector3> Generate_HexGridCenterPointsWithinHosts(List<Vector3> hostPoints, int _cellSize, int _hostCellSize, bool removePartialChildren)
+        {
+            // int _cellSize = (int)cellSize;
+            // int _hostCellSize = (int)hostcellSize;
+
+            Dictionary<Vector2, Vector3> found_byLookup = new Dictionary<Vector2, Vector3>();
+            HashSet<Vector2> visited = new HashSet<Vector2>();
+            List<Vector2> pointsLookups = removePartialChildren ? new List<Vector2>() : null;
+
+            foreach (Vector3 host in hostPoints)
+            {
+                Vector3[] radiusCorners = HexCoreUtil.GenerateHexagonPoints(host, _hostCellSize);
+
+                List<Vector3> neighborPoints = HexCoreUtil.GenerateHexCenterPoints_X13(host, _cellSize);
+                foreach (var neighbor in neighborPoints)
+                {
+                    Vector2 neighborLookup = HexCoreUtil.Calculate_CenterLookup(neighbor, _cellSize);
+
+                    if (visited.Contains(neighborLookup)) continue;
+                    visited.Add(neighborLookup);
+
+                    if (HexCoreUtil.IsAnyHexPointWithinPolygon(neighbor, _cellSize, radiusCorners) == false) continue;
+
+                    found_byLookup.Add(neighborLookup, neighbor);
+                    if (removePartialChildren) pointsLookups.Add(neighborLookup);
+                }
+            }
+
+            if (removePartialChildren)
+            {
+                foreach (var lookup in pointsLookups)
+                {
+                    int neighborsfound = GetHexCenterNeighborsInCollection(found_byLookup[lookup], _cellSize, found_byLookup);
+                    if (neighborsfound < 3) found_byLookup.Remove(lookup);
+                }
+            }
+
+            return found_byLookup;
+        }
+
+
         public static Dictionary<int, Dictionary<Vector2, Vector3>> Generate_HexGridCenterPoints_X7(Vector3 center, int size)
         {
             Vector3[] cornerPoints = HexCoreUtil.GenerateHexagonPoints(center, size);
@@ -30,6 +71,73 @@ namespace WFCSystem
             return centerPointsByLookup_BySize;
         }
 
+
+        public static Dictionary<int, Dictionary<Vector2, Vector3>> Generate_RandomHexGridCenterPoints_BySize(
+            Vector3 initialCenter,
+            int _cellSize,
+            int maxMembers,
+            int gridRadiusMax,
+            bool randomOrder,
+            bool logResults = false
+        )
+        {
+            // int _cellSize = (int)cellsize;
+            Vector3 currentHead = initialCenter;
+            Vector3 currentHeadLookup = HexCoreUtil.Calculate_CenterLookup(currentHead, _cellSize);
+
+            Dictionary<int, Dictionary<Vector2, Vector3>> found_byLookup = new Dictionary<int, Dictionary<Vector2, Vector3>>() {
+                {
+                    _cellSize, new Dictionary<Vector2, Vector3>() {  {  currentHeadLookup, currentHead } }
+                }
+            };
+            HashSet<Vector2> visited = new HashSet<Vector2>() {
+                currentHeadLookup
+            };
+            List<Vector3> headsToCheck = new List<Vector3>();
+            headsToCheck.AddRange(HexCoreUtil.Generate_RandomHexNeighborCenters(currentHead, (_cellSize * 3), maxMembers / 2, false));
+
+
+            int attempts = 999;
+
+
+            while (currentHead != Vector3.positiveInfinity && found_byLookup[_cellSize].Keys.Count < maxMembers && attempts > 0)
+            {
+
+                List<Vector3> neighborPoints = null;
+                if (randomOrder)
+                {
+                    int r = UnityEngine.Random.Range(0, 2);
+                    neighborPoints = r == 0 ? HexCoreUtil.GenerateHexCenterPoints_X3(currentHead, _cellSize) : HexCoreUtil.GenerateHexCenterPoints_X6(currentHead, _cellSize);
+                }
+                else neighborPoints = HexCoreUtil.GenerateHexCenterPoints_X6(currentHead, _cellSize);
+
+                foreach (var neighbor in neighborPoints)
+                {
+                    // Debug.Log("headsToCheck:  " + headsToCheck.Count);
+                    Vector2 neighborLookup = HexCoreUtil.Calculate_CenterLookup(neighbor, _cellSize);
+
+                    if (visited.Contains(neighborLookup)) continue;
+                    visited.Add(neighborLookup);
+
+                    found_byLookup[_cellSize].Add(neighborLookup, neighbor);
+                    headsToCheck.Add(neighbor);
+
+                    if (found_byLookup[_cellSize].Keys.Count < maxMembers) break;
+                }
+
+                if (headsToCheck.Count > 0)
+                {
+                    currentHead = headsToCheck[0];
+                    headsToCheck.Remove(currentHead);
+                }
+                else break;
+
+                attempts--;
+            }
+
+            // Debug.Log("found_byLookup:  " + found_byLookup[_cellSize].Count);
+            return found_byLookup;
+        }
 
         public static Dictionary<int, Dictionary<Vector2, Vector3>> Generate_RandomHexGridCenterPoints_BySize(
             Vector3 initialCenter,
@@ -78,6 +186,8 @@ namespace WFCSystem
 
                     found_byLookup[_cellSize].Add(neighborLookup, neighbor);
                     headsToCheck.Add(neighbor);
+
+                    if (found_byLookup[_cellSize].Keys.Count < maxMembers) break;
                 }
 
                 if (headsToCheck.Count > 0)
@@ -109,15 +219,17 @@ namespace WFCSystem
 
         public static Dictionary<int, Dictionary<Vector2, Vector3>> Generate_RandomHexGridCenterPoints_BySize(
             Vector3 initialCenter,
-            HexCellSizes cellsize,
+            int _cellSize,
             Vector2Int hostsMinMax,
+            int maxRadius,
             bool shuffle,
             bool removePartials = true,
             bool logResults = false
         )
         {
-            int _cellSize = (int)cellsize;
-            int _hostCellSize = _cellSize * 3;
+            // int _cellSize = (int)cellsize;
+            int minRadius = (_cellSize * 3);
+            int _hostCellSize = (_cellSize * 3);
 
             Vector3 currentHead = initialCenter;
             Vector3 currentHeadLookup = HexCoreUtil.Calculate_CenterLookup(currentHead, _hostCellSize);
@@ -135,7 +247,15 @@ namespace WFCSystem
                 currentHeadLookup
             };
 
+            // HashSet<Vector3> hostsAdded = new HashSet<Vector3>();
+            // headsToCheck.AddRange(HexCoreUtil.Generate_RandomHexNeighborCenters(currentHead, (_cellSize * 3), maxMembers / 2, false));
+            // List<Vector3>  new_hosts =  HexCoreUtil.Generate_RandomHexNeighborCenters(currentHead, _hostCellSize, hostsMinMax.y, shuffle);
             hostPoints.AddRange(HexCoreUtil.Generate_RandomHexNeighborCenters(currentHead, _hostCellSize, hostsMinMax.y, shuffle));
+            // Dictionary<int, Dictionary<Vector2, Vector3>> new_cellCenters_ByLookup_BySize = HexGridUtil.Generate_RandomHexGridCenterPoints_BySize(initialCenter, (HexCellSizes)_hostCellSize, hostsMinMax.y, maxRadius, false);
+            // foreach (var point in new_cellCenters_ByLookup_BySize[_hostCellSize].Values)
+            // {
+            //     hostPoints.Add(point);
+            // }
 
             List<Vector2> pointsLookups = removePartials ? new List<Vector2>() : null;
 

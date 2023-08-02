@@ -11,13 +11,42 @@ namespace WFCSystem
         public TileSocketProfile(Dictionary<Vector3, SocketFace> _socketFaceByLookup)
         {
             socketFaceByLookup = new Dictionary<Vector3, SocketFace>();
-
+            // socketFacesByLookupByRotation = new Dictionary<int, Dictionary<Vector3, SocketFace>>();
+            // socketFacesByLookupByRotation.Add(0, new Dictionary<Vector3, SocketFace>());
             foreach (var kvp in _socketFaceByLookup)
             {
                 socketFaceByLookup.Add(kvp.Key, kvp.Value);
+                // socketFacesByLookupByRotation[0].Add(kvp.Key, kvp.Value);
             }
         }
+
+        // public TileSocketProfile(Dictionary<Vector3, SocketFace> _socketFaceByLookup, bool calculateRotations, Vector3 rotationCenter)
+        // {
+        //     // socketFaceByLookup = new Dictionary<Vector3, SocketFace>();
+        //     socketFacesByLookupByRotation = new Dictionary<int, Dictionary<Vector3, SocketFace>>();
+        //     socketFacesByLookupByRotation.Add(0, new Dictionary<Vector3, SocketFace>());
+        //     foreach (var kvp in _socketFaceByLookup)
+        //     {
+        //         // socketFaceByLookup.Add(kvp.Key, kvp.Value);
+        //         socketFacesByLookupByRotation[0].Add(kvp.Key, kvp.Value);
+        //     }
+        //     if (calculateRotations && socketFacesByLookupByRotation[0].Count > 0)
+        //     {
+        //         for (int rot = 1; rot < 6; rot++)
+        //         {
+        //             Dictionary<Vector3, SocketFace> rotatedSocketFaces = GenerateRotatedSocketFaces(socketFacesByLookupByRotation[0], rot, rotationCenter);
+        //             socketFacesByLookupByRotation.Add(rot, rotatedSocketFaces);
+        //         }
+        //     }
+        // }
+
         public Dictionary<Vector3, SocketFace> socketFaceByLookup { get; private set; } = null;
+        // public Dictionary<int, Dictionary<Vector3, SocketFace>> socketFacesByLookupByRotation { get; private set; } = null; // Used for TOP & BOTTOM
+        // public Dictionary<Vector3, SocketFace> GetSocketFaces(int rotation = 0)
+        // {
+        //     if (socketFacesByLookupByRotation.ContainsKey(rotation)) return socketFacesByLookupByRotation[rotation];
+        //     return null;
+        // }
 
         public TileSocketProfile(int _defaultID) { defaultID = _defaultID; }
         public TileSocketProfile(GlobalSockets _defaultID) { defaultID = (int)_defaultID; }
@@ -35,6 +64,14 @@ namespace WFCSystem
                     if (neighbor != null && neighbor.owner != block.owner && neighbor.owner == foreignCellOwner)
                     {
                         (Vector3 lookup, SocketFace socketFace) = SurfaceBlock.GetFaceProfie(block, neighbor);
+
+                        //temp
+                        (Vector3 lookupB, SocketFace socketFaceB) = SurfaceBlock.GetFaceProfie(neighbor, block);
+                        if (lookup != lookupB || SurfaceBlock.AreFacesCompatible(socketFace, socketFaceB) == false)
+                        {
+                            Debug.LogError("lookup != lookupB || SurfaceBlock.AreFacesCompatible(socketFace, socketFaceB) == false, lookup: " + lookup + ", lookupB: " + lookupB);
+                        }
+
                         if (_socketFaceByLookup.ContainsKey(lookup) == false) _socketFaceByLookup.Add(lookup, socketFace);
                     }
 
@@ -60,7 +97,7 @@ namespace WFCSystem
         {
             if (profile.socketFaceByLookup == null || otherProfile.socketFaceByLookup == null)
             {
-                Debug.Log("(profile.socketFaceByLookup == null || otherProfile.socketFaceByLookup == null)");
+                Debug.Log("(profile.socketFaceByLookup() == null || otherProfile.socketFaceByLookup == null)");
 
                 int profileDefaultID = profile.defaultID;
                 int otherDefaultID = otherProfile.defaultID;
@@ -116,7 +153,7 @@ namespace WFCSystem
                 SocketFace otherFace = otherProfile.socketFaceByLookup[socketLookup];
                 if (SurfaceBlock.AreFacesCompatible(profileFace, otherFace) == false)
                 {
-                    Debug.LogError("SurfaceBlock.AreFacesCompatible(profileFace, otherFace) == false");
+                    Debug.LogError("SurfaceBlock.AreFacesCompatible(profileFace, otherFace) == false - profileFace: " + profileFace + ", otherFace: " + otherFace);
                     return false;
                 }
             }
@@ -194,7 +231,6 @@ namespace WFCSystem
         {
             Dictionary<int, Dictionary<HexagonTileSide, TileSocketProfile>> socketsBySideByRotation = new Dictionary<int, Dictionary<HexagonTileSide, TileSocketProfile>>();
             int rotations = 6;
-
             // Add the initial socket profile by side for rotation 0
             socketsBySideByRotation.Add(0, new Dictionary<HexagonTileSide, TileSocketProfile>(socketProfileBySide));
 
@@ -213,6 +249,25 @@ namespace WFCSystem
             }
 
             return socketsBySideByRotation;
+        }
+
+
+        public static Dictionary<Vector3, SocketFace> GenerateRotatedSocketFaces(Dictionary<Vector3, SocketFace> _socketFaceByLookup, int rotation, Vector3 center)
+        {
+            Dictionary<Vector3, SocketFace> rotatedSocketFaces = new Dictionary<Vector3, SocketFace>();
+
+            float[] rotationValues = { 0f, 60f, 120f, 180f, 240f, 300f };
+            float rotationAngle = rotationValues[rotation % 6];
+
+            Quaternion rotationQuaternion = Quaternion.Euler(0f, rotationAngle, 0f);
+
+            foreach (var kvp in _socketFaceByLookup)
+            {
+                Vector3 rotatedKey = rotationQuaternion * (kvp.Key - center) + center;
+                rotatedSocketFaces.Add(rotatedKey, kvp.Value);
+            }
+
+            return rotatedSocketFaces;
         }
 
         public static TileSocketProfile GetRotatedSideSockets(

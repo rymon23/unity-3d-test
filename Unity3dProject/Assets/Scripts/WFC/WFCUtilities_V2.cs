@@ -1419,7 +1419,7 @@ namespace WFCSystem
             bool isTopLayer = cell.HasTopNeighbor() == false;
 
             Vector3 position = cell.GetPosition();
-            position.y += 0.2f;
+            // position.y += 0.2f;
 
             GameObject tileGO = GameObject.Instantiate(prefab.model, position, Quaternion.identity);
             HexagonTileCore.RotateTile(tileGO.gameObject, rotation);

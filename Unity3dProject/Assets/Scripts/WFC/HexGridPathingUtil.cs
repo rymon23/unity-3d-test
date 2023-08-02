@@ -10,6 +10,96 @@ namespace WFCSystem
 
     public static class HexGridPathingUtil
     {
+        public static List<List<HexagonCellPrototype>> GetConsecutiveClustersList(
+            Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>> cellLookup_ByLayer,
+            CellSearchPriority searchPriority = CellSearchPriority.SideNeighbors
+        )
+        {
+            List<List<HexagonCellPrototype>> cells_byGroup = new List<List<HexagonCellPrototype>>();
+            HashSet<string> visited = new HashSet<string>();
+            int added = 0;
+            int iterations = 0;
+
+            foreach (int currentLayer in cellLookup_ByLayer.Keys)
+            {
+                foreach (Vector2 lookup in cellLookup_ByLayer[currentLayer].Keys)
+                {
+                    iterations++;
+
+                    HexagonCellPrototype cell = cellLookup_ByLayer[currentLayer][lookup];
+                    if (cell == null)
+                    {
+                        // Debug.LogError("(cell == null)");
+                        continue;
+                    }
+
+                    if (visited.Contains(cell.Get_Uid())) continue;
+
+
+                    List<HexagonCellPrototype> group = GetConsecutiveNeighborsCluster(
+                        cell,
+                        999,
+                        searchPriority,
+                        visited
+                    );
+
+                    if (group.Count > 0)
+                    {
+                        cells_byGroup.Add(group);
+                        added++;
+                    }
+                    // if (clusters.Count >= max) return clusters;
+                }
+            }
+            // Debug.Log("added: " + added + ", iterations: " + iterations);
+            return cells_byGroup;
+        }
+
+        public static List<HexagonCellPrototype> GetConsecutiveNeighborsCluster(
+            HexagonCellPrototype start,
+            int maxMembers,
+            CellSearchPriority searchPriority = CellSearchPriority.SideNeighbors,
+            HashSet<string> visited = null
+        )
+        {
+            List<HexagonCellPrototype> cluster = new List<HexagonCellPrototype>();
+            if (visited == null) visited = new HashSet<string>();
+
+            RecursivelyFindNeighborsForCluster(start, maxMembers, cluster, visited, searchPriority);
+            return cluster;
+        }
+
+        private static void RecursivelyFindNeighborsForCluster(
+            HexagonCellPrototype current,
+            int maxMembers,
+            List<HexagonCellPrototype> cluster,
+            HashSet<string> visited,
+            CellSearchPriority searchPriority = CellSearchPriority.SideNeighbors
+        )
+        {
+            cluster.Add(current);
+            visited.Add(current.Get_Uid());
+
+            // if (cluster.Count >= maxMembers) return;
+
+            // List<HexagonCellPrototype> sortedNeighbors = EvaluateNeighborSearchPriority(current, searchPriority);
+            HexagonCellPrototype[] allNeighborsByTileSide = current.GetNeighborTileSides();
+
+            for (int i = 0; i < allNeighborsByTileSide.Length; i++)
+            {
+                // if (cluster.Count > maxMembers) break;
+
+                HexagonCellPrototype neighbor = allNeighborsByTileSide[i];
+                if (neighbor == null) continue;
+
+                if (visited.Contains(neighbor.Get_Uid()) == false)
+                {
+                    RecursivelyFindNeighborsForCluster(neighbor, maxMembers, cluster, visited, searchPriority);
+                }
+            }
+        }
+
+
 
         public static void Rehydrate_CellNeighbors(
             Vector2 cellLookup,
@@ -60,6 +150,88 @@ namespace WFCSystem
                 }
             }
         }
+
+
+        public static Dictionary<Vector2, Vector3> GetConsecutiveCellPoints(
+            Vector3 initialCenterPostion,
+            int maxMembers,
+            int _cellSize,
+            int maxRadius,
+            HexNeighborExpansionSize headExpansionSize = HexNeighborExpansionSize.X_7,
+            HexNeighborExpansionSize initialExpansionSize = HexNeighborExpansionSize.X_7,
+            HashSet<Vector2> excludeList = null,
+            HashSet<Vector2> added = null,
+            Vector3[] absoluteBoundsCorners = null,
+            int absoluteBoundsRadius = 108
+        )
+        {
+            if (maxRadius < _cellSize * 3) maxRadius = (_cellSize * 3);
+
+            Vector3 currentHead = initialCenterPostion;
+            Vector2 currentHeadLookup = HexCoreUtil.Calculate_CenterLookup(currentHead, _cellSize);
+
+            Dictionary<Vector2, Vector3> foundByLookup = new Dictionary<Vector2, Vector3>();
+            HashSet<Vector2> visited = new HashSet<Vector2>();
+            List<Vector3> headsToCheck = new List<Vector3>();
+
+            int attempts = 999;
+            bool doOnce = false;
+
+            Vector3[] boundsCorners = HexCoreUtil.GenerateHexagonPoints(initialCenterPostion, maxRadius);
+            int found = 0;
+
+            while (currentHead != Vector3.positiveInfinity && found < maxMembers && attempts > 0)
+            {
+                if (found >= maxMembers) break;
+
+                List<Vector3> neighborPoints = doOnce ?
+                    HexCoreUtil.GenerateHexCenterPoints_X(currentHead, _cellSize, initialExpansionSize)
+                    : HexCoreUtil.GenerateHexCenterPoints_X(currentHead, _cellSize, headExpansionSize);
+
+                doOnce = true;
+
+                for (int i = 0; i < neighborPoints.Count; i++)
+                {
+                    if (found >= maxMembers) break;
+
+                    Vector3 neighbor = neighborPoints[i];
+                    Vector2 neighborLookup = HexCoreUtil.Calculate_CenterLookup(neighbor, _cellSize);
+
+                    if (visited.Contains(neighborLookup)) continue;
+                    visited.Add(neighborLookup);
+
+                    if (excludeList != null && excludeList.Contains(neighborLookup)) continue;
+                    if (added != null && added.Contains(neighborLookup)) continue;
+
+                    if (HexCoreUtil.IsAnyHexPointWithinPolygon(neighbor, _cellSize, boundsCorners))
+                    {
+                        if (absoluteBoundsCorners != null && VectorUtil.IsPointWithinPolygon(neighbor, absoluteBoundsCorners) == false) continue;
+                        // if (absoluteBoundsCorners != null && HexCoreUtil.IsAnyHexPointWithinPolygon(neighbor, _cellSize, absoluteBoundsCorners) == false) continue;
+
+                        foundByLookup.Add(neighborLookup, neighbor);
+                        headsToCheck.Add(neighbor);
+
+                        if (added != null) added.Add(neighborLookup);
+                        found++;
+                    }
+                }
+
+                if (found < maxMembers)
+                {
+                    if (headsToCheck.Count > 0)
+                    {
+                        currentHead = headsToCheck[0];
+                        currentHeadLookup = HexCoreUtil.Calculate_CenterLookup(currentHead, _cellSize);
+                        headsToCheck.Remove(currentHead);
+                    }
+                    else break;
+                }
+                attempts--;
+            }
+            // Debug.Log("foundByLookup: " + foundByLookup.Count);
+            return foundByLookup;
+        }
+
 
 
         public static (Dictionary<int, List<Vector3>>, Dictionary<Vector2, Vector3>, Vector2Int) GetConsecutiveCellPointsWithintNoiseElevationRange_V7(
@@ -1784,7 +1956,7 @@ namespace WFCSystem
 
                 if (searchPriority == CellSearchPriority.SideNeighbors)
                 {
-                    neighborsList.AddRange(current.neighbors.FindAll(n => n.IsSameLayer(current)).OrderByDescending(n => n.neighbors.Count));
+                    neighborsList.AddRange(current.neighbors.FindAll(n => n != null && n.IsSameLayer(current)).OrderByDescending(n => n.neighbors.Count));
                     if (current.layerNeighbors[0] != null && neighborsList.Contains(current.layerNeighbors[0]) == false) neighborsList.Add(current.layerNeighbors[0]);
                     if (current.layerNeighbors[1] != null && neighborsList.Contains(current.layerNeighbors[1]) == false) neighborsList.Add(current.layerNeighbors[1]);
                     // neighborsList.AddRange(current.layerNeighbors.ToList().FindAll(n => n != null));
@@ -1794,7 +1966,7 @@ namespace WFCSystem
                     if (current.layerNeighbors[0] != null && neighborsList.Contains(current.layerNeighbors[0]) == false) neighborsList.Add(current.layerNeighbors[0]);
                     if (current.layerNeighbors[1] != null && neighborsList.Contains(current.layerNeighbors[1]) == false) neighborsList.Add(current.layerNeighbors[1]);
                     // neighborsList.AddRange(current.layerNeighbors.ToList().FindAll(n => n != null));
-                    neighborsList.AddRange(current.neighbors.FindAll(n => n.IsSameLayer(current)).OrderByDescending(n => n.neighbors.Count));
+                    neighborsList.AddRange(current.neighbors.FindAll(n => n != null && n.IsSameLayer(current)).OrderByDescending(n => n.neighbors.Count));
                 }
                 else if (searchPriority == CellSearchPriority.SideAndSideLayerNeighbors)
                 {

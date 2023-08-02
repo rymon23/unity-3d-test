@@ -346,7 +346,10 @@ namespace WFCSystem
             {
                 Debug.LogError("otherProfile == null");
                 return false;
+
             }
+            // int topBottomRotation = 0;
+            // if (side == HexagonTileSide.Top || side == HexagonTileSide.Bottom) topBottomRotation = rotation;
 
             return TileSocketProfile.IsCompatible(profile, otherProfile, socketDirectory);
         }

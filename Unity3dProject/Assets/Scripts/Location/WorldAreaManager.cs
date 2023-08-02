@@ -351,7 +351,7 @@ namespace ProceduralBase
         public List<Vector2> GetCurrentWorldAreaNeighborLookups()
         {
             HexagonCellPrototype current_AreaCell = GetCurrentWorldAreaCell();
-            List<Vector2> calculatedAreaNeighborLookups = HexCoreUtil.GenerateNeighborLookupCoordinates(current_AreaCell.center, current_AreaCell.size);
+            Vector2[] calculatedAreaNeighborLookups = HexCoreUtil.Generate_NeighborLookups_X6(current_AreaCell.center, current_AreaCell.size);
             List<Vector2> results = new List<Vector2>();
 
             foreach (Vector2 areaLookup in calculatedAreaNeighborLookups)
@@ -803,7 +803,7 @@ namespace ProceduralBase
                 {(int)HexCellSizes.X_4, new List<HexagonCellPrototype>()},
             };
 
-            int baseLayer = HexCoreUtil.Calculate_CurrentLayer(cellLayerElevation, gridBaseElevation);
+            int baseLayer = HexCoreUtil.Calculate_CellSnapLayer(cellLayerElevation, gridBaseElevation);
             // int totalCreated = 0;
             // Debug.Log("gridBaseElevation: " + gridBaseElevation + ", baseLayer: " + baseLayer);
 
@@ -909,7 +909,7 @@ namespace ProceduralBase
 
                         if (layersMax > 1 && groundTypeFound == CellStatus.GenericGround)
                         {
-                            allowBufferStatusAssignment = HexCellUtil.IsCellInBeteenNeighborsOfStatus(newCell, CellStatus.FlatGround, subCellTerraforms);
+                            allowBufferStatusAssignment = HexCellUtil.IsCellInBetweenNeighborsOfStatus(newCell, CellStatus.FlatGround, subCellTerraforms);
                             // if (allowBufferStatusAssignment) Debug.Log("allowBufferStatusAssignment " + allowBufferStatusAssignment);
                             if (allowBufferStatusAssignment == false) continue;
                         }
@@ -1301,7 +1301,7 @@ namespace ProceduralBase
                     int neighborsFound = 0;
 
                     // List<Vector2> neighborLookups = HexagonCellPrototype.GenerateNeighborLookupCoordinates(cell.center, cell.size);
-                    Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.GenerateNeighborLookupCoordinatesBySide(cell.center, cell.size);
+                    Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.Generate_NeighborLookups_BySide(cell.center, cell.size);
                     foreach (var kvp in neighborLookupsBySide)
                     {
                         Vector2 neighborLookup = kvp.Value;
@@ -2972,7 +2972,6 @@ namespace ProceduralBase
 
                             HexagonCellPrototype.DrawHexagonCellPrototypeGrid(
                                 pairs[currentSize],
-                                gameObject.transform,
                                 gridFilter_Type,
                                 GridFilter_Level.HostCells,
                                 cellDisplayType,
@@ -4337,7 +4336,7 @@ namespace ProceduralBase
                                     // if (checkingLayer != int.MaxValue && (z % 2 == 0 || x % 2 == 0))
                                     // {
                                     //     Vector2 nearestCellLookup = nearestGroundCell.GetLookup();
-                                    //     int groundLayer = HexCoreUtil.Calculate_CurrentLayer(cellLayerElevation, (int)baseNoiseHeight);
+                                    //     int groundLayer = HexCoreUtil.Calculate_CellSnapLayer(cellLayerElevation, (int)baseNoiseHeight);
 
                                     //     if (cellLookup_ByLayer_BySize_ByWorldSpace[closest_WorldspaceTerraformLookup][nearestGroundCell.size].ContainsKey(groundLayer) &&
                                     //         cellLookup_ByLayer_BySize_ByWorldSpace[closest_WorldspaceTerraformLookup][nearestGroundCell.size][groundLayer].ContainsKey(nearestCellLookup)
@@ -4417,7 +4416,7 @@ namespace ProceduralBase
                                                 Vector3 nearestCellCenter = HexCoreUtil.Calculate_ClosestHexCenter_V2(position, (int)nearestGroundCell.size);
                                                 Vector2 nearestCellLookup = HexCoreUtil.Calculate_CenterLookup(nearestCellCenter, (int)nearestGroundCell.size);
 
-                                                int currentLayer = HexCoreUtil.Calculate_CurrentLayer(cellLayerElevation, baseNoiseHeight);
+                                                int currentLayer = HexCoreUtil.Calculate_CellSnapLayer(cellLayerElevation, baseNoiseHeight);
                                                 if (
                                                     cellLookup_ByLayer_BySize_ByWorldSpace[closest_WorldspaceTerraformLookup][nearestGroundCell.size].ContainsKey(currentLayer) &&
                                                     cellLookup_ByLayer_BySize_ByWorldSpace[closest_WorldspaceTerraformLookup][nearestGroundCell.size][currentLayer].ContainsKey(nearestCellLookup)

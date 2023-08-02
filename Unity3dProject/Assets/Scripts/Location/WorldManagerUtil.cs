@@ -932,11 +932,11 @@ namespace ProceduralBase
 
 
         public static List<(Vector2[,], Vector2)> GetVertexGridChunkKeys(
-                  Dictionary<Vector2, TerrainVertex> globalVertexGrid,
-                  List<Vector3> centerPoints,
-                  float steps,
-                  Vector2 terrainChunkSizeXZ
-              )
+            Dictionary<Vector2, TerrainVertex> globalVertexGrid,
+            List<Vector3> centerPoints,
+            float steps,
+            Vector2 terrainChunkSizeXZ
+        )
         {
             List<(Vector2[,], Vector2)> result = new List<(Vector2[,], Vector2)>();
             foreach (Vector3 point in centerPoints)

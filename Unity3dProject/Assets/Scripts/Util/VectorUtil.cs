@@ -7,8 +7,45 @@ using System.Linq;
 
 public static class VectorUtil
 {
+    public static List<Vector3> ScaleShape(List<Vector3> points, float scale, Vector3 center)
+    {
+        List<Vector3> scaledPoints = new List<Vector3>();
+        foreach (Vector3 point in points)
+        {
+            Vector3 scaledPoint = center + (point - center) * scale;
+            scaledPoints.Add(scaledPoint);
+        }
+        return scaledPoints;
+    }
+
+    public static Vector3 GetRandomPointInCircle(int radius, Vector3 center)
+    {
+        // Generate a random point within a unit circle in 2D
+        Vector2 randomPoint2D = Random.insideUnitCircle;
+        // Set the y-coordinate to zero to keep it on the x-z plane
+        Vector3 randomPoint = new Vector3(randomPoint2D.x, 0f, randomPoint2D.y);
+        // Scale the point by the radius and add the center to get the final 3D point
+        return center + randomPoint * radius;
+    }
 
 
+    public static Vector3 GetDirectionFromRotation(int rotation)
+    {
+        float[] rotationValues = { 0f, 60f, 120f, 180f, 240f, 300f };
+
+        // Calculate the index based on the rotation value
+        int index = rotation % rotationValues.Length;
+
+        // Convert the rotation angle to radians
+        float angle = rotationValues[index] * Mathf.Deg2Rad;
+
+        // Calculate the direction vector based on the angle
+        float x = Mathf.Cos(angle);
+        float z = Mathf.Sin(angle);
+
+        // Return the direction vector
+        return new Vector3(x, 0f, z);
+    }
 
     public static void Shuffle(List<Vector3> points)
     {
@@ -110,8 +147,21 @@ public static class VectorUtil
         return filteredBounds;
     }
 
-    public static Vector2 PointLookupDefault(Vector2 position) => VectorUtil.ToVector2Int(position);
-    // public static Vector3 PointLookupDefault(Vector3 position) => VectorUtil.ToVector3Int(position);
+    public static Vector2 PointLookupDefault_X2(Vector2 position)
+    {
+        return new Vector2(
+         Mathf.Round(position.x * 10f) / 10f,
+         Mathf.Round(position.y * 10f) / 10f
+     );
+    }
+    public static Vector2 PointLookupDefault_X2(Vector3 position)
+    {
+        return new Vector2(
+         Mathf.Round(position.x * 10f) / 10f,
+         Mathf.Round(position.z * 10f) / 10f
+     );
+    }
+    // public static Vector2 PointLookupDefault(Vector2 position) => VectorUtil.ToVector2Int(position);
     public static Vector3 PointLookupDefault(Vector3 vector)
     {
         return new Vector3(
@@ -196,13 +246,6 @@ public static class VectorUtil
         float roundedZ = Mathf.RoundToInt(vector.z / round) * round;
         return new Vector3(roundedX, vector.y, roundedZ);
     }
-    // public static Vector3 RoundVector3ToDyanmicValueXZ(Vector3 position, int size)
-    // {
-    //     int roundAmount = Mathf.RoundToInt((size / 12) / 5f) * 5;
-    //     float roundedX = Mathf.Round(position.x / roundAmount) * roundAmount;
-    //     float roundedZ = Mathf.Round(position.z / roundAmount) * roundAmount;
-    //     return new Vector3(roundedX, position.y, roundedZ);
-    // }
 
     public static Vector2 Calculate_Coordinate(Vector3 position) => new Vector2(position.x, position.z);
     public static Vector2 Calculate_AproximateCoordinate(Vector2 coord) => ToVector2Int(coord);
@@ -721,7 +764,7 @@ public static class VectorUtil
 
 
 
-    public static Vector3 CalculateCenterPositionFromPoints(Vector3[] points)
+    public static Vector3 Calculate_CenterPositionFromPoints(Vector3[] points)
     {
         // Calculate the center point
         Vector3 center = Vector3.zero;
@@ -731,7 +774,7 @@ public static class VectorUtil
 
         return center;
     }
-    public static Vector3 CalculateCenterPositionFromPoints(List<Vector3> points)
+    public static Vector3 Calculate_CenterPositionFromPoints(List<Vector3> points)
     {
         // Calculate the center point
         Vector3 center = Vector3.zero;
@@ -1011,13 +1054,13 @@ public static class VectorUtil
     }
 
 
-    public static bool IsCellWithinVerticalBounds(float baseElevation, float height, Vector3 cellCenter, float cellSize)
+    public static bool IsBlockWithinVerticalBounds(float baseElevation, float height, Vector3 blockCenter, float blockSize)
     {
-        float cellTop = cellCenter.y + (cellSize * 0.5f);
-        float cellBottom = cellCenter.y - (cellSize * 0.5f);
-        float verticalTop = baseElevation + height;
+        float blockBottom = blockCenter.y - (blockSize / 2);
+        float blockTop = blockCenter.y + (blockSize / 2);
         float verticalBottom = baseElevation;
-        return (cellTop <= verticalTop && cellBottom >= verticalBottom);
+        float verticalTop = baseElevation + height;
+        return (blockTop <= verticalTop && blockBottom >= verticalBottom);
     }
 
 
@@ -1045,6 +1088,15 @@ public static class VectorUtil
 
         if (closestPoint == Vector3.zero || edgeDistance > maxEdgeDistance) return (false, distance);
         return (true, distance);
+    }
+
+    public static bool AnyPointsWithinPolygon(List<Vector3> points, Vector3[] bopundsCorners)
+    {
+        foreach (var item in points)
+        {
+            if (IsPointWithinPolygon(item, bopundsCorners)) return true;
+        }
+        return false;
     }
 
     public static bool IsPointWithinPolygon(Vector3 point, List<Vector3> corners)
@@ -1101,6 +1153,39 @@ public static class VectorUtil
         }
         return intersectCount % 2 != 0;
     }
+    public static bool IsPointWithinPolygon(Vector3 point, List<Vector3> corners, float height)
+    {
+        int intersectCount = 0;
+        float minY = corners[0].y;
+        float maxY = minY + height;
+        for (int i = 0; i < corners.Count; i++)
+        {
+            Vector3 p1 = corners[i];
+            Vector3 p2 = corners[(i + 1) % corners.Count];
+            if (point.z > Mathf.Min(p1.z, p2.z))
+            {
+                if (point.z <= Mathf.Max(p1.z, p2.z))
+                {
+                    if (point.x <= Mathf.Max(p1.x, p2.x))
+                    {
+                        if (p1.z != p2.z)
+                        {
+                            float xIntersection = (point.z - p1.z) * (p2.x - p1.x) / (p2.z - p1.z) + p1.x;
+                            if (p1.x == p2.x || point.x <= xIntersection)
+                            {
+                                if (point.y <= maxY && point.y >= minY)
+                                {
+                                    intersectCount++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return intersectCount % 2 != 0;
+    }
+
 
     public static bool IsPointOnLine(Vector3 point, Vector3 lineStart, Vector3 lineEnd)
     {
@@ -1350,6 +1435,16 @@ public static class VectorUtil
         return new Bounds(center, size);
     }
 
+
+    public static Bounds CalculateBounds(List<Bounds> allBounds)
+    {
+        List<Vector3> boundsPTs = new List<Vector3>();
+        foreach (var item in allBounds)
+        {
+            boundsPTs.AddRange(VectorUtil.GetBoundsCorners(item));
+        }
+        return VectorUtil.CalculateBounds_V2(boundsPTs);
+    }
 
     public static Bounds CalculateBounds(List<Vector3> corners)
     {
@@ -2924,6 +3019,19 @@ public static class VectorUtil
         }
     }
 
+    public static void DrawHexagonPointLinesInGizmos(Vector3 center, int size, bool connectCenter = false)
+    {
+        Vector3[] corners = HexCoreUtil.GenerateHexagonPoints(center, size);
+        for (int i = 0; i < corners.Length; i++)
+        {
+            Vector3 pointA = corners[i];
+            Vector3 pointB = corners[(i + 1) % corners.Length];
+            Gizmos.DrawLine(pointA, pointB);
+
+            if (connectCenter) Gizmos.DrawLine(pointA, center);
+        }
+    }
+
     public static void DrawHexagonPointLinesInGizmos(Vector3[] corners)
     {
         for (int i = 0; i < corners.Length; i++)
@@ -2931,6 +3039,7 @@ public static class VectorUtil
             Vector3 pointA = corners[i];
             Vector3 pointB = corners[(i + 1) % corners.Length];
             Gizmos.DrawLine(pointA, pointB);
+
         }
     }
     public static void DrawHexagonPointLinesInGizmos(Vector3[] corners, float elevation)
@@ -2985,24 +3094,81 @@ public static class VectorUtil
 
     public static Vector3[] CreateCube(Vector3 centerPos, float size)
     {
-        Vector3[] cubePoints = new Vector3[8];
-
+        Vector3[] new_corners = new Vector3[8];
         // Calculate half size for convenience
         float halfSize = size * 0.5f;
-
         // Calculate the 8 corner points of the cube
-        cubePoints[0] = centerPos + new Vector3(-halfSize, -halfSize, -halfSize);
-        cubePoints[1] = centerPos + new Vector3(-halfSize, -halfSize, halfSize);
-        cubePoints[2] = centerPos + new Vector3(halfSize, -halfSize, halfSize);
-        cubePoints[3] = centerPos + new Vector3(halfSize, -halfSize, -halfSize);
-        cubePoints[4] = centerPos + new Vector3(-halfSize, halfSize, -halfSize);
-        cubePoints[5] = centerPos + new Vector3(-halfSize, halfSize, halfSize);
-        cubePoints[6] = centerPos + new Vector3(halfSize, halfSize, halfSize);
-        cubePoints[7] = centerPos + new Vector3(halfSize, halfSize, -halfSize);
+        new_corners[0] = centerPos + new Vector3(-halfSize, -halfSize, -halfSize);
+        new_corners[1] = centerPos + new Vector3(-halfSize, -halfSize, halfSize);
+        new_corners[2] = centerPos + new Vector3(halfSize, -halfSize, halfSize);
+        new_corners[3] = centerPos + new Vector3(halfSize, -halfSize, -halfSize);
+        new_corners[4] = centerPos + new Vector3(-halfSize, halfSize, -halfSize);
+        new_corners[5] = centerPos + new Vector3(-halfSize, halfSize, halfSize);
+        new_corners[6] = centerPos + new Vector3(halfSize, halfSize, halfSize);
+        new_corners[7] = centerPos + new Vector3(halfSize, halfSize, -halfSize);
 
-        return cubePoints;
+        return new_corners;
+    }
+    public static Vector3[] DrawCube(Vector3 centerPos, float size)
+    {
+        Vector3[] new_corners = new Vector3[8];
+        // Calculate half size for convenience
+        float halfSize = size * 0.5f;
+        // Calculate the 8 corner points of the cube
+        new_corners[0] = centerPos + new Vector3(-halfSize, -halfSize, -halfSize);
+        new_corners[1] = centerPos + new Vector3(-halfSize, -halfSize, halfSize);
+        new_corners[2] = centerPos + new Vector3(halfSize, -halfSize, halfSize);
+        new_corners[3] = centerPos + new Vector3(halfSize, -halfSize, -halfSize);
+        new_corners[4] = centerPos + new Vector3(-halfSize, halfSize, -halfSize);
+        new_corners[5] = centerPos + new Vector3(-halfSize, halfSize, halfSize);
+        new_corners[6] = centerPos + new Vector3(halfSize, halfSize, halfSize);
+        new_corners[7] = centerPos + new Vector3(halfSize, halfSize, -halfSize);
+
+        return new_corners;
     }
 
+    // public static Vector3[] CreateRotatedCube(Vector3 centerPos, float size, int rotation)
+    // {
+    //     Vector3[] cubePoints = new Vector3[8];
+    //     float[] rotationValues = { 0f, 60f, 120f, 180f, 240f, 300f };
+    //     float rotationAngle = rotationValues[rotation % 6];
+
+    //     // Calculate half size for convenience
+    //     float halfSize = size * 0.5f;
+
+    //     // Create rotation quaternions for x and z axes
+    //     Quaternion rotationQuaternion = Quaternion.Euler(0f, rotationAngle, 0f);
+
+    //     // Calculate the 8 corner points of the rotated cube
+    //     cubePoints[0] = centerPos + (rotationQuaternion * new Vector3(-halfSize, -halfSize, -halfSize));
+    //     cubePoints[1] = centerPos + (rotationQuaternion * new Vector3(-halfSize, -halfSize, halfSize));
+    //     cubePoints[2] = centerPos + (rotationQuaternion * new Vector3(halfSize, -halfSize, halfSize));
+    //     cubePoints[3] = centerPos + (rotationQuaternion * new Vector3(halfSize, -halfSize, -halfSize));
+    //     cubePoints[4] = centerPos + (rotationQuaternion * new Vector3(-halfSize, halfSize, -halfSize));
+    //     cubePoints[5] = centerPos + (rotationQuaternion * new Vector3(-halfSize, halfSize, halfSize));
+    //     cubePoints[6] = centerPos + (rotationQuaternion * new Vector3(halfSize, halfSize, halfSize));
+    //     cubePoints[7] = centerPos + (rotationQuaternion * new Vector3(halfSize, halfSize, -halfSize));
+
+    //     return cubePoints;
+    // }
+
+    public static void Draw_Cube(Vector3[] corners)
+    {
+        // if (corners.Length == 8) {
+        //     Gizmos.DrawLine(sideCorners[0], sideCorners[1]);
+        //     Gizmos.DrawLine(sideCorners[1], sideCorners[3]);
+        //     Gizmos.DrawLine(sideCorners[3], sideCorners[2]);
+        //     Gizmos.DrawLine(sideCorners[2], sideCorners[0]);
+        //     Gizmos.DrawLine(sideCorners[0], sideCorners[3]);
+        //     Gizmos.DrawLine(sideCorners[2], sideCorners[1]);
+        // }
+        Gizmos.DrawLine(corners[0], corners[1]);
+        Gizmos.DrawLine(corners[1], corners[3]);
+        Gizmos.DrawLine(corners[3], corners[2]);
+        Gizmos.DrawLine(corners[2], corners[0]);
+        Gizmos.DrawLine(corners[0], corners[3]);
+        Gizmos.DrawLine(corners[2], corners[1]);
+    }
 
     public static Vector3[,,] Generate3DGrid(Vector3 origin, int gridSizeX, int gridSizeY, int gridSizeZ, float spacing)
     {
@@ -3050,6 +3216,8 @@ public static class VectorUtil
         spacing = UtilityHelpers.RoundToNearestStep(spacing, 0.2f);
 
         int gridSizeY = Mathf.FloorToInt((maxHeight - baseElevation) / spacing) + 1;
+
+        // Debug.LogError("[gridSizeX, gridSizeY, gridSizeZ]: " + gridSizeX + ", " + gridSizeY + " , " + gridSizeZ);
 
         Vector3[,,] grid = new Vector3[gridSizeX, gridSizeY, gridSizeZ];
 

@@ -6,7 +6,7 @@ using ProceduralBase;
 
 namespace WFCSystem
 {
-    public enum Filter_CellType { Any = 0, Edge, NoEdge, NullValue }
+    public enum Filter_CellType { Any = 0, Edge, NoEdge, NullValue, Path }
 
     public enum EdgeCellType { None = 0, Default = 1, Connector, Inner }
     public enum PathCellType { Unset = 0, Default = 1, Start, End }
@@ -65,7 +65,8 @@ namespace WFCSystem
             bool hasHostParent = (parentCell != null && parentCell.GetSize() < (int)HexCellSizes.X_108);
             bool isSubCell = (size < (int)HexCellSizes.X_108);
 
-            this.layer = HexCoreUtil.Calculate_CurrentLayer(layerOffset, center.y);
+            this.layer = HexCoreUtil.Calculate_CellSnapLayer(layerOffset, center.y);
+            this.layerOffset = (int)layerOffset;
 
             if (hasHostParent)
             {
@@ -100,14 +101,27 @@ namespace WFCSystem
             if (preAssignGround) SetToGround(true);
         }
 
-        // public static HexagonCellPrototype New_SubCell(Vector3 centerPoint, HexCellSizes size, Vector2 worldspaceLookup, int layerBaseOffset, IHexCell parentCell = null)
-        // {
-        //     HexagonCellPrototype new_subcell = new HexagonCellPrototype(centerPoint, (int)size, parentCell, layerBaseOffset);
-        //     new_subcell.SetWorldSpaceLookup(worldspaceLookup);
-        //     new_subcell.SetParentLookup(parentLookup);
-        //     new_subcell.SetWorldCoordinate(new Vector2(centerPoint.x, centerPoint.z));
-        //     return new_subcell;
-        // }
+        public static HexagonCellPrototype Generate_NearestHexCell(Vector3 position, int hexSize, HexCellSizes snapCellSize, int layerHeight)
+        {
+            Vector3 hexCenter = HexCoreUtil.Calculate_ClosestHexCenter_V2(position, (int)snapCellSize);
+            hexCenter.y = (int)UtilityHelpers.RoundHeightToNearestElevation(position.y, layerHeight);
+            return new HexagonCellPrototype(hexCenter, (int)hexSize, false);
+        }
+
+        public static HexagonCellPrototype Generate_HexCellAtPosition(Vector3 position, HexCellSizes hexSize, int layerHeight)
+        {
+            Vector3 hexCenter = position;
+            hexCenter.y = (int)UtilityHelpers.RoundHeightToNearestElevation(position.y, layerHeight);
+            return new HexagonCellPrototype(hexCenter, (int)hexSize, false);
+        }
+
+        public static HexagonCellPrototype Generate_NearestHexCell(Vector3 position, HexCellSizes hexSize, int layerOffset)
+        {
+            Vector3 hexCenter = HexCoreUtil.Calculate_ClosestHexCenter_V2(position, (int)hexSize);
+            hexCenter.y = (int)UtilityHelpers.RoundHeightToNearestElevation(position.y, layerOffset);
+            return new HexagonCellPrototype(hexCenter, (int)hexSize, false);
+        }
+
         public static HexagonCellPrototype New_WorldCell(Vector3 centerPoint, int size, Vector2 parentLookup)
         {
             int layerBaseOffset = 2;
@@ -255,13 +269,41 @@ namespace WFCSystem
         public string bottomNeighborId;
         public string name;
         public int size;
+        public int layerOffset { get; private set; }
         public int layer { get; private set; } = -1;
         public int GetGridLayer() => layer;
         public bool IsSameLayer(HexagonCellPrototype cell) => (int)cell.center.y == (int)center.y;
 
         public Vector3 center { get; private set; }
+        public void UpdateLayer(int elevation)
+        {
+            Vector3 temp = center;
+            temp.y = elevation;
+            this.center = temp;
+            this.layer = HexCoreUtil.Calculate_CellSnapLayer(layerOffset, center.y);
+            this.layerOffset = (int)layerOffset;
+        }
+
         public Vector3[] cornerPoints { get; private set; }
         public Vector3[] sidePoints { get; private set; }
+
+        public List<BoundsShapeBlock> buildingNodeClearBounds = null;
+        public Vector3[] buildingNodeEdgePoints = null;
+        public List<int> buildingNode_SlicedCorners = null;
+
+        public void Draw_NodeEdges()
+        {
+            if (buildingNodeEdgePoints == null) return;
+
+            for (int i = 0; i < buildingNodeEdgePoints.Length; i++)
+            {
+                Vector3 pointA = buildingNodeEdgePoints[i];
+                Vector3 pointB = buildingNodeEdgePoints[(i + 1) % buildingNodeEdgePoints.Length];
+                Gizmos.DrawLine(pointA, pointB);
+                Gizmos.DrawSphere(pointA, 0.6f);
+            }
+        }
+
 
         public List<HexagonCellPrototype> neighbors = new List<HexagonCellPrototype>();
         public HexagonCellPrototype[] neighborsBySide { get; private set; } = new HexagonCellPrototype[6];
@@ -286,6 +328,7 @@ namespace WFCSystem
         public bool HasGroundSideNeighbor() => neighbors.Any(n => IsSameLayer(n) && n.IsGround());
         public bool HasPreassignedNeighbor() => neighbors.Any(n => n.IsPreAssigned());
         public int GetEdgeSideNeighborCount() => neighbors.FindAll(n => IsSameLayer(n) && n.IsEdge()).Count;
+        public List<HexagonCellPrototype> GetEdgeSideNeighbors() => neighbors.FindAll(n => IsSameLayer(n) && n.IsEdge());
 
 
         public List<HexagonSide> GetNeighborSides(Filter_CellType filter_CellType)
@@ -331,16 +374,6 @@ namespace WFCSystem
         {
             List<HexagonTileSide> sides = new List<HexagonTileSide>();
             HexagonCellPrototype[] allNeighborsByTileSide = GetNeighborTileSides();
-            // // Sides 
-            // allNeighborsByTileSide[0] = neighborsBySide[0];
-            // allNeighborsByTileSide[1] = neighborsBySide[1];
-            // allNeighborsByTileSide[2] = neighborsBySide[2];
-            // allNeighborsByTileSide[3] = neighborsBySide[3];
-            // allNeighborsByTileSide[4] = neighborsBySide[4];
-            // allNeighborsByTileSide[5] = neighborsBySide[5];
-            // // Top & Bottom
-            // allNeighborsByTileSide[6] = layerNeighbors[1]; //top
-            // allNeighborsByTileSide[7] = layerNeighbors[0]; //btm
 
             for (int side = 0; side < allNeighborsByTileSide.Length; side++)
             {
@@ -453,7 +486,8 @@ namespace WFCSystem
         public Vector2 worldspaceLookup { get; private set; } = Vector2.positiveInfinity;
         public Vector2 parentLookup { get; private set; } = Vector2.positiveInfinity;
         public Vector2 worldCoordinate { get; private set; } = Vector2.positiveInfinity;
-        public Vector2 GetLookup() => HexCoreUtil.Calculate_CenterLookup(worldCoordinate, size);
+        public Vector2 GetLookup() => HexCoreUtil.Calculate_CenterLookup(center, size);
+        // public Vector2 GetLookup() => HexCoreUtil.Calculate_CenterLookup(worldCoordinate, size);
 
         public Vector2 GetWorldSpaceLookup() => worldspaceLookup;
         public void SetWorldCoordinate(Vector2 coordinate) { worldCoordinate = coordinate; }
@@ -985,9 +1019,7 @@ namespace WFCSystem
 
         public static List<Vector2> CalculateNeighborLookupCoordinates(HexagonCellPrototype cell)
         {
-            List<Vector2> estimatedNeighborCenters = HexCoreUtil.GenerateNeighborLookupCoordinates(cell.center, cell.size);
-            // List<Vector2> estimatedNeighborCenters = HexagonCellPrototype.GenerateChildrenLookupCoordinates_X11(cell.center, cell.size);
-            // List<Vector3> estimatedNeighborCenters = HexagonCellPrototype.GenerateHexagonCenterPoints(cell.center, cell.size, null, false);
+            Vector2[] estimatedNeighborCenters = HexCoreUtil.Generate_NeighborLookups_X6(cell.center, cell.size);
             List<Vector2> neighborLookups = new List<Vector2>();
             foreach (Vector3 centerPos in estimatedNeighborCenters)
             {
@@ -1386,6 +1418,44 @@ namespace WFCSystem
                 if (currentPrototype.layer != desiredLayer)
                 {
                     currentPrototype = currentPrototype.layerNeighbors[verticalDirection];
+                }
+                else
+                {
+                    found = true;
+                    return currentPrototype;
+                }
+            }
+            return null;
+        }
+
+        public static HexagonCellPrototype FindBoundsCellInLayerStack(Vector2 elevationBottom_Top, HexagonCellPrototype baseCell)
+        {
+            int verticalDirection = (elevationBottom_Top.x >= baseCell.center.y) ? 1 : 0;
+
+            HexagonCellPrototype currentCell = baseCell;
+            bool found = false;
+
+            while (found == false && currentCell != null)
+            {
+                if (HexCellUtil.IsBlockWithinCellVerticalBounds(elevationBottom_Top, currentCell))
+                {
+                    found = true;
+                    return currentCell;
+                }
+                else currentCell = currentCell.layerNeighbors[verticalDirection];
+            }
+            return null;
+        }
+
+        public static HexagonCellPrototype GetTopLayerInStack(HexagonCellPrototype prototypeCell)
+        {
+            HexagonCellPrototype currentPrototype = prototypeCell;
+            bool found = false;
+            while (found == false && currentPrototype != null)
+            {
+                if (currentPrototype.HasTopNeighbor())
+                {
+                    currentPrototype = currentPrototype.layerNeighbors[1];
                 }
                 else
                 {
@@ -2899,14 +2969,16 @@ namespace WFCSystem
 
         public static void DrawHexagonCellPrototype(
             HexagonCellPrototype cell,
-            Transform transform,
             GridFilter_Type filterType,
             CellDisplay_Type cellDisplayType,
             bool showCorners,
             bool showHighlights = true,
-            Dictionary<string, Color> colors = null
+            Dictionary<string, Color> colors = null,
+            bool useExternalColor = false
         )
         {
+            if (cell == null) return;
+
             bool showAll = filterType == GridFilter_Type.All;
             Vector3 pointPos = cell.center;
 
@@ -2930,7 +3002,7 @@ namespace WFCSystem
 
                 if ((showAll || filterType == GridFilter_Type.Entrance) && cell.IsEntry())
                 {
-                    Gizmos.color = Color.green;
+                    if (!useExternalColor) Gizmos.color = Color.green;
                     show = true;
                     // showRadius = 7f;
                 }
@@ -2941,93 +3013,93 @@ namespace WFCSystem
                 }
                 else if ((showAll || filterType == GridFilter_Type.GridEdge) && cell.GetEdgeCellType() == EdgeCellType.Default)
                 {
-                    Gizmos.color = Color.red;
+                    if (!useExternalColor) Gizmos.color = Color.red;
                     show = true;
                 }
                 else if ((showAll || filterType == GridFilter_Type.InnerEdge) && cell.GetEdgeCellType() == EdgeCellType.Inner)
                 {
-                    Gizmos.color = Color.blue;
+                    if (!useExternalColor) Gizmos.color = Color.blue;
                     show = true;
                 }
                 else if ((showAll || filterType == GridFilter_Type.OriginalGridEdge) && cell.IsOriginalGridEdge())
                 {
-                    Gizmos.color = Color.red;
+                    if (!useExternalColor) Gizmos.color = Color.red;
                     show = true;
                 }
                 else if ((showAll || filterType == GridFilter_Type.HostChildEdge) && cell.IsEdgeOfParent())
                 {
-                    Gizmos.color = Color.red;
+                    if (!useExternalColor) Gizmos.color = Color.red;
                     show = true;
                 }
                 else if ((showAll || filterType == GridFilter_Type.Path) && cell.IsPath())
                 {
                     if (cell._pathCellType > PathCellType.Default)
                     {
-                        Gizmos.color = cell.IsPathCellStart() ? Color.green : Color.red;
+                        if (!useExternalColor) Gizmos.color = cell.IsPathCellStart() ? Color.green : Color.red;
                     }
-                    else Gizmos.color = (cell.IsGround() == false) ? Color.green : Color.red;
+                    else if (!useExternalColor) Gizmos.color = (cell.IsGround() == false) ? Color.green : Color.red;
 
                     show = true;
                 }
                 else if ((showAll || filterType == GridFilter_Type.Ground) && cell.IsGround())
                 {
-                    Gizmos.color = colors != null && colors.ContainsKey("brown") ? colors["brown"] : Color.black;
+                    if (!useExternalColor) Gizmos.color = colors != null && colors.ContainsKey("brown") ? colors["brown"] : Color.black;
                     show = true;
                 }
                 else if ((showAll || filterType == GridFilter_Type.FlatGround) && cell.IsFlatGround())
                 {
-                    Gizmos.color = colors != null && colors.ContainsKey("brown") ? colors["brown"] : Color.black;
+                    if (!useExternalColor) Gizmos.color = colors != null && colors.ContainsKey("brown") ? colors["brown"] : Color.black;
                     show = true;
                 }
                 else if ((filterType == GridFilter_Type.Cluster) && cell.IsInCluster())
                 {
-                    Gizmos.color = Color.cyan;
+                    if (!useExternalColor) Gizmos.color = Color.cyan;
                     Gizmos.DrawWireSphere(cell.center, cell.size);
                     show = true;
                 }
                 else if ((showAll || filterType == GridFilter_Type.Removed) && cell.cellStatus == CellStatus.Remove)
                 {
-                    Gizmos.color = Color.white;
+                    if (!useExternalColor) Gizmos.color = Color.white;
                     show = true;
                 }
                 else if ((showAll || filterType == GridFilter_Type.AboveGround) && cell.cellStatus == CellStatus.AboveGround)
                 {
-                    Gizmos.color = Color.white;
+                    if (!useExternalColor) Gizmos.color = Color.white;
                     show = true;
                 }
                 else if ((showAll || filterType == GridFilter_Type.UnderGround) && cell.cellStatus == CellStatus.UnderGround)
                 {
-                    Gizmos.color = Color.grey;
+                    if (!useExternalColor) Gizmos.color = Color.grey;
                     show = true;
                 }
                 else if ((showAll || filterType == GridFilter_Type.Underwater) && cell.IsUnderWater())
                 {
-                    Gizmos.color = Color.blue;
+                    if (!useExternalColor) Gizmos.color = Color.blue;
                     show = true;
                 }
                 else if ((showAll || filterType == GridFilter_Type.Unset) && cell.cellStatus == CellStatus.Unset)
                 {
-                    Gizmos.color = Color.black;
+                    if (!useExternalColor) Gizmos.color = Color.black;
                     show = true;
                 }
                 else if ((showAll || filterType == GridFilter_Type.Tunnel) && cell.isTunnel)
                 {
-                    Gizmos.color = Color.green;
+                    if (!useExternalColor) Gizmos.color = Color.green;
                     show = true;
                 }
                 else if ((showAll || filterType == GridFilter_Type.TunnelGroundEntry) && cell.isTunnelGroundEntry)
                 {
-                    Gizmos.color = Color.green;
+                    if (!useExternalColor) Gizmos.color = Color.green;
                     show = true;
                 }
                 else if ((showAll || filterType == GridFilter_Type.TunnelFloor) && cell.tunnelStatus == TunnelStatus.FlatGround)
                 {
-                    Gizmos.color = Color.green;
+                    if (!useExternalColor) Gizmos.color = Color.green;
                     show = true;
                 }
                 else if ((showAll || filterType == GridFilter_Type.TunnelAir) && cell.tunnelStatus == TunnelStatus.AboveGround)
                 {
-                    Gizmos.color = Color.green;
+                    if (!useExternalColor) Gizmos.color = Color.green;
                     show = true;
                 }
                 else if ((showAll || showHighlights || filterType == GridFilter_Type.Highlight) && cell.isHighlighted)
@@ -3044,7 +3116,7 @@ namespace WFCSystem
 
                 if (cellDisplayType != CellDisplay_Type.DrawCenter)
                 {
-                    Gizmos.color = Color.black;
+                    if (!useExternalColor) Gizmos.color = Color.black;
                     VectorUtil.DrawHexagonPointLinesInGizmos(cell.cornerPoints);
                 }
 
@@ -3058,7 +3130,6 @@ namespace WFCSystem
                     }
                 }
             }
-
         }
 
 
@@ -3082,7 +3153,6 @@ namespace WFCSystem
             {
                 DrawHexagonCellPrototype(
                     cell,
-                    transform,
                     filterType,
                     (drawLines) ? CellDisplay_Type.DrawCenterAndLines : CellDisplay_Type.DrawCenter,
                     showCorners,
@@ -3238,7 +3308,33 @@ namespace WFCSystem
             }
         }
 
-        public static void DrawHexagonCellPrototypeGrid(Dictionary<int, List<HexagonCellPrototype>> prototypesByLayer,
+        public static void DrawHexagonCellPrototypeGrid(
+            Dictionary<Vector2, HexagonCellPrototype> cellsByLookup,
+            Transform transform,
+            GridFilter_Type filterType,
+            GridFilter_Level filterLevel = GridFilter_Level.All,
+            bool drawLines = true,
+            bool showCorners = false,
+            bool showHighlights = true
+        )
+        {
+            if (cellsByLookup == null) return;
+
+            bool showAllLevels = (filterLevel == GridFilter_Level.All);
+
+            if (showAllLevels || filterLevel == GridFilter_Level.HostCells) DrawHexagonCellPrototypes(cellsByLookup.Values.ToList(), transform, filterType, drawLines, showCorners, showHighlights);
+
+            if (showAllLevels || filterLevel == GridFilter_Level.MicroCells)
+            {
+                foreach (var cell in cellsByLookup.Values)
+                {
+                    if (cell.children != null && cell.children.Count > 0) DrawHexagonCellPrototypes(cell.children, transform, filterType, drawLines, showCorners, showHighlights);
+                }
+            }
+        }
+
+        public static void DrawHexagonCellPrototypeGrid(
+            Dictionary<int, List<HexagonCellPrototype>> prototypesByLayer,
             Transform transform,
             GridFilter_Type filterType,
             GridFilter_Level filterLevel = GridFilter_Level.All,
@@ -3278,12 +3374,12 @@ namespace WFCSystem
         }
 
         public static void DrawHexagonCellPrototypeGrid(Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>> cellLookups_ByLayer,
-            Transform transform,
             GridFilter_Type filterType,
             GridFilter_Level filterLevel = GridFilter_Level.All,
             CellDisplay_Type cellDisplayType = CellDisplay_Type.DrawCenterAndLines,
             bool showCorners = false,
-            bool showHighlights = true
+            bool showHighlights = true,
+            bool useExternalColor = false
         )
         {
             if (cellLookups_ByLayer == null) return;
@@ -3298,12 +3394,12 @@ namespace WFCSystem
                 {
                     DrawHexagonCellPrototype(
                         cell,
-                        transform,
                         filterType,
                         cellDisplayType,
                         showCorners,
                         showHighlights,
-                        customColors
+                        customColors,
+                        useExternalColor
                     );
                 }
             }
@@ -3400,6 +3496,10 @@ namespace WFCSystem
 
             return MeshUtil.GenerateMeshFromVertexSurfaces(MeshUtil.GenerateMeshesFromVertexSurfaces(vertexSurfaceSets));
         }
+
+
+
+
 
         public static Dictionary<Vector3, List<(MeshVertexSurfaceType, List<Vector3>)>> GenerateTunnelVertexPointsFromPrototypes(List<HexagonCellPrototype> prototypes, int layerElevation, Transform transform = null)
         {
@@ -3500,6 +3600,92 @@ namespace WFCSystem
 
             return vertexSurfaceSets;
         }
+
+        public static Dictionary<Vector3, List<(MeshVertexSurfaceType, List<Vector3>)>> Generate_TunnelVertexPointsFromCell(
+            HexagonCellPrototype cell,
+            List<HexagonCellPrototype> allCellsList,
+            HashSet<string> visited,
+            Transform transform = null
+        )
+        {
+            Dictionary<Vector3, List<(MeshVertexSurfaceType, List<Vector3>)>> vertexSurfaceSets = new Dictionary<Vector3, List<(MeshVertexSurfaceType, List<Vector3>)>>();
+            if (visited == null) visited = new HashSet<string>();
+
+            if (visited.Contains(cell.GetId())) return null;
+
+            visited.Add(cell.GetId());
+
+            bool hasGroundEntryNeighbor = false;
+
+            List<int> sideWalls = new List<int>();
+
+            for (int side = 0; side < 6; side++)
+            {
+                HexagonCellPrototype sideNeighbor = cell.neighborsBySide[side];
+
+                if (sideNeighbor != null && sideNeighbor.isTunnelGroundEntry)
+                {
+                    hasGroundEntryNeighbor = true;
+
+                    if (cell.isTunnelStart && cell.tunnelStartOpenSides == null)
+                    {
+                        cell.tunnelStartOpenSides = new List<int>();
+                        cell.tunnelStartOpenSides.Add(side);
+                    }
+                    continue;
+                }
+
+                if (sideNeighbor == null) sideWalls.Add(side);
+            }
+
+            List<(MeshVertexSurfaceType, List<Vector3>)> vertexSurfaces = new List<(MeshVertexSurfaceType, List<Vector3>)>();
+            Vector3 innerCenterPos = new Vector3(cell.center.x, cell.center.y + (cell.layerOffset / 2f), cell.center.z);
+
+            if (sideWalls.Count > 0)
+            {
+                List<List<Vector3>> sideSurfaces = GenerateSideSurfaceLists(cell, sideWalls, cell.layerOffset, transform);
+                foreach (var item in sideSurfaces)
+                {
+                    vertexSurfaces.Add((MeshVertexSurfaceType.SideInner, item));
+                    if (hasGroundEntryNeighbor)
+                    {
+                        vertexSurfaces.Add((MeshVertexSurfaceType.SideOuter, item));
+                    }
+                }
+            }
+            List<Vector3> bottomFloor = new List<Vector3>();
+            List<Vector3> topCeiling = new List<Vector3>();
+
+            HexagonCellPrototype topNeighbor = cell.layerNeighbors[1];
+
+            if (!allCellsList.Contains(topNeighbor) && (topNeighbor == null || !topNeighbor.isTunnelGroundEntry || topNeighbor.tunnelEntryType != TunnelEntryType.Basement))
+            {
+                // bottomFloor.Add(prototype.center);
+                // bottomFloor.AddRange(prototype.sidePoints);
+                bottomFloor.AddRange(cell.cornerPoints);
+
+                topCeiling = VectorUtil.DuplicatePositionsToNewYPos(bottomFloor, cell.layerOffset, 1);
+                if (topCeiling.Count > 0) vertexSurfaces.Add((MeshVertexSurfaceType.Top, topCeiling));
+            }
+            if (allCellsList.Contains(cell.layerNeighbors[0]) == false)
+            {
+                if (bottomFloor.Count == 0)
+                {
+                    // bottomFloor.Add(prototype.center);
+                    // bottomFloor.AddRange(prototype.sidePoints);
+                    bottomFloor.AddRange(cell.cornerPoints);
+                }
+
+                if (bottomFloor.Count > 0) vertexSurfaces.Add((MeshVertexSurfaceType.Bottom, bottomFloor));
+            }
+
+            vertexSurfaceSets.Add(innerCenterPos, vertexSurfaces);
+
+            return vertexSurfaceSets;
+        }
+
+
+
         // public static Dictionary<Vector3, List<List<Vector3>>> GenerateTunnelVertexPointsFromPrototypes(List<HexagonCellPrototype> prototypes, int layerElevation)
         // {
         //     Dictionary<Vector3, List<List<Vector3>>> vertexSurfaceSets = new Dictionary<Vector3, List<List<Vector3>>>();

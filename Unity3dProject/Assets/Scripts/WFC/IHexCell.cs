@@ -4,7 +4,9 @@ using UnityEngine;
 
 namespace WFCSystem
 {
-    public enum HexCellSizes { Default = 12, X_12 = 12, X_4 = 4, X_36 = 36, X_108 = 108 }
+    public enum HexCellSizes { Default = 12, X_12 = 12, X_4 = 4, X_36 = 36, X_108 = 108, Worldspace = 108 }
+    public enum HexNeighborExpansionSize { Default = 6, X_6 = 6, X_7 = 7, X_12 = 12, X_13 = 13, X_19 = 19, }
+
     public interface IHexCell
     {
         public string GetId();
