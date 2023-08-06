@@ -28,7 +28,6 @@ namespace WFCSystem
 
     public class HexagonCellPrototype : IHexCell
     {
-
         #region Static Vars
         public static float neighborSearchCenterDistMult = 2.4f;
         public static float GetCornerNeighborSearchDist(int cellSize) => 1.2f * ((float)cellSize / 12f);
@@ -216,10 +215,49 @@ namespace WFCSystem
         }
 
         public bool isHighlighted { get; private set; }
+        public List<HexagonTileSide> HighlightedSides { get; private set; } = null;
+        public bool IsSideHighlighted() => HighlightedSides != null;
         public void Highlight(bool enable)
         {
             isHighlighted = enable;
         }
+        public void HighlightSide(bool enable, HexagonTileSide tileSide)
+        {
+            isHighlighted = enable;
+            if (enable)
+            {
+                if (HighlightedSides == null)
+                {
+                    HighlightedSides = new List<HexagonTileSide>() { tileSide };
+                }
+                else if (HighlightedSides.Contains(tileSide) == false) HighlightedSides.Add(tileSide);
+            }
+            else if (HighlightedSides != null && HighlightedSides.Contains(tileSide)) HighlightedSides.Remove(tileSide);
+        }
+        public void ClearSideHighlights()
+        {
+            HighlightedSides = null;
+        }
+        public void Draw_Highlights(float drawSize = 0.5f)
+        {
+            if (HighlightedSides == null) return;
+
+            foreach (var side in HighlightedSides)
+            {
+                if (side == HexagonTileSide.Top)
+                {
+                    Gizmos.DrawSphere(center + new Vector3(0, layerOffset, 0), drawSize);
+                    continue;
+                }
+                if (side == HexagonTileSide.Bottom)
+                {
+                    Gizmos.DrawSphere(center, drawSize);
+                    continue;
+                }
+                Gizmos.DrawSphere(sidePoints[(int)side], drawSize);
+            }
+        }
+
 
         public bool isIgnored;
         public void SetIgnore(bool ignore)
@@ -3000,13 +3038,20 @@ namespace WFCSystem
                     }
                 }
 
-                if ((showAll || filterType == GridFilter_Type.Entrance) && cell.IsEntry())
+                if ((showAll || showHighlights || filterType == GridFilter_Type.Highlight) && cell.isHighlighted)
+                {
+                    Gizmos.color = Color.red;
+                    Gizmos.DrawSphere(cell.center, showRadius);
+
+                    cell.Draw_Highlights();
+                    show = true;
+                }
+
+                else if ((showAll || filterType == GridFilter_Type.Entrance) && cell.IsEntry())
                 {
                     if (!useExternalColor) Gizmos.color = Color.green;
                     show = true;
-                    // showRadius = 7f;
                 }
-
                 else if ((showAll || filterType == GridFilter_Type.AnyEdge) && (cell.IsEdge() || cell.IsOriginalGridEdge())) // cell._edgeCellType > 0)
                 {
                     show = true;
@@ -3102,11 +3147,7 @@ namespace WFCSystem
                     if (!useExternalColor) Gizmos.color = Color.green;
                     show = true;
                 }
-                else if ((showAll || showHighlights || filterType == GridFilter_Type.Highlight) && cell.isHighlighted)
-                {
-                    Gizmos.color = Color.red;
-                    show = true;
-                }
+
 
                 if (cellDisplayType != CellDisplay_Type.DrawLines && (showAll || show)) Gizmos.DrawSphere(cell.center, showRadius);
             }

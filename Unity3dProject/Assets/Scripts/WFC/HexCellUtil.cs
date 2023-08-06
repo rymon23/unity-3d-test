@@ -38,7 +38,8 @@ namespace WFCSystem
             List<HexagonCellPrototype> neighborsToEvaluate,
             Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>> cellLookup_ByLayer,
             bool enableLog = false,
-            bool checkLayers = false
+            bool checkLayers = false,
+            bool resetNeighborList = false
         )
         {
             if (enableLog) Debug.Log("neighborsToEvaluate.Count: " + neighborsToEvaluate.Count);
@@ -53,6 +54,7 @@ namespace WFCSystem
                 }
 
                 int currentSize = cell.size;
+                if (resetNeighborList) cell.ClearNeighborLists();
 
                 Dictionary<HexagonSide, Vector2> neighborLookupsBySide = HexCoreUtil.Generate_NeighborLookups_BySide(cell.center, currentSize);
                 HashSet<string> foundUids = new HashSet<string>();

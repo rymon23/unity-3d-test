@@ -708,16 +708,21 @@ public class CityGenerator : MonoBehaviour
     {
         Vector3 gridStartPos = HexCoreUtil.Calculate_ClosestHexCenter_V2(transform.position, (int)36);
 
+        LocationFoundationSettings foundationSettings = new LocationFoundationSettings(
+                                                                          4,
+                                                                          1,
+                                                                          40,
+                                                                          40,
+                                                                          90
+                                                                      );
+
+
         (Dictionary<Vector2, Vector3> _baseNodeCenters,
         Dictionary<Vector2, Vector3> _bufferNodes
         ) = HexCoreUtil.Generate_FoundationPoints(
             gridStartPos,
             36,
-            foundation_innersMax,
-            foundation_cornersMax,
-            foundation_random_Inners,
-            foundation_random_Corners,
-            foundation_random_Center
+            foundationSettings
         );
 
         List<Vector3> hostPoints = HexCoreUtil.GenerateHexCenterPoints_X13(gridStartPos, 36);

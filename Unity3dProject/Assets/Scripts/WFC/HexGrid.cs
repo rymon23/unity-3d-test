@@ -33,7 +33,8 @@ namespace WFCSystem
             int _cellLayers,
             int _cellLayerOffset,
             int _radius,
-            Option_CellGridType _gridType
+            Option_CellGridType _gridType,
+            HexGrid parentHexGrid = null
         )
         {
             gridCenterPos = _startPosition;
@@ -44,7 +45,7 @@ namespace WFCSystem
             radius = _radius;
             gridType = _gridType;
 
-            Generate_Grid();
+            Generate_Grid(null, parentHexGrid);
         }
 
         public HexGrid(
@@ -157,10 +158,46 @@ namespace WFCSystem
                     neighborsToEvaluate_bySize[currentSize],
                     cellLookup_ByLayer_BySize[currentSize],
                     false,
-                    false
+                    false,
+                    true
                 );
             }
         }
+
+        public void ExcludeToCells(Dictionary<HexagonCellPrototype, List<SurfaceBlock>> surfaceBlocksByCell, bool logErrors = false)
+        {
+            Dictionary<int, Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>>> updated_cellLookup_ByLayer_BySize = new Dictionary<int, Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>>>();
+            Dictionary<int, List<HexagonCellPrototype>> neighborsToEvaluate_bySize = new Dictionary<int, List<HexagonCellPrototype>>();
+
+            foreach (HexagonCellPrototype cell in surfaceBlocksByCell.Keys)
+            {
+                HexagonCellPrototype found = GetCell(cell, logErrors);
+                if (found == null)
+                {
+                    Debug.LogError("cell was NOT found!");
+                    continue;
+                }
+
+                int currentCellSize = found.size;
+                int currentCellLayer = found.layer;
+                Vector2 currentCellLookup = found.GetLookup();
+
+                if (updated_cellLookup_ByLayer_BySize.ContainsKey(currentCellSize) == false)
+                    updated_cellLookup_ByLayer_BySize.Add(currentCellSize, new Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>>());
+
+                if (updated_cellLookup_ByLayer_BySize[currentCellSize].ContainsKey(currentCellLayer) == false)
+                    updated_cellLookup_ByLayer_BySize[currentCellSize].Add(currentCellLayer, new Dictionary<Vector2, HexagonCellPrototype>());
+
+                if (updated_cellLookup_ByLayer_BySize[currentCellSize][currentCellLayer].ContainsKey(currentCellLookup) == false)
+                    updated_cellLookup_ByLayer_BySize[currentCellSize][currentCellLayer].Add(currentCellLookup, found);
+
+                if (neighborsToEvaluate_bySize.ContainsKey(currentCellSize) == false) neighborsToEvaluate_bySize.Add(currentCellSize, new List<HexagonCellPrototype>());
+                neighborsToEvaluate_bySize[currentCellSize].Add(found);
+            }
+
+            SetCells(updated_cellLookup_ByLayer_BySize, neighborsToEvaluate_bySize);
+        }
+
 
         public Dictionary<int, Dictionary<Vector2, HexagonCellPrototype>> GetCellsByLayer() => cellLookup_ByLayer_BySize[cellSize];
         public Dictionary<Vector2, HexagonCellPrototype> GetBaseLayerCells() => cellLookup_ByLayer_BySize[cellSize][baseLayer];
@@ -210,6 +247,43 @@ namespace WFCSystem
             return null;
         }
 
+        public HexagonCellPrototype GetCell(HexagonCellPrototype cell, bool logErrors = false)
+        {
+            int currentCellSize = cell.size;
+            int currentCellLayer = cell.layer;
+            Vector2 currentCellLookup = cell.GetLookup();
+
+            if (logErrors)
+            {
+                if (cellLookup_ByLayer_BySize.ContainsKey(currentCellSize) == false)
+                {
+                    Debug.LogError("cellLookup_ByLayer_BySize.ContainsKey(cellSize) == false, cellSize: " + currentCellSize);
+                    return null;
+                }
+                if (cellLookup_ByLayer_BySize[currentCellSize].ContainsKey(currentCellLayer) == false)
+                {
+                    Debug.LogError("cellLookup_ByLayer_BySize[cellSize].ContainsKey(cellLayer) == false, cellLayer: " + currentCellLayer);
+                    return null;
+                }
+                if (cellLookup_ByLayer_BySize[currentCellSize][currentCellLayer].ContainsKey(currentCellLookup) == false)
+                {
+                    Debug.LogError("cellLookup_ByLayer_BySize[cellSize][cellLayer].ContainsKey(cellLookup) == false, cellLookup: " + currentCellLookup);
+                    return null;
+                }
+
+                return cellLookup_ByLayer_BySize[currentCellSize][currentCellLayer][currentCellLookup];
+            }
+            else
+            {
+                if (
+                    cellLookup_ByLayer_BySize.ContainsKey(currentCellSize) &&
+                    cellLookup_ByLayer_BySize[currentCellSize].ContainsKey(currentCellLayer) &&
+                    cellLookup_ByLayer_BySize[currentCellSize][currentCellLayer].ContainsKey(currentCellLookup)
+                ) return cellLookup_ByLayer_BySize[currentCellSize][currentCellLayer][currentCellLookup];
+            }
+            return null;
+        }
+
         public HexagonCellPrototype GetContainingCell(SurfaceBlock block, bool logErrors = false)
         {
             int currentLayer = HexCoreUtil.Calculate_CellLayer(block, cellLayerOffset);
@@ -246,15 +320,46 @@ namespace WFCSystem
             return null;
         }
 
+        public HexagonCellPrototype GetContainingCell(Vector3 cellCenter, int size, bool logErrors = false)
+        {
+            int currentLayer = HexCoreUtil.Calculate_CellLayer(cellCenter, cellLayerOffset);
+            List<Vector2> nearestCellLookups = HexCoreUtil.Calculate_ClosestHexLookups_X7(cellCenter, cellSize);
+            // Debug.Log("currentLayer: " + currentLayer + ", cellSize: " + cellSize);
+            if (cellLookup_ByLayer_BySize.ContainsKey(cellSize) && cellLookup_ByLayer_BySize[cellSize].ContainsKey(currentLayer))
+            {
+                foreach (Vector2 currentLookup in nearestCellLookups)
+                {
+                    HexagonCellPrototype currentCell = GetCell(currentLookup, currentLayer, logErrors);
+                    if (currentCell == null) continue;
+                    // Debug.Log("currentCell - layer: " + currentLayer + ", lookup: " + currentLookup);
+                    if (HexCoreUtil.IsAnyHexPointWithinPolygon(cellCenter, size, currentCell.cornerPoints))
+                    // if (VectorUtil.IsPointWithinPolygon(cellCenter, currentCell.cornerPoints))
+                    {
+                        return currentCell;
+                    }
+                }
+            }
+
+            return null;
+        }
+
         public bool HasCell(Vector2 cellLookup, int cellLayer)
         {
-            if (
-                cellLookup_ByLayer_BySize.ContainsKey(cellSize) &&
-                cellLookup_ByLayer_BySize[cellSize].ContainsKey(cellLayer) &&
-                cellLookup_ByLayer_BySize[cellSize][cellLayer].ContainsKey(cellLookup)
-            )
+            if (cellLookup_ByLayer_BySize.ContainsKey(cellSize) && cellLookup_ByLayer_BySize[cellSize].ContainsKey(cellLayer) && cellLookup_ByLayer_BySize[cellSize][cellLayer].ContainsKey(cellLookup))
             {
                 return cellLookup_ByLayer_BySize[cellSize][cellLayer][cellLookup] != null;
+            }
+            return false;
+        }
+
+        public bool HasCell(HexagonCellPrototype cell)
+        {
+            int currentCellSize = cell.size;
+            int currentCellLayer = cell.layer;
+            Vector2 currentCellLookup = cell.GetLookup();
+            if (cellLookup_ByLayer_BySize.ContainsKey(currentCellSize) && cellLookup_ByLayer_BySize[currentCellSize].ContainsKey(currentCellLayer) && cellLookup_ByLayer_BySize[currentCellSize][currentCellLayer].ContainsKey(currentCellLookup))
+            {
+                return cellLookup_ByLayer_BySize[currentCellSize][currentCellLayer][currentCellLookup] != null;
             }
             return false;
         }
@@ -362,7 +467,7 @@ namespace WFCSystem
         }
 
 
-        public void Generate_Grid(Dictionary<int, Dictionary<Vector2, Vector3>> new_cellCenters_ByLookup_BySize = null)
+        public void Generate_Grid(Dictionary<int, Dictionary<Vector2, Vector3>> new_cellCenters_ByLookup_BySize = null, HexGrid parentHexGrid = null)
         {
             baseLayer = HexCoreUtil.Calculate_CellSnapLayer(cellLayerOffset, gridCenterPos.y);
 
@@ -382,6 +487,7 @@ namespace WFCSystem
                 );
             }
 
+            bool hasParentGrid = parentHexGrid != null;
             Vector3[] radiusCorners = HexCoreUtil.GenerateHexagonPoints(gridCenterPos, radius);
             int created = 0;
 
@@ -415,6 +521,12 @@ namespace WFCSystem
                 {
                     Vector3 point = kvp.Value;
                     Vector2 pointLookup = HexCoreUtil.Calculate_CenterLookup(point, currentSize);
+
+                    if (hasParentGrid)
+                    {
+                        HexagonCellPrototype parentCell = parentHexGrid.GetContainingCell(point, currentSize);
+                        if (parentCell == null) continue;
+                    }
 
                     if (HexCoreUtil.IsAnyHexPointWithinPolygon(point, currentSize, radiusCorners))
                     {

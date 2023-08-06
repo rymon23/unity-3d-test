@@ -32,6 +32,7 @@ namespace WFCSystem
         public BuildingPrototype(
             Vector3 _gridCenter,
             HexCellSizes cellSize,
+            float _blockSize,
             Vector2Int _nodeCellLayersMinMax,
             int _cellLayerOffset,
             int _maxCellsPerLayer,
@@ -42,10 +43,12 @@ namespace WFCSystem
             bool consecutiveExpansionShuffle = false
         )
         {
+            blockSize = _blockSize;
             position = _gridCenter;
             transform = _transform;
             nodeGrid_CellLayersMin = _nodeCellLayersMinMax.x;
             nodeGrid_CellLayersMax = _nodeCellLayersMinMax.y;
+            nodeGrid_CellLayerOffset = _cellLayerOffset;
 
             Dictionary<int, Dictionary<Vector2, Vector3>> new_cellCenters_ByLookup_BySize = HexGrid.Generate_CenterPointsGrid(
                 _gridCenter,
@@ -112,8 +115,14 @@ namespace WFCSystem
         public Vector3 doorDimensions_Default = new Vector3(3f, 2.4f, 1.5f);
         public Vector3 doorDimensions_EXT = new Vector3(3f, 2.4f, 1.5f);
         public Vector3 doorDimensions_INT = new Vector3(3f, 2.4f, 2f);
-        public Vector3 windowDimensions = new Vector3(3f, 1.6f, 1.3f);
-        [Range(0.2f, 0.6f)][SerializeField] float windowElevationOffsetMult = 0.4f;
+
+        [Header("Windows")]
+        public Vector3 windowDimensions = new Vector3(3f, 1.3f, 1f);
+        [Range(0.2f, 0.6f)][SerializeField] float windowElevationOffsetMult = 0.3f;
+
+        [Header("Stairs")]
+        public Vector3 stairDimensions = new Vector3(3f, 1.3f, 1f);
+        public Vector3 stairwayDimensions = new Vector3(3f, 2f, 3f);
 
         [Header(" ")]
         [Header("Surface Block Settings")]
@@ -125,7 +134,7 @@ namespace WFCSystem
 
         Bounds gridBounds;
         List<Bounds> structureBounds = new List<Bounds>();
-        Dictionary<Vector3, SurfaceBlock> blockCenterLookups = null;
+        Dictionary<Vector3, SurfaceBlock> surfaceBlockCenterLookups = null;
         Dictionary<Vector2, Dictionary<string, BoundsShapeBlock>> boundsShapesByCellLookup = null;
         List<RectangleBounds> buildingBoundsShells = null;
         List<RectangleBounds> rect_doorwaysInner = null;
@@ -134,7 +143,6 @@ namespace WFCSystem
         List<RectangleBounds> rect_stairways = null;
         List<HexagonCellPrototype> baseEdges = null;
         List<HexagonCellPrototype> baseInners = null;
-        List<BoundsShapeBlock> clearWithinBounds = null;
         Dictionary<Vector2, HexagonCellPrototype> stairwayCells = new Dictionary<Vector2, HexagonCellPrototype>();
         Dictionary<HexagonCellPrototype, List<SurfaceBlock>> surfaceBlocksByCell = null;
         List<HexagonCellPrototype> pathCells = null;
@@ -190,21 +198,19 @@ namespace WFCSystem
                     tileGrid_CellLayers,
                     tileGrid_CellLayerOffset,
                     (int)HexCellSizes.X_36,
-                    Option_CellGridType.Defualt
+                    Option_CellGridType.Defualt,
+                    hexNodeGrid
                 );
 
             HexGridToBuilding();
 
-            if (displaySettings.enable_blockGrid)
-            {
-                Generate_BlockGrid();
-            }
+            if (displaySettings.enable_blockGrid) Generate_BlockGrid();
         }
 
-        public void Draw(BuildingPrototypeDisplaySettings _displaySettings = null)
+        public void Draw(BuildingPrototypeDisplaySettings _displaySettings = null, HexGridDisplaySettings _hexGridDisplaySettings = null)
         {
             if (_displaySettings != null) displaySettings = _displaySettings;
-
+            if (_hexGridDisplaySettings != null) hexGridDisplaySettings = _hexGridDisplaySettings;
 
             if (displaySettings.show_clusterCenter)
             {
@@ -220,6 +226,66 @@ namespace WFCSystem
                     item.Draw();
                 }
             }
+
+            if (displaySettings.show_markers && markerPoints_spawn != null)
+            {
+                foreach (var markerPoint in markerPoints_spawn.Values)
+                {
+                    Gizmos.color = Color.yellow;
+                    Gizmos.DrawSphere(markerPoint, 0.5f);
+                }
+            }
+
+            if (displaySettings.show_blockBounds)
+            {
+                Gizmos.color = Color.white;
+                VectorUtil.DrawRectangleLines(gridBounds);
+            }
+
+            if (displaySettings.show_doorways)
+            {
+                if (rect_doorwaysOuter != null)
+                {
+                    Gizmos.color = Color.green;
+                    foreach (var entry in rect_doorwaysOuter)
+                    {
+                        entry.Draw();
+                    }
+                }
+                if (rect_doorwaysInner != null)
+                {
+                    Gizmos.color = Color.blue;
+                    foreach (var entry in rect_doorwaysInner)
+                    {
+                        entry.Draw();
+                    }
+                }
+            }
+
+            if (displaySettings.show_windows)
+            {
+                if (rect_windows != null)
+                {
+                    Gizmos.color = Color.cyan;
+                    foreach (var window in rect_windows)
+                    {
+                        window.Draw();
+                    }
+                }
+            }
+
+            if (displaySettings.show_stairwayNodes)
+            {
+                if (rect_stairways != null)
+                {
+                    Gizmos.color = Color.yellow;
+                    foreach (var stairways in rect_stairways)
+                    {
+                        stairways.Draw();
+                    }
+                }
+            }
+
 
             if (displaySettings.show_nodeGrid && hexNodeGrid != null && hexNodeGrid.cellLookup_ByLayer_BySize != null && hexNodeGrid.cellLookup_ByLayer_BySize.Count > 0)
             {
@@ -280,73 +346,23 @@ namespace WFCSystem
 
                 }
 
-                if (displaySettings.show_blockBounds)
-                {
-                    Gizmos.color = Color.white;
-                    VectorUtil.DrawRectangleLines(gridBounds);
-                }
+                // if (displaySettings.show_stairwayNodes && stairwayCells != null)
+                // {
+                //     foreach (var cell in stairwayCells.Values)
+                //     {
+                //         Gizmos.color = Color.magenta;
+                //         Gizmos.DrawWireSphere(cell.center, cell.size * 0.7f);
 
-                if (displaySettings.show_doorways)
-                {
-                    if (rect_doorwaysOuter != null)
-                    {
-                        Gizmos.color = Color.green;
-                        foreach (var entry in rect_doorwaysOuter)
-                        {
-                            // Gizmos.DrawWireSphere(entry, doorwayRadius);
-                            // RectangleBounds rect = new RectangleBounds(entry, doorwayRadius, 0, doorDimensions_EXT);
-                            entry.Draw();
-                        }
-                    }
-
-                    if (rect_doorwaysInner != null)
-                    {
-                        Gizmos.color = Color.blue;
-                        foreach (var entry in rect_doorwaysInner)
-                        {
-                            entry.Draw();
-                        }
-                    }
-                }
-
-                if (displaySettings.show_windows)
-                {
-                    if (rect_windows != null)
-                    {
-                        Gizmos.color = Color.cyan;
-                        foreach (var window in rect_windows)
-                        {
-                            window.Draw();
-                        }
-                    }
-                }
-
-                if (displaySettings.show_stairwayNodes && stairwayCells != null)
-                {
-                    foreach (var cell in stairwayCells.Values)
-                    {
-                        Gizmos.color = Color.magenta;
-                        Gizmos.DrawWireSphere(cell.center, cell.size * 0.7f);
-
-                        if (cell.layerNeighbors[1] != null)
-                        {
-                            Gizmos.color = customColors["orange"];
-                            Gizmos.DrawWireSphere(cell.layerNeighbors[1].center, cell.size * 0.5f);
-                        }
-                    }
-                }
+                //         if (cell.layerNeighbors[1] != null)
+                //         {
+                //             Gizmos.color = customColors["orange"];
+                //             Gizmos.DrawWireSphere(cell.layerNeighbors[1].center, cell.size * 0.5f);
+                //         }
+                //     }
+                // }
 
                 if (displaySettings.show_clearingBounds)
                 {
-
-                    if (clearWithinBounds != null)
-                    {
-                        Gizmos.color = customColors["orange"];
-                        foreach (var item in clearWithinBounds)
-                        {
-                            item.DrawPoints();
-                        }
-                    }
 
                     if (boundsShapesByCellLookup != null)
                     {
@@ -359,6 +375,14 @@ namespace WFCSystem
                             }
                         }
                     }
+                    // if (clearWithinBounds != null)
+                    // {
+                    //     Gizmos.color = customColors["orange"];
+                    //     foreach (var item in clearWithinBounds)
+                    //     {
+                    //         item.DrawPoints();
+                    //     }
+                    // }
                 }
 
                 // if (show_clearingBounds && pathCells != null && pathCells.Count > 0)
@@ -389,21 +413,34 @@ namespace WFCSystem
                         GridFilter_Level.HostCells,
                         hexGridDisplaySettings.cellDisplayType,
                         false,
-                        hexGridDisplaySettings.showHighlights
+                        true
+                    // hexGridDisplaySettings.showHighlights
                     );
                 }
             }
 
             if (displaySettings.enable_blockGrid && hexNodeGrid != null && hexTileGrid != null)
             {
-                if (blockCenterLookups == null)
+                if (surfaceBlockCenterLookups == null)
                 {
                     Generate_BlockGrid();
                 }
                 else
                 {
 
-                    if (displaySettings.show_blockGrid) SurfaceBlock.DrawGrid(blockCenterLookups);
+                    if (displaySettings.show_blockGrid) SurfaceBlock.DrawGrid(surfaceBlockCenterLookups);
+
+                    // if (surfaceBlocksByCell != null)
+                    // {
+                    //     foreach (HexagonCellPrototype cell in surfaceBlocksByCell.Keys)
+                    //     {
+                    //         // Gizmos.color = customColors["purple"];
+                    //         Gizmos.color = Color.red;
+                    //         Gizmos.DrawWireSphere(cell.center, 0.5f);
+                    //         Gizmos.color = Color.black;
+                    //         VectorUtil.DrawHexagonPointLinesInGizmos(cell.cornerPoints);
+                    //     }
+                    // }
 
                     // if (showHighlightedCell && surfaceBlocksByCell != null)
                     // {
@@ -471,11 +508,11 @@ namespace WFCSystem
                 return;
             }
 
-            int maxHeight = ((hexNodeGrid.cellLayersMax) * nodeGrid_CellLayerOffset);
+            int maxHeight = hexNodeGrid.cellLayersMax * nodeGrid_CellLayerOffset;
 
             surfaceBlocksByCell = new Dictionary<HexagonCellPrototype, List<SurfaceBlock>>();
 
-            blockCenterLookups = SurfaceBlock.CreateSurfaceBlocks_V3(
+            surfaceBlockCenterLookups = SurfaceBlock.CreateSurfaceBlocks_V3(
                                                 gridBounds,
                                                 blockSize,
                                                 position.y,
@@ -485,12 +522,14 @@ namespace WFCSystem
                                                 surfaceBlocksByCell,
                                                 boundsShapesByCellLookup,
                                                 logBuildErrors
-                                                );
+                                            );
 
             // surfaceBlocksGrid = SurfaceBlock.ClearInnerBlocks(surfaceBlocksGrid);
             // SurfaceBlock.EvaluateTileEdges(surfaceBlocksGrid);
 
-            SurfaceBlock.EvaluateNeighbors(blockCenterLookups);
+            hexTileGrid.ExcludeToCells(surfaceBlocksByCell);
+
+            SurfaceBlock.EvaluateNeighbors(surfaceBlockCenterLookups);
 
             tileInnerEdgesByCellSide = SurfaceBlock.GetTileInnerEdgesByCellSide(surfaceBlocksByCell);
 
@@ -528,11 +567,113 @@ namespace WFCSystem
                 }
             }
         }
+        // public static void Generate_BuildingNodeEdgePoints(HexagonCellPrototype cell, HexagonSide buildingFront)
+        // {
+        //     if (cell.IsEdge() == false) return;
+
+        //     List<HexagonSide> neighborSides = cell.GetNeighborSides(Filter_CellType.Any);
+        //     HexagonSide frontOpposite = HexCoreUtil.OppositeSide(buildingFront);
+        //     List<int> mutatedCornersList = new List<int>();
+
+        //     if (neighborSides.Count == 2)
+        //     {
+        //         List<HexagonSide> nullNeighborSides = cell.GetNeighborSides(Filter_CellType.NullValue);
+        //         List<List<HexagonSide>> consecutiveSets;
+        //         // Debug.Log("consecutiveSets:  " + consecutiveSets.Count);
+
+        //         if (HexCoreUtil.AreSidesConsecutive(neighborSides) == false)
+        //         {
+        //             consecutiveSets = HexCoreUtil.ExtractAllConsecutiveSides(nullNeighborSides);
+        //             if (consecutiveSets.Count == 1 && consecutiveSets[0].Count == 3)
+        //             {
+        //                 cell.buildingNodeEdgePoints = HexCoreUtil.Generate_PartialHexagonCorners(cell.center, cell.size, consecutiveSets[0], mutatedCornersList);
+        //                 cell.buildingNode_SlicedCorners = mutatedCornersList;
+        //             }
+        //             return;
+        //         }
+
+        //         List<HexagonSide> filteredNullNeighborSides = nullNeighborSides.FindAll(n => n != frontOpposite && n != buildingFront);
+        //         consecutiveSets = HexCoreUtil.ExtractAllConsecutiveSides(filteredNullNeighborSides);
+
+        //         if (consecutiveSets.Count == 1 && consecutiveSets[0].Count == 2)
+        //         {
+        //             cell.buildingNodeEdgePoints = HexCoreUtil.Generate_PartialHexagonCorners(cell.center, cell.size, consecutiveSets[0], mutatedCornersList);
+        //             cell.buildingNode_SlicedCorners = mutatedCornersList;
+        //         }
+        //     }
+        //     else if (neighborSides.Count == 3)
+        //     {
+        //         if (HexCoreUtil.AreSidesConsecutive(neighborSides))
+        //         {
+        //             List<HexagonSide> nullNeighborSides = cell.GetNeighborSides(Filter_CellType.NullValue).FindAll(n => n != frontOpposite);
+        //             // Debug.Log("nullNeighborSides:  " + nullNeighborSides.Count + ",  has " + frontOpposite + ": " + nullNeighborSides.Contains(frontOpposite));
+        //             if (nullNeighborSides.Count == 2 && HexCoreUtil.AreSidesConsecutive(nullNeighborSides))
+        //             {
+        //                 cell.buildingNodeEdgePoints = HexCoreUtil.Generate_PartialHexagonCorners(cell.center, cell.size, nullNeighborSides, mutatedCornersList);
+        //                 cell.buildingNode_SlicedCorners = mutatedCornersList;
+        //             }
+        //         }
+        //     }
+        // }
+        public static RectangleBounds Create_DoorwayBounds(
+            Vector3 position,
+            Vector3 dimensions,
+            int rotation,
+            Dictionary<Vector2, Dictionary<string, BoundsShapeBlock>> boundsShapesByCellLookup,
+            HexCellSizes nodeCellSize = HexCellSizes.X_12,
+            float sizeMult = 2
+        )
+        {
+            RectangleBounds new_rect = new RectangleBounds(position, sizeMult, rotation, dimensions);
+            BoundsShapeBlock new_doorwayShape = new BoundsShapeBlock(new_rect);
+            BoundsShapeBlock.GetIntersectingHexLookups(new_doorwayShape, (int)nodeCellSize, boundsShapesByCellLookup);
+            return new_rect;
+        }
+
+        public static RectangleBounds Create_StairwayBounds(
+            Vector3 position,
+            Vector3 dimensions,
+            int rotation,
+            Dictionary<Vector2, Dictionary<string, BoundsShapeBlock>> boundsShapesByCellLookup,
+            HexCellSizes nodeCellSize = HexCellSizes.X_12,
+            float sizeMult = 2
+        )
+        {
+            RectangleBounds new_rect = new RectangleBounds(position, sizeMult, rotation, dimensions);
+            BoundsShapeBlock new_stairway = new BoundsShapeBlock(new_rect);
+            BoundsShapeBlock.GetIntersectingHexLookups(new_stairway, (int)nodeCellSize, boundsShapesByCellLookup);
+            return new_rect;
+        }
+
+        public static RectangleBounds Create_WindowBounds(
+            Vector3 rawPosition,
+            Vector3 dimensions,
+            int rotation,
+            Dictionary<Vector2, Dictionary<string, BoundsShapeBlock>> boundsShapesByCellLookup,
+            HexagonCellPrototype nodeCell,
+            float windowElevationOffsetMult = 0.3f,
+            float sizeMult = 2
+        )
+        {
+            Vector3 pos = rawPosition;
+            pos.y += nodeCell.layerOffset * windowElevationOffsetMult;
+            RectangleBounds new_rect = new RectangleBounds(pos, sizeMult, rotation, dimensions);
+            BoundsShapeBlock new_windowShape = new BoundsShapeBlock(new_rect);
+            BoundsShapeBlock.GetIntersectingHexLookups(new_windowShape, nodeCell.size, boundsShapesByCellLookup);
+            return new_rect;
+        }
+
+        public static void Create_Marker(Vector3 rawPosition, Dictionary<Vector3, Vector3> markersByLookup, float elevationOffset = 0)
+        {
+            Vector3 pos = rawPosition;
+            pos.y += elevationOffset;
+            Vector3 markerLookup = VectorUtil.PointLookupDefault(pos);
+            if (markersByLookup.ContainsKey(markerLookup) == false) markersByLookup.Add(markerLookup, pos);
+        }
 
         public void HexGridToBuilding()
         {
-            // surfaceBlocksGrid = null;
-            blockCenterLookups = null;
+            surfaceBlockCenterLookups = null;
 
             baseEdges = new List<HexagonCellPrototype>();
             baseInners = new List<HexagonCellPrototype>();
@@ -541,7 +682,6 @@ namespace WFCSystem
             rect_doorwaysInner = new List<RectangleBounds>();
             rect_windows = new List<RectangleBounds>();
             rect_stairways = new List<RectangleBounds>();
-            clearWithinBounds = new List<BoundsShapeBlock>();
 
             buildingBoundsShells = new List<RectangleBounds>();
 
@@ -571,6 +711,9 @@ namespace WFCSystem
 
             Dictionary<int, List<HexagonCellPrototype>> available_stairwayCellsByLayer = new Dictionary<int, List<HexagonCellPrototype>>();
 
+            stairwayDimensions.y = hexNodeGrid.cellLayerOffset * 0.75f;
+            doorDimensions_INT.y = (hexNodeGrid.cellLayerOffset / 2) * 0.8f;
+            doorDimensions_EXT.y = (hexNodeGrid.cellLayerOffset / 2) * 0.8f;
 
             foreach (var currentLayer in hexNodeGrid.GetCellsByLayer().Keys)
             {
@@ -647,26 +790,31 @@ namespace WFCSystem
 
                                 extEntrancesByLookupBySide.Add(side, pos);
 
-                                RectangleBounds new_rect = new RectangleBounds(pos, doorwayRadius, HexCoreUtil.GetRotationFromSide(side), doorDimensions_EXT);
-                                rect_doorwaysOuter.Add(new_rect);
-
-                                BoundsShapeBlock new_doorwayShape = new BoundsShapeBlock(new_rect);
-                                clearWithinBounds.Add(new_doorwayShape);
-                                BoundsShapeBlock.GetIntersectingHexLookups(new_doorwayShape, cell.size, boundsShapesByCellLookup);
+                                Create_Marker(pos, markerPoints_spawn, 1f);
+                                RectangleBounds new_doorwayRect = Create_DoorwayBounds(
+                                    pos,
+                                    doorDimensions_EXT,
+                                    HexCoreUtil.GetRotationFromSide(side),
+                                    boundsShapesByCellLookup,
+                                    (HexCellSizes)cell.size
+                                );
+                                rect_doorwaysOuter.Add(new_doorwayRect);
 
                                 entrances++;
                             }
                             else
                             {
-
                                 Vector3 pos = cell.sidePoints[(int)side];
-                                pos.y += cell.layerOffset * windowElevationOffsetMult;
-                                RectangleBounds new_rect = new RectangleBounds(pos, doorwayRadius, HexCoreUtil.GetRotationFromSide(side), windowDimensions);
-                                rect_windows.Add(new_rect);
 
-                                BoundsShapeBlock new_windowShape = new BoundsShapeBlock(new_rect);
-                                clearWithinBounds.Add(new_windowShape);
-                                BoundsShapeBlock.GetIntersectingHexLookups(new_windowShape, cell.size, boundsShapesByCellLookup);
+                                RectangleBounds new_windowRect = Create_WindowBounds(
+                                    pos,
+                                    windowDimensions,
+                                    HexCoreUtil.GetRotationFromSide(side),
+                                    boundsShapesByCellLookup,
+                                    cell,
+                                    windowElevationOffsetMult
+                                );
+                                rect_windows.Add(new_windowRect);
                             }
                         }
 
@@ -674,9 +822,7 @@ namespace WFCSystem
                     }
 
                     BoundsShapeBlock new_cellBoundsShape = new BoundsShapeBlock(cell, 0.78f, 0.88f, edge);
-                    clearWithinBounds.Add(new_cellBoundsShape);
                     BoundsShapeBlock.GetIntersectingHexLookups(new_cellBoundsShape, cell.size, boundsShapesByCellLookup);
-
 
                     List<HexagonSide> innerNeighborSides = cell.GetNeighborSides(Filter_CellType.Any);
 
@@ -689,12 +835,15 @@ namespace WFCSystem
 
                         innerEntrywayLookups.Add(posLookup);
 
-                        RectangleBounds new_rect = new RectangleBounds(pos, doorwayRadius, HexCoreUtil.GetRotationFromSide(side), doorDimensions_INT);
-                        rect_doorwaysInner.Add(new_rect);
-
-                        BoundsShapeBlock new_doorwayShape = new BoundsShapeBlock(new_rect);
-                        clearWithinBounds.Add(new_doorwayShape);
-                        BoundsShapeBlock.GetIntersectingHexLookups(new_doorwayShape, cell.size, boundsShapesByCellLookup);
+                        Create_Marker(pos, markerPoints_spawn, 1f);
+                        RectangleBounds new_doorwayRect = Create_DoorwayBounds(
+                            pos,
+                            doorDimensions_INT,
+                            HexCoreUtil.GetRotationFromSide(side),
+                            boundsShapesByCellLookup,
+                            (HexCellSizes)cell.size
+                        );
+                        rect_doorwaysInner.Add(new_doorwayRect);
                     }
 
                     Vector3[] boundsCorners = HexCoreUtil.GenerateHexagonPoints(cell.center, cell.size);
@@ -703,34 +852,42 @@ namespace WFCSystem
                 }
             }
 
-            // List<HexagonCellPrototype> stairwayCells = new List<HexagonCellPrototype>();
-            // stairwayCells = new Dictionary<Vector2, HexagonCellPrototype>();
+            stairwayCells = new Dictionary<Vector2, HexagonCellPrototype>();
 
-            // foreach (var currentLayer in available_stairwayCellsByLayer.Keys)
-            // {
-            //     if (available_stairwayCellsByLayer[currentLayer].Count == 0) break;
+            foreach (var currentLayer in available_stairwayCellsByLayer.Keys)
+            {
+                if (available_stairwayCellsByLayer[currentLayer].Count == 0) break;
 
-            //     List<HexagonCellPrototype> sorted = available_stairwayCellsByLayer[currentLayer];
+                List<HexagonCellPrototype> sorted = available_stairwayCellsByLayer[currentLayer];
 
-            //     // if (stairwayCells.Count > 0)
-            //     // {
-            //     sorted = sorted.FindAll(e => !stairwayCells.ContainsKey(e.GetLookup())); //;.OrderByDescending(e => e.GetNeighborSides(Filter_CellType.NullValue)).ToList();
-            //                                                                              // }
-            //                                                                              // else sorted = sorted.OrderByDescending(e => e.GetNeighborSides(Filter_CellType.NullValue)).ToList();
+                // if (stairwayCells.Count > 0)
+                // {
+                sorted = sorted.FindAll(e => !stairwayCells.ContainsKey(e.GetLookup())); //;.OrderByDescending(e => e.GetNeighborSides(Filter_CellType.NullValue)).ToList();
+                                                                                         // }
+                                                                                         // else sorted = sorted.OrderByDescending(e => e.GetNeighborSides(Filter_CellType.NullValue)).ToList();
 
-            //     if (sorted.Count == 0) continue;
+                if (sorted.Count == 0) continue;
 
-            //     stairwayCells.Add(sorted[0].GetLookup(), sorted[0]);
-            //     HexagonCellPrototype topNeighbor = sorted[0].layerNeighbors[1];
-            //     if (topNeighbor != null && stairwayCells.ContainsKey(topNeighbor.GetLookup()) == false)
-            //     {
-            //         stairwayCells.Add(topNeighbor.GetLookup(), topNeighbor);
-            //     }
+                Vector2 lookup = sorted[0].GetLookup();
+                stairwayCells.Add(lookup, sorted[0]);
+                Vector3 pos = sorted[0].center;
 
-            //     clearWithinBounds.Add(new BoundsShapeBlock(sorted[0], 0.78f, 1.8f, true));
-            //     // RectangleBounds new_rect = new RectangleBounds(pos, doorwayRadius, HexCoreUtil.GetRotationFromSide(side), doorDimensions_EXT);
-            //     // rect_stairways.Add(new_rect);
-            // }
+                RectangleBounds new_stairwayRect = Create_StairwayBounds(
+                    pos,
+                    stairwayDimensions,
+                    0,
+                    // HexCoreUtil.GetRotationFromSide(side),
+                    boundsShapesByCellLookup,
+                    (HexCellSizes)sorted[0].size
+                );
+                rect_stairways.Add(new_stairwayRect);
+
+                HexagonCellPrototype topNeighbor = sorted[0].layerNeighbors[1];
+                if (topNeighbor != null && stairwayCells.ContainsKey(topNeighbor.GetLookup()) == false)
+                {
+                    stairwayCells.Add(topNeighbor.GetLookup(), topNeighbor);
+                }
+            }
 
             structureBounds = new_structureBounds;
             gridBounds = VectorUtil.CalculateBounds(structureBounds);
@@ -783,12 +940,11 @@ namespace WFCSystem
         )
         {
             // Evalaute_Folder();
-
             List<HexagonTileTemplate> generatedTiles = null;
 
-            if (blockCenterLookups == null)
+            if (surfaceBlockCenterLookups == null)
             {
-                Debug.LogError("blockCenterLookups == null");
+                Debug.LogError("surfaceBlockCenterLookups == null");
                 return generatedTiles;
             }
 
@@ -899,6 +1055,7 @@ namespace WFCSystem
             bool _show_stairwayNodes = false,
             bool _enable_blockGrid = false,
             bool _show_buildingBoundsShells = true,
+            bool _show_markers = true,
             bool _show_clusterCenter = true,
             bool _enable_pathing = false
         )
@@ -916,6 +1073,7 @@ namespace WFCSystem
 
             show_stairwayNodes = _show_stairwayNodes;
             show_buildingBoundsShells = _show_buildingBoundsShells;
+            show_markers = _show_markers;
 
             enable_blockGrid = _enable_blockGrid;
             enable_pathing = _enable_pathing;
@@ -934,7 +1092,51 @@ namespace WFCSystem
         public bool show_windows = true;
         public bool show_stairwayNodes;
         public bool show_buildingBoundsShells = true;
+        public bool show_markers = false;
         [Header(" ")]
         public bool enable_pathing = false;
     }
+
+    [System.Serializable]
+    public class LocationFoundationSettings
+    {
+        public LocationFoundationSettings(
+            int _foundation_innersMax,
+            int _foundation_cornersMax,
+            int _foundation_random_Inners = 40,
+            int _foundation_random_Corners = 40,
+            int _foundation_random_Center = 100,
+            int _foundation_layerOffset = 2,
+            int _foundation_maxLayers = 6,
+            int _foundation_maxLayerDifference = 4
+        )
+        {
+            foundation_innersMax = _foundation_innersMax;
+            foundation_cornersMax = _foundation_cornersMax;
+            foundation_random_Inners = _foundation_random_Inners;
+            foundation_random_Corners = _foundation_random_Corners;
+            foundation_random_Center = _foundation_random_Center;
+
+            foundation_layerOffset = _foundation_layerOffset;
+            foundation_maxLayers = _foundation_maxLayers;
+            foundation_maxLayerDifference = _foundation_maxLayerDifference;
+        }
+
+        [Range(2, 10)] public int foundation_layerOffset = 2;
+        [Range(1, 12)] public int foundation_maxLayers = 6;
+        [Range(1, 12)] public int foundation_maxLayerDifference = 4;
+        [Header(" ")]
+        [Range(1, 12)] public int foundation_innersMax = 4;
+        [Range(1, 12)] public int foundation_cornersMax = 1;
+        [Header(" ")]
+        [Range(0, 100)] public int foundation_random_Inners = 40;
+        [Range(0, 100)] public int foundation_random_Corners = 40;
+        [Range(0, 100)] public int foundation_random_Center = 90;
+
+        public float groundCellInfluenceRadiusMult { get; private set; } = 1.29f;
+        public float bufferZoneLerpMult { get; private set; } = 0.55f;
+        public float pathCellLerpMult { get; private set; } = 0.5f;
+        public List<LayeredNoiseOption> layeredNoise_terrainGlobal { get; private set; }
+    }
+
 }

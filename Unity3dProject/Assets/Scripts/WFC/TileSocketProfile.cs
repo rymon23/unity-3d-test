@@ -187,7 +187,7 @@ namespace WFCSystem
                     // {
                     // }
                     // else defaultSocketId = IsGroundCell() ? GlobalSockets.Unassigned_EdgeCell : defaultSocketId = GlobalSockets.Empty_Space;
-                    Debug.LogError("NO Tile on side: " + side + ", using defaultSocketId: " + defaultSocketId);
+                    Debug.LogError("Neighbor has NO Tile on side: " + side + ", using defaultSocketId: " + defaultSocketId);
                     neighborTileSocketsBySide.Add(side, new TileSocketProfile(defaultSocketId));
                 }
             }
@@ -319,5 +319,57 @@ namespace WFCSystem
 
             return socketProfileBySideByRotation[rotation][side];
         }
+
+
+
+
+        // public static void SaveSideSocketProfileData(Dictionary<HexagonTileSide, TileSocketProfile> socketProfileBySide, string directoryPath, string fileName)
+        // {
+        //     Dictionary<Vector2, WorldCellData> dict = new Dictionary<Vector2, WorldCellData>();
+        //     foreach (var kvp in socketProfileBySide)
+        //     {
+        //         Vector2 lookupCoord = kvp.Key;
+        //         HexagonCellPrototype cell = kvp.Value;
+
+        //         WorldCellData cellData = new WorldCellData();
+        //         cellData.CopyFromCell(cell, lookupCoord);
+
+        //         dict.Add(lookupCoord, cellData);
+        //     }
+
+        //     string json = JsonConvert.SerializeObject(dict, Formatting.Indented);
+
+        //     try
+        //     {
+        //         if (!Directory.Exists(directoryPath))
+        //         {
+        //             Directory.CreateDirectory(directoryPath);
+        //         }
+
+        //         string filePath = Path.Combine(directoryPath, fileName + ".json");
+        //         File.WriteAllText(filePath, json);
+
+        //         Debug.Log("SaveData!: \n" + filePath);
+        //     }
+        //     catch (System.Exception ex)
+        //     {
+        //         Debug.LogError("Error while saving data: " + ex.Message);
+        //     }
+        // }
     }
+
+    // public class TileSocketsData
+    // {
+    //     public Vector2Serialized parentLookup;
+    //     public Vector2Serialized worldspacelookup;
+    //     public Vector2Serialized lookup;
+    //     public Vector3Serialized center;
+    //     public Vector2Serialized[] neighborLookups;
+    //     public Vector2Serialized[] neighborWorldspaceLookups;
+    //     public Vector2Serialized[] layerNeighborLookups;
+    //     public Vector2Serialized[] layerNeighborWorldspaceLookups;
+    //     public int worldCellStatus;
+    //     public bool isEdgeCell;
+    //     public int objectIndex = -1;
+    // }
 }

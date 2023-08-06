@@ -28,7 +28,6 @@ public static class VectorUtil
         return center + randomPoint * radius;
     }
 
-
     public static Vector3 GetDirectionFromRotation(int rotation)
     {
         float[] rotationValues = { 0f, 60f, 120f, 180f, 240f, 300f };
@@ -46,6 +45,25 @@ public static class VectorUtil
         // Return the direction vector
         return new Vector3(x, 0f, z);
     }
+
+    public static Vector3 GetDirectionFromRotation_90Degree(int rotation)
+    {
+        float[] rotationValues = { 0f, 90f, 180f, 270f };
+
+        // Calculate the index based on the rotation value
+        int index = rotation % rotationValues.Length;
+
+        // Convert the rotation angle to radians
+        float angle = rotationValues[index] * Mathf.Deg2Rad;
+
+        // Calculate the direction vector based on the angle
+        float x = Mathf.Cos(angle);
+        float z = Mathf.Sin(angle);
+
+        // Return the direction vector
+        return new Vector3(x, 0f, z);
+    }
+
 
     public static void Shuffle(List<Vector3> points)
     {
@@ -383,6 +401,15 @@ public static class VectorUtil
     public static Vector3[] InversePointsToLocal_ToArray(List<Vector3> points, Transform transform)
     {
         Vector3[] worldPositions = new Vector3[points.Count];
+        for (int i = 0; i < worldPositions.Length; i++)
+        {
+            worldPositions[i] = transform.InverseTransformPoint(points[i]);
+        }
+        return worldPositions;
+    }
+    public static Vector3[] InversePointsToLocal_ToArray(Vector3[] points, Transform transform)
+    {
+        Vector3[] worldPositions = new Vector3[points.Length];
         for (int i = 0; i < worldPositions.Length; i++)
         {
             worldPositions[i] = transform.InverseTransformPoint(points[i]);
@@ -3039,9 +3066,17 @@ public static class VectorUtil
             Vector3 pointA = corners[i];
             Vector3 pointB = corners[(i + 1) % corners.Length];
             Gizmos.DrawLine(pointA, pointB);
-
         }
     }
+
+    public static void Draw_PointsInGizmos(Vector3[] points, float size = 0.5f)
+    {
+        for (int i = 0; i < points.Length; i++)
+        {
+            Gizmos.DrawSphere(points[i], size);
+        }
+    }
+
     public static void DrawHexagonPointLinesInGizmos(Vector3[] corners, float elevation)
     {
         for (int i = 0; i < corners.Length; i++)

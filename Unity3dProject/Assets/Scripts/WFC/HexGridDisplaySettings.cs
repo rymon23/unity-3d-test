@@ -2,14 +2,14 @@
 namespace WFCSystem
 {
     [System.Serializable]
-    public struct HexGridDisplaySettings
+    public class HexGridDisplaySettings
     {
         public HexGridDisplaySettings(
             CellDisplay_Type _cellDisplayType,
             GridFilter_Level _gridFilter_Level,
             GridFilter_Type _gridFilter_Type,
             HexCellSizes _gridFilter_size,
-            bool _showHighlights
+            bool _showHighlights = true
         )
         {
             cellDisplayType = _cellDisplayType;
@@ -19,10 +19,10 @@ namespace WFCSystem
             showHighlights = _showHighlights;
         }
 
-        public CellDisplay_Type cellDisplayType;
-        public GridFilter_Level gridFilter_Level;
-        public GridFilter_Type gridFilter_Type;
-        public HexCellSizes gridFilter_size;
-        public bool showHighlights;
+        public CellDisplay_Type cellDisplayType = CellDisplay_Type.DrawLines;
+        public GridFilter_Level gridFilter_Level = GridFilter_Level.All;
+        public GridFilter_Type gridFilter_Type = GridFilter_Type.All;
+        public HexCellSizes gridFilter_size = HexCellSizes.Default;
+        public bool showHighlights = true;
     }
 }

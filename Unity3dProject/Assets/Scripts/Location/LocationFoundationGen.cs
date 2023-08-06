@@ -79,31 +79,43 @@ public class LocationFoundationGen : MonoBehaviour
 
     [Header(" ")]
     [SerializeField] private List<LayeredNoiseOption> layeredNoise_terrainGlobal;
-    [Range(2, 10)][SerializeField] private int foundation_layerOffset = 2;
-    [Range(1, 12)][SerializeField] private int foundation_maxLayers = 6;
-    [Range(1, 12)][SerializeField] private int foundation_maxLayerDifference = 4;
     [Header(" ")]
-    [Range(1, 12)][SerializeField] private int foundation_innersMax = 4;
-    [Range(1, 12)][SerializeField] private int foundation_cornersMax = 1;
-    [Header(" ")]
-    [Range(0, 100)][SerializeField] private int foundation_random_Inners = 40;
-    [Range(0, 100)][SerializeField] private int foundation_random_Corners = 40;
-    [Range(0, 100)][SerializeField] private int foundation_random_Center = 90;
+
+    [Range(1, 7)][SerializeField] int worldspacesMax = 2;
+
+    [SerializeField]
+    private LocationFoundationSettings foundationSettings = new LocationFoundationSettings(
+                                                                                4,
+                                                                                1,
+                                                                                40,
+                                                                                40,
+                                                                                90
+                                                                            );
 
     [Header(" ")]
     [Range(-32, 768)][SerializeField] private float terrainHeightDefault = 10f;
     [Range(1, 5)][SerializeField] int vertexDensity = 3;
+
+    [Header("Tile Generation")]
+
+    [SerializeField] private bool generate_tiles;
+    [SerializeField] private bool useCompatibilityCheck;
+    [SerializeField] private bool instantiateOnGenerate;
+    [Range(1, 99)][SerializeField] int generatePrototypesLimit = 1;
+    [SerializeField] private TileDirectory tileDirectory;
+
     [Header(" ")]
     [SerializeField] Vector3 defaultBuilding_dimensions = new Vector3(10f, 12f, 6f);
 
     [SerializeField] private GameObject worldAreaMeshObjectPrefab;
+    [SerializeField] private GameObject tileMeshObjectPrefab;
+
     List<RectangleBounds> buildingBoundsShells = null;
     Dictionary<int, Dictionary<Vector2, Vector3>> buildingBlockClusters = null;
     Dictionary<int, Dictionary<Vector2, Vector3>> buildingClusters = null;
     Dictionary<int, BuildingPrototype> buildingPrototypes = null;
 
     private Vector2 terrainChunkSizeXZ = new Vector2(164, 95);
-    GameObject meshChunkObject = null;
     Dictionary<Vector2, TerrainVertex> globalTerrainVertexGrid = null;
     Bounds activeGridBounds;
     HexagonCellPrototype worldspaceCell;
@@ -114,6 +126,12 @@ public class LocationFoundationGen : MonoBehaviour
     Dictionary<Vector2, Vector3> pathCenters = null;
     Dictionary<Vector2, Vector3> overPathCenters = new Dictionary<Vector2, Vector3>();
     Dictionary<Vector2, Vector3> foundOverPathCellConnectors = new Dictionary<Vector2, Vector3>();
+
+    private Dictionary<Vector2, Vector3> worldspace_ByLookups = null;
+    [SerializeField] private List<GameObject> worldspaceMeshObjects = new List<GameObject>();
+    GameObject meshChunkObject = null;
+
+    Dictionary<Vector2, HexVertexNode> hexVertexNodes = null;
 
     #region Saved
     private HexagonCellPrototype debug_currentHexCell;
@@ -126,6 +144,7 @@ public class LocationFoundationGen : MonoBehaviour
     #endregion
 
     public Transform folder_Main { get; private set; } = null;
+    public Transform folder_GeneratedTiles { get; private set; } = null;
     public void Evalaute_Folder()
     {
         if (folder_Main == null)
@@ -133,38 +152,45 @@ public class LocationFoundationGen : MonoBehaviour
             folder_Main = new GameObject("Terrain" + this.gameObject.name).transform;
             folder_Main.transform.SetParent(this.transform);
         }
+        if (folder_GeneratedTiles == null)
+        {
+            folder_GeneratedTiles = new GameObject("Generated Tiles" + this.gameObject.name).transform;
+            folder_GeneratedTiles.transform.SetParent(this.transform);
+        }
     }
 
-    public void Generate_Platfrom()
-    {
-        cellCenters_ByLookup = new Dictionary<Vector2, Vector3>();
-        allCenterPointsAdded = new Dictionary<Vector2, Vector3>();
 
-        buildingBlockClusters = Generate_TerrainPlatform(
-            debug_currentHexCell.center,
-            (int)debug_currentCellSize,
-            foundation_layerOffset,
-            foundation_maxLayers,
-            HexCellSizes.Worldspace,
-            foundation_innersMax,
-            foundation_cornersMax,
-            foundation_random_Inners,
-            foundation_random_Corners,
-            foundation_random_Center,
+    public static Dictionary<int, Dictionary<Vector2, Vector3>> Generate_Platfrom(
+        Vector3 gridCenter,
+        int hostCellSize,
+        LocationFoundationSettings foundationSettings,
+        Dictionary<Vector2, Vector3> pathCenters,
+        Dictionary<Vector2, Vector3> cellCenters_ByLookup,
+        Dictionary<Vector2, Vector3> allCenterPointsAdded,
+
+        List<LayeredNoiseOption> layerdNoises_terrain = null,
+        HexCellSizes maxGridSize = HexCellSizes.Worldspace,
+        float terrainHeightMax = 1
+    )
+    {
+        Dictionary<int, Dictionary<Vector2, Vector3>> new_buildingBlockClusters = Generate_TerrainPlatform(
+            gridCenter,
+            hostCellSize,
+            maxGridSize,
+            foundationSettings,
             cellCenters_ByLookup,
             allCenterPointsAdded,
-            layeredNoise_terrainGlobal,
-            terrainHeightDefault,
-            foundation_maxLayerDifference
+            layerdNoises_terrain,
+            terrainHeightMax
         );
 
         (
             Dictionary<int, Dictionary<Vector2, Vector3>> _blockCluster_,
             Dictionary<Vector2, Vector3> _pathCenters
         ) = HexCoreUtil.Generate_CellCityClusterCenters(
-                debug_currentHexCell.center,
+                gridCenter,
                 (int)HexCellSizes.X_4,
-                (int)debug_currentCellSize,
+                hostCellSize,
                 99,
                 14,
                 true,
@@ -181,11 +207,10 @@ public class LocationFoundationGen : MonoBehaviour
 
             (Vector2 nearestLookup, float nearestDist, float avgElevation) = GetCloseest_HexLookupInDictionary_withDistance_ElevationLerp(
                 center,
-                12,
+                (int)HexCellSizes.X_12,
                 cellCenters_ByLookup,
-                pathCellLerpMult
+                foundationSettings.pathCellLerpMult
             );
-
             // (Vector2 nearestLookup, float nearestDist) = GetCloseest_HexLookupInDictionary_withDistance(
             //     center,
             //     12,
@@ -195,17 +220,17 @@ public class LocationFoundationGen : MonoBehaviour
             float pathNoiseHeight = 0;
             if (nearestDist != float.MaxValue)
             {
-                if (nearestDist < (4 * (groundCellInfluenceRadiusMult)))
+                if (nearestDist < (4 * foundationSettings.groundCellInfluenceRadiusMult))
                 {
                     // pathNoiseHeight = avgElevation;
                     // pathNoiseHeight = cellCenters_ByLookup[nearestLookup].y;
-                    pathNoiseHeight = LayerdNoise.Calculate_NoiseHeightForCoordinate((int)center.x, (int)center.z, terrainHeightDefault, layeredNoise_terrainGlobal);
+                    pathNoiseHeight = LayerdNoise.Calculate_NoiseHeightForCoordinate((int)center.x, (int)center.z, terrainHeightMax, layerdNoises_terrain);
                     pathNoiseHeight = Mathf.Lerp(pathNoiseHeight, avgElevation, 0.6f);
                 }
                 else
                 {
-                    pathNoiseHeight = LayerdNoise.Calculate_NoiseHeightForCoordinate((int)center.x, (int)center.z, terrainHeightDefault, layeredNoise_terrainGlobal);
-                    pathNoiseHeight = Mathf.Lerp(pathNoiseHeight, avgElevation, pathCellLerpMult);
+                    pathNoiseHeight = LayerdNoise.Calculate_NoiseHeightForCoordinate((int)center.x, (int)center.z, terrainHeightMax, layerdNoises_terrain);
+                    pathNoiseHeight = Mathf.Lerp(pathNoiseHeight, avgElevation, foundationSettings.pathCellLerpMult);
                     // pathNoiseHeight = UtilityHelpers.RoundToNearestStep(pathNoiseHeight, 0.3f);
                     // pathNoiseHeight = Mathf.Lerp(pathNoiseHeight, cellCenters_ByLookup[nearestLookup].y, 0.56f);
                     // center.y = pathNoiseHeight;
@@ -214,15 +239,39 @@ public class LocationFoundationGen : MonoBehaviour
                 pathCenters[lookup] = center;
             }
         }
+        return new_buildingBlockClusters;
+    }
 
 
+    public static Dictionary<int, BuildingPrototype> Generate_PlatfromBuildingPrototypes(
+        Dictionary<Vector2, Vector3> cellCenters_ByLookup,
+        Dictionary<Vector2, Vector3> allCenterPointsAdded,
+        List<RectangleBounds> buildingBoundsShells,
+        Dictionary<Vector2, Vector3> overPathCenters,
+        Dictionary<Vector2, Vector3> foundOverPathCellConnectors,
+        Dictionary<int, Dictionary<Vector2, Vector3>> buildingBlockClusters,
+        Dictionary<int, Dictionary<Vector2, Vector3>> buildingClusters,
+        Transform transform,
+        LocationFoundationSettings foundationSettings,
+        Vector3 defaultBuilding_dimensions,
+        int defaultBuilding_layersMin = 1,
+        int defaultBuilding_layersMax = 10,
+        float defaultBuilding_size = 2f,
+        int buildingNode_membersMax = 3,
+        int buildingNode_layerOffset = 4,
+        int buildingConnector_baseOffesetMin = 2,
+        int buildingConnector_baseOffesetMax = 4,
+        int buildingConnector_layersMax = 2,
+        bool enable_overPathCenters = true
+    )
+    {
         buildingBoundsShells = new List<RectangleBounds>();
         overPathCenters = new Dictionary<Vector2, Vector3>();
         foundOverPathCellConnectors = new Dictionary<Vector2, Vector3>();
 
         if (enable_overPathCenters)
         {
-            keys = allCenterPointsAdded.Keys.ToList();
+            List<Vector2> keys = allCenterPointsAdded.Keys.ToList();
             foreach (var lookup in keys)
             {
                 if (cellCenters_ByLookup.ContainsKey(lookup)) continue;
@@ -250,14 +299,14 @@ public class LocationFoundationGen : MonoBehaviour
 
                     // float elevation = Mathf.Clamp(heighestY, heighestY, UnityEngine.Random.Range(heighestY, (heighestY + (defaultBuilding_layersMax * foundation_layerOffset)) + 1));
                     // hexCenter.y = (UnityEngine.Random.Range(heighestY, defaultBuilding_layersMax + 1) * foundation_layerOffset);
-                    hexCenter.y = heighestY + UnityEngine.Random.Range(buildingConnector_baseOffesetMin, buildingConnector_baseOffesetMax) * foundation_layerOffset;
+                    hexCenter.y = heighestY + UnityEngine.Random.Range(buildingConnector_baseOffesetMin, buildingConnector_baseOffesetMax) * foundationSettings.foundation_layerOffset;
                     overPathCenters.Add(lookup, hexCenter);
                     allCenterPointsAdded[lookup] = hexCenter;
 
 
                     Vector3 dimensions = new Vector3(
                         defaultBuilding_dimensions.x,
-                        UnityEngine.Random.Range(1, buildingConnector_layersMax + 1) * foundation_layerOffset,
+                        UnityEngine.Random.Range(1, buildingConnector_layersMax + 1) * foundationSettings.foundation_layerOffset,
                         defaultBuilding_dimensions.z
                     );
                     RectangleBounds rect = new RectangleBounds(hexCenter, defaultBuilding_size, UnityEngine.Random.Range(0, 6), dimensions);
@@ -277,7 +326,7 @@ public class LocationFoundationGen : MonoBehaviour
                 float height = 0;
                 if (foundOverPathCellConnectors.ContainsKey(lookup))
                 {
-                    height = UnityEngine.Random.Range(buildingConnector_baseOffesetMax + buildingConnector_layersMax, (buildingConnector_baseOffesetMax + buildingConnector_layersMax) + 2) * foundation_layerOffset;
+                    height = UnityEngine.Random.Range(buildingConnector_baseOffesetMax + buildingConnector_layersMax, (buildingConnector_baseOffesetMax + buildingConnector_layersMax) + 2) * foundationSettings.foundation_layerOffset;
                     dimensions = new Vector3(
                         defaultBuilding_dimensions.x,
                         height,
@@ -288,7 +337,7 @@ public class LocationFoundationGen : MonoBehaviour
                 {
                     dimensions = new Vector3(
                         defaultBuilding_dimensions.x * UtilityHelpers.RoundToNearestStep(UnityEngine.Random.Range(0.6f, 1f), 0.2f),
-                        UnityEngine.Random.Range(defaultBuilding_layersMin, defaultBuilding_layersMax + 1) * foundation_layerOffset,
+                        UnityEngine.Random.Range(defaultBuilding_layersMin, defaultBuilding_layersMax + 1) * foundationSettings.foundation_layerOffset,
                         defaultBuilding_dimensions.z
                     );
                 }
@@ -299,15 +348,14 @@ public class LocationFoundationGen : MonoBehaviour
         }
 
 
-        if (enable_BuildingPrototypes)
-        {
-            buildingPrototypes = BuildingPrototype.Generate_BuildingPrototypesFromBlockClusters(
-                buildingBlockClusters,
-                buildingNode_membersMax,
-                transform,
-                null
-            );
-        }
+        Dictionary<int, BuildingPrototype> buildingPrototypes = BuildingPrototype.Generate_BuildingPrototypesFromBlockClusters(
+            buildingBlockClusters,
+            buildingNode_membersMax,
+            transform,
+            null
+        );
+
+        return buildingPrototypes;
 
         // buildingClusters = HexCoreUtil.Generate_BaseBuildingClusters(
         //     buildingBlockClusters,
@@ -339,7 +387,71 @@ public class LocationFoundationGen : MonoBehaviour
         //         break;
         //     }
         // }
+    }
 
+    public void Generate_PlatfromMesh_V2(Vector3 gridCenter, GameObject meshObject, bool createNewObject = true)
+    {
+        float centerSize = 4 / 3f;
+
+        Dictionary<Vector2, Vector3> allCornerLookups = new Dictionary<Vector2, Vector3>();
+        hexVertexNodes = null;
+
+        hexVertexNodes = HexVertexUtil.Generate_HexMVertexGrid(
+            gridCenter,
+            centerSize,
+            (int)HexCellSizes.Worldspace,
+            transform,
+            HexCellSizes.X_12,
+            cellCenters_ByLookup,
+            allCenterPointsAdded,
+            pathCenters,
+            layeredNoise_terrainGlobal,
+            terrainHeightDefault,
+            groundCellInfluenceRadiusMult,
+            bufferZoneLerpMult,
+            foundationSettings.foundation_layerOffset
+        );
+
+
+        Mesh mesh = HexVertexNode.Generate_Mesh(hexVertexNodes, transform);
+        // if (createNewObject)
+        // {
+        //     MeshUtil.InstantiatePrefabWithMesh(worldAreaMeshObjectPrefab, mesh, transform.position);
+        //     return;
+        // }
+
+        if (meshObject == null)
+        {
+            GameObject new_meshObject = MeshUtil.InstantiatePrefabWithMesh(worldAreaMeshObjectPrefab, mesh, transform.position);
+            new_meshObject.name = "Foundation";
+            if (folder_Main != null)
+            {
+                new_meshObject.transform.SetParent(folder_Main);
+            }
+            else new_meshObject.transform.SetParent(transform);
+        }
+        else
+        {
+            // Debug.Log("Existing mesh found");
+            MeshFilter meshFilter = meshObject.GetComponent<MeshFilter>();
+            MeshCollider meshCollider = meshObject.GetComponent<MeshCollider>();
+            // Mesh finalMesh = meshFilter.sharedMesh;
+            // finalMesh.name = "Terrain Mesh";
+            // finalMesh.Clear();
+            // // finalMesh.uv = uvs;
+
+            // // Refresh Terrain Mesh
+            // finalMesh.RecalculateNormals();
+            // finalMesh.RecalculateBounds();
+
+            // Apply the mesh data to the MeshFilter component
+            meshFilter.sharedMesh = mesh;
+            meshCollider.sharedMesh = mesh;
+        }
+    }
+
+    public void Generate_PlatfromMesh()
+    {
         if (worldAreaMeshObjectPrefab == null)
         {
             Debug.LogError("worldAreaMeshObjectPrefab is null");
@@ -364,7 +476,7 @@ public class LocationFoundationGen : MonoBehaviour
                 terrainHeightDefault,
                 groundCellInfluenceRadiusMult,
                 bufferZoneLerpMult,
-                foundation_layerOffset
+                foundationSettings.foundation_layerOffset
             );
 
         globalTerrainVertexGrid = _globalTerrainVertexGrid;
@@ -428,7 +540,6 @@ public class LocationFoundationGen : MonoBehaviour
         // Apply the mesh data to the MeshFilter component
         meshFilter.sharedMesh = finalMesh;
         meshCollider.sharedMesh = finalMesh;
-        // }
     }
 
 
@@ -461,309 +572,129 @@ public class LocationFoundationGen : MonoBehaviour
 
             if (debug_terrainPlatform)
             {
+                worldspace_ByLookups = HexGridPathingUtil.GetConsecutiveCellPoints(
+                    debug_currentHexCell.center,
+                    worldspacesMax,
+                    (int)HexCellSizes.Worldspace,
+                    (int)HexCellSizes.WorldArea,
+                    HexNeighborExpansionSize.X_7,
+                    HexNeighborExpansionSize.X_7
+                );
 
-                Generate_Platfrom();
+                cellCenters_ByLookup = new Dictionary<Vector2, Vector3>();
+                allCenterPointsAdded = new Dictionary<Vector2, Vector3>();
+                pathCenters = new Dictionary<Vector2, Vector3>();
 
+                if (worldspaceMeshObjects == null) worldspaceMeshObjects = new List<GameObject>();
 
-                //     cellCenters_ByLookup = new Dictionary<Vector2, Vector3>();
-                //     allCenterPointsAdded = new Dictionary<Vector2, Vector3>();
+                int attempts = 99;
+                while (worldspaceMeshObjects.Count < worldspacesMax && attempts > 0)
+                {
+                    attempts--;
 
-                //     buildingBlockClusters = Generate_TerrainPlatform(
-                //         debug_currentHexCell.center,
-                //         (int)debug_currentCellSize,
-                //         foundation_layerOffset,
-                //         foundation_maxLayers,
-                //         HexCellSizes.Worldspace,
-                //         foundation_innersMax,
-                //         foundation_cornersMax,
-                //         foundation_random_Inners = 40,
-                //         foundation_random_Corners = 40,
-                //         foundation_random_Center = 100,
-                //         cellCenters_ByLookup,
-                //         allCenterPointsAdded,
-                //         layeredNoise_terrainGlobal,
-                //         terrainHeightDefault,
-                //         foundation_maxLayerDifference
-                //     );
+                    GameObject new_gameObject = MeshUtil.InstantiatePrefabWithMesh(worldAreaMeshObjectPrefab, new Mesh(), transform.position);
+                    new_gameObject.name = "Foundation";
+                    if (folder_Main != null)
+                    {
+                        new_gameObject.transform.SetParent(folder_Main);
+                    }
+                    else new_gameObject.transform.SetParent(transform);
 
-                //     // (
-                //     //     Dictionary<int, Dictionary<Vector2, Vector3>> _blockCluster_,
-                //     //     Dictionary<Vector2, Vector3> _pathCenters
-                //     // ) = HexCoreUtil.Generate_CellCityClusterCenters(debug_currentHexCell.center, (int)HexCellSizes.X_4, debug_alternateCell_size, 99, 14);
+                    worldspaceMeshObjects.Add(new_gameObject);
+                }
 
-                //     (
-                //         Dictionary<int, Dictionary<Vector2, Vector3>> _blockCluster_,
-                //         Dictionary<Vector2, Vector3> _pathCenters
-                //     ) = HexCoreUtil.Generate_CellCityClusterCenters(
-                //             debug_currentHexCell.center,
-                //             (int)HexCellSizes.X_4,
-                //             (int)debug_currentCellSize,
-                //             99,
-                //             14,
-                //             true,
-                //             65,
-                //             60
-                //         );
-
-                //     pathCenters = _pathCenters;
-
-                //     List<Vector2> keys = pathCenters.Keys.ToList();
-                //     foreach (var lookup in keys)
-                //     {
-                //         Vector3 center = pathCenters[lookup];
-
-                //         (Vector2 nearestLookup, float nearestDist, float avgElevation) = GetCloseest_HexLookupInDictionary_withDistance_ElevationLerp(
-                //             center,
-                //             12,
-                //             cellCenters_ByLookup,
-                //             pathCellLerpMult
-                //         );
-
-                //         // (Vector2 nearestLookup, float nearestDist) = GetCloseest_HexLookupInDictionary_withDistance(
-                //         //     center,
-                //         //     12,
-                //         //     cellCenters_ByLookup
-                //         // );
-
-                //         float pathNoiseHeight = 0;
-                //         if (nearestDist != float.MaxValue)
-                //         {
-                //             if (nearestDist < (4 * (groundCellInfluenceRadiusMult)))
-                //             {
-                //                 // pathNoiseHeight = avgElevation;
-                //                 // pathNoiseHeight = cellCenters_ByLookup[nearestLookup].y;
-                //                 pathNoiseHeight = LayerdNoise.Calculate_NoiseHeightForCoordinate((int)center.x, (int)center.z, terrainHeightDefault, layeredNoise_terrainGlobal);
-                //                 pathNoiseHeight = Mathf.Lerp(pathNoiseHeight, avgElevation, 0.6f);
-                //             }
-                //             else
-                //             {
-                //                 pathNoiseHeight = LayerdNoise.Calculate_NoiseHeightForCoordinate((int)center.x, (int)center.z, terrainHeightDefault, layeredNoise_terrainGlobal);
-                //                 pathNoiseHeight = Mathf.Lerp(pathNoiseHeight, avgElevation, pathCellLerpMult);
-                //                 // pathNoiseHeight = UtilityHelpers.RoundToNearestStep(pathNoiseHeight, 0.3f);
-                //                 // pathNoiseHeight = Mathf.Lerp(pathNoiseHeight, cellCenters_ByLookup[nearestLookup].y, 0.56f);
-                //                 // center.y = pathNoiseHeight;
-                //             }
-                //             center.y = pathNoiseHeight;
-                //             pathCenters[lookup] = center;
-                //         }
-                //     }
-
-
-                //     buildingBoundsShells = new List<RectangleBounds>();
-                //     overPathCenters = new Dictionary<Vector2, Vector3>();
-                //     foundOverPathCellConnectors = new Dictionary<Vector2, Vector3>();
-
-                //     if (enable_overPathCenters)
-                //     {
-                //         keys = allCenterPointsAdded.Keys.ToList();
-                //         foreach (var lookup in keys)
-                //         {
-                //             if (cellCenters_ByLookup.ContainsKey(lookup)) continue;
-
-                //             Vector3 hexCenter = allCenterPointsAdded[lookup];
-
-                //             Dictionary<Vector2, Vector3> _foundConnectors = new Dictionary<Vector2, Vector3>();
-
-                //             if (HexCoreUtil.IsHexCenterBetweenNeighborsInLookup(
-                //                 hexCenter,
-                //                 12,
-                //                 cellCenters_ByLookup,
-                //                 _foundConnectors
-                //             ))
-                //             {
-                //                 float heighestY = 0.1f;
-                //                 foreach (var k in _foundConnectors.Keys)
-                //                 {
-                //                     Vector3 connectorFoundation = _foundConnectors[k];
-
-                //                     if (heighestY == 0.1f || heighestY < connectorFoundation.y) heighestY = connectorFoundation.y;
-
-                //                     if (foundOverPathCellConnectors.ContainsKey(k) == false) foundOverPathCellConnectors.Add(k, connectorFoundation);
-                //                 }
-
-                //                 // float elevation = Mathf.Clamp(heighestY, heighestY, UnityEngine.Random.Range(heighestY, (heighestY + (defaultBuilding_layersMax * foundation_layerOffset)) + 1));
-                //                 // hexCenter.y = (UnityEngine.Random.Range(heighestY, defaultBuilding_layersMax + 1) * foundation_layerOffset);
-                //                 hexCenter.y = heighestY + UnityEngine.Random.Range(buildingConnector_baseOffesetMin, buildingConnector_baseOffesetMax) * foundation_layerOffset;
-                //                 overPathCenters.Add(lookup, hexCenter);
-                //                 allCenterPointsAdded[lookup] = hexCenter;
-
-
-                //                 Vector3 dimensions = new Vector3(
-                //                     defaultBuilding_dimensions.x,
-                //                     UnityEngine.Random.Range(1, buildingConnector_layersMax + 1) * foundation_layerOffset,
-                //                     defaultBuilding_dimensions.z
-                //                 );
-                //                 RectangleBounds rect = new RectangleBounds(hexCenter, defaultBuilding_size, UnityEngine.Random.Range(0, 6), dimensions);
-                //                 buildingBoundsShells.Add(rect);
-                //             }
-                //         }
-                //     }
-
-
-                //     foreach (var ix in buildingBlockClusters.Keys)
-                //     {
-                //         foreach (var lookup in buildingBlockClusters[ix].Keys)
-                //         {
-                //             Vector3 pos = buildingBlockClusters[ix][lookup];
-
-                //             Vector3 dimensions = Vector3.zero;
-                //             float height = 0;
-                //             if (foundOverPathCellConnectors.ContainsKey(lookup))
-                //             {
-                //                 height = UnityEngine.Random.Range(buildingConnector_baseOffesetMax + buildingConnector_layersMax, (buildingConnector_baseOffesetMax + buildingConnector_layersMax) + 2) * foundation_layerOffset;
-                //                 dimensions = new Vector3(
-                //                     defaultBuilding_dimensions.x,
-                //                     height,
-                //                     defaultBuilding_dimensions.z
-                //                 );
-                //             }
-                //             else
-                //             {
-                //                 dimensions = new Vector3(
-                //                     defaultBuilding_dimensions.x * UtilityHelpers.RoundToNearestStep(UnityEngine.Random.Range(0.6f, 1f), 0.2f),
-                //                     UnityEngine.Random.Range(defaultBuilding_layersMin, defaultBuilding_layersMax + 1) * foundation_layerOffset,
-                //                     defaultBuilding_dimensions.z
-                //                 );
-                //             }
-
-                //             RectangleBounds rect = new RectangleBounds(pos, defaultBuilding_size, UnityEngine.Random.Range(0, 6), dimensions);
-                //             buildingBoundsShells.Add(rect);
-                //         }
-                //     }
-
-
-                //     if (enable_BuildingPrototypes)
-                //     {
-                //         buildingPrototypes = BuildingPrototype.Generate_BuildingPrototypesFromBlockClusters(
-                //             buildingBlockClusters,
-                //             buildingNode_membersMax,
-                //             transform,
-                //             null
-                //         );
-                //     }
-
-                //     // buildingClusters = HexCoreUtil.Generate_BaseBuildingClusters(
-                //     //     buildingBlockClusters,
-                //     //     5,
-                //     //     null
-                //     // );
-                //     // if (buildingClusters != null)
-                //     // {
-                //     //     buildingPrototypes = new Dictionary<int, BuildingPrototype>();
-
-                //     //     foreach (var ix in buildingClusters.Keys)
-                //     //     {
-                //     //         List<Vector3> points = buildingClusters[ix].Values.ToList();
-                //     //         Vector3 clusterCenter = VectorUtil.Calculate_CenterPositionFromPoints(points);
-                //     //         Vector3 gridStartPos = HexCoreUtil.Calculate_ClosestHexCenter_V2(clusterCenter, (int)HexCellSizes.X_12);
-                //     //         gridStartPos.y = points[0].y;
-
-                //     //         BuildingPrototype new_buildingPrototype = new BuildingPrototype(
-                //     //             gridStartPos,
-                //     //             new Dictionary<int, Dictionary<Vector2, Vector3>> {
-                //     //                 {(int)HexCellSizes.X_12,  buildingClusters[ix]}
-                //     //             },
-                //     //             transform
-                //     //         );
-
-                //     //         buildingPrototypes.Add(ix, new_buildingPrototype);
-
-                //     //         //Temp
-                //     //         break;
-                //     //     }
-                //     // }
-
-                //     if (worldAreaMeshObjectPrefab == null)
-                //     {
-                //         Debug.LogError("worldAreaMeshObjectPrefab is null");
-                //         return;
-                //     }
-
-                //     worldspaceCell = Generate_NearestHexCell(debug_currentHexCell.center, (int)HexCellSizes.Worldspace, HexCellSizes.Default, 0);
-                //     activeGridBounds = VectorUtil.CalculateBounds_V2(worldspaceCell.cornerPoints.ToList());
-
-                //     Dictionary<Vector2, TerrainVertex> _globalTerrainVertexGrid = new Dictionary<Vector2, TerrainVertex>();
-
-                //     Vector2[,] gridLookups = Generate_TerrainFoundationVertices(
-                //             activeGridBounds,
-                //             transform,
-                //             vertexDensity,
-                //             HexCellSizes.X_12,
-                //             cellCenters_ByLookup,
-                //             allCenterPointsAdded,
-                //             pathCenters,
-                //             layeredNoise_terrainGlobal,
-                //             _globalTerrainVertexGrid,
-                //             terrainHeightDefault,
-                //             groundCellInfluenceRadiusMult,
-                //             bufferZoneLerpMult,
-                //             foundation_layerOffset
-                //         );
-
-                //     globalTerrainVertexGrid = _globalTerrainVertexGrid;
-
-                //     worldspaceChunkCenters = worldspaceCell.GetTerrainChunkCoordinates().ToList();
-
-                //     allGridChunksWithCenters = new List<(Vector2[,], Vector2)>();
-
-                //     allGridChunksWithCenters.AddRange(WorldManagerUtil.GetVertexGridChunkKeys(
-                //             globalTerrainVertexGrid,
-                //             worldspaceChunkCenters,
-                //             vertexDensity,
-                //             terrainChunkSizeXZ
-                //         ));
-
-
-                //     // for (int i = 0; i < allGridChunksWithCenters.Count; i++)
-                //     // {
-                //     //     Vector2 chunkCenterLookup = TerrainChunkData.CalculateTerrainChunkLookup(allGridChunksWithCenters[i].Item2);
-
-                //     //     // if (Evaluate_WorldAreaFolder_ByLookup(chunkCenterLookup) == false)
-                //     //     // {
-                //     //     //     continue;
-                //     //     // }
-
-                //     //     // Extract Grid Data
-                //     //     Vector2[,] gridChunkKeys = allGridChunksWithCenters[i].Item1;
-
-                //     (Vector3[] vertexPositions, Vector2[] uvs, HashSet<Vector2> meshTraingleExcludeList) = TerrainVertexUtil.ExtractVertexWorldPositionsAndUVs_V2(
-                //         gridLookups,
-                //         globalTerrainVertexGrid,
-                //         transform
-                //     );
-
-                //     if (meshChunkObject == null)
-                //     {
-                //         meshChunkObject = MeshUtil.InstantiatePrefabWithMesh(worldAreaMeshObjectPrefab, new Mesh(), transform.position);
-                //         meshChunkObject.name = "Foundation";
-                //         if (folder_Main != null)
-                //         {
-                //             meshChunkObject.transform.SetParent(folder_Main);
-                //         }
-                //         else meshChunkObject.transform.SetParent(transform);
-                //     }
-
-                //     // Get the MeshFilter component from the instantiatedPrefab
-                //     MeshFilter meshFilter = meshChunkObject.GetComponent<MeshFilter>();
-                //     MeshCollider meshCollider = meshChunkObject.GetComponent<MeshCollider>();
-                //     Mesh finalMesh = meshFilter.sharedMesh;
-
-                //     finalMesh.name = "Terrain Mesh";
-                //     finalMesh.Clear();
-                //     finalMesh.vertices = vertexPositions;
-                //     finalMesh.triangles = WorldAreaManager.GenerateTerrainTriangles_V2(gridLookups, meshTraingleExcludeList);
-                //     finalMesh.uv = uvs;
-
-                //     // Refresh Terrain Mesh
-                //     finalMesh.RecalculateNormals();
-                //     finalMesh.RecalculateBounds();
-
-                //     // Apply the mesh data to the MeshFilter component
-                //     meshFilter.sharedMesh = finalMesh;
-                //     meshCollider.sharedMesh = finalMesh;
-                //     // }
+                int ix = 0;
+                foreach (var item in worldspace_ByLookups.Values)
+                {
+                    Geenrate_WorldSpaceTerrain(item, foundationSettings, worldspaceMeshObjects[ix]);
+                    ix++;
+                }
+                // Geenrate_WorldSpaceTerrain(debug_currentHexCell.center, foundationSettings);
             }
         }
+
+
+        if (generate_tiles)
+        {
+            Evalaute_Folder();
+
+            generate_tiles = false;
+
+            if (buildingPrototypes == null || buildingPrototypes.Count == 0)
+            {
+                Debug.LogError("buildingPrototypes == null || buildingPrototypes.Count == 0");
+            }
+            else
+            {
+                int buildingsGenerated = 0;
+
+                foreach (BuildingPrototype buildingPrototype in buildingPrototypes.Values)
+                {
+                    if (buildingsGenerated >= generatePrototypesLimit) break;
+
+                    List<HexagonTileTemplate> generatedTiles = buildingPrototype.Generate_Tiles(
+                        tileMeshObjectPrefab,
+                        folder_GeneratedTiles,
+                        useCompatibilityCheck,
+                        tileDirectory.GetSocketDirectory(),
+                        null,
+                        false,
+                        true
+                    );
+
+                    buildingsGenerated++;
+                }
+            }
+        }
+    }
+
+
+    public void Geenrate_WorldSpaceTerrain(Vector3 gridCenter, LocationFoundationSettings foundationSettings, GameObject meshObject)
+    {
+        int hostCellSize = (int)HexCellSizes.X_36;
+
+        buildingBlockClusters = Generate_Platfrom(
+            gridCenter,
+            hostCellSize,
+            foundationSettings,
+            pathCenters,
+            cellCenters_ByLookup,
+            allCenterPointsAdded,
+
+            layeredNoise_terrainGlobal,
+            HexCellSizes.Worldspace,
+            terrainHeightDefault
+        );
+
+
+        buildingBoundsShells = new List<RectangleBounds>();
+        overPathCenters = new Dictionary<Vector2, Vector3>();
+        foundOverPathCellConnectors = new Dictionary<Vector2, Vector3>();
+        buildingClusters = new Dictionary<int, Dictionary<Vector2, Vector3>>();
+
+        buildingPrototypes = Generate_PlatfromBuildingPrototypes(
+            cellCenters_ByLookup,
+            allCenterPointsAdded,
+            buildingBoundsShells,
+            overPathCenters,
+            foundOverPathCellConnectors,
+            buildingBlockClusters,
+            buildingClusters,
+            transform,
+            foundationSettings,
+            defaultBuilding_dimensions,
+            defaultBuilding_layersMin = 1,
+            defaultBuilding_layersMax = 10,
+            defaultBuilding_size = 2f,
+            buildingNode_membersMax = 3,
+            buildingNode_layerOffset = 4,
+            buildingConnector_baseOffesetMin = 2,
+            buildingConnector_baseOffesetMax = 4,
+            buildingConnector_layersMax = 2
+        );
+
+        Generate_PlatfromMesh_V2(gridCenter, meshObject);
+        // Generate_PlatfromMesh();
     }
 
 
@@ -771,21 +702,17 @@ public class LocationFoundationGen : MonoBehaviour
     public static Dictionary<int, Dictionary<Vector2, Vector3>> Generate_TerrainPlatform(
         Vector3 gridCenter,
         int hostCellSize,
-        int layerOffset,
-        int maxLayers,
         HexCellSizes maxGridSize,
-        int foundation_innersMax,
-        int foundation_cornersMax,
-        int foundation_random_Inners = 40,
-        int foundation_random_Corners = 40,
-        int foundation_random_Center = 100,
+        LocationFoundationSettings foundationSettings,
         Dictionary<Vector2, Vector3> cellCenters_ByLookup = null,
         Dictionary<Vector2, Vector3> allCenterPointsAdded = null,
         List<LayeredNoiseOption> layerdNoises_terrain = null,
-        float terrainHeight = 1,
-        int maxLayerDifference = 2
+        float terrainHeight = 1
     )
     {
+        int layerOffset = foundationSettings.foundation_layerOffset;
+        int maxLayers = foundationSettings.foundation_maxLayers;
+        int maxLayerDifference = foundationSettings.foundation_maxLayerDifference;
         int baseLayer = HexCoreUtil.Calculate_CellSnapLayer(layerOffset, gridCenter.y);
         int _maxGridSize = (int)maxGridSize;
 
@@ -795,11 +722,7 @@ public class LocationFoundationGen : MonoBehaviour
         ) = HexCoreUtil.Generate_FoundationPoints(
             gridCenter,
             hostCellSize,
-            foundation_innersMax,
-            foundation_cornersMax,
-            foundation_random_Inners,
-            foundation_random_Corners,
-            foundation_random_Center,
+            foundationSettings,
             allCenterPointsAdded
         );
 
@@ -874,6 +797,8 @@ public class LocationFoundationGen : MonoBehaviour
                 if (cellCenters_ByLookup.ContainsKey(lookup) == false) cellCenters_ByLookup.Add(lookup, centerPos);
             }
         }
+
+        Debug.Log(new_buildingBlockClusters.Count + " new buildingBlockClusters created!");
 
         return new_buildingBlockClusters;
     }
@@ -1441,7 +1366,13 @@ public class LocationFoundationGen : MonoBehaviour
                     }
                 }
 
-
+                if (showGlobalVertexGrid && hexVertexNodes != null)
+                {
+                    foreach (var node in hexVertexNodes.Values)
+                    {
+                        HexVertexNode.Draw(node);
+                    }
+                }
 
             }
 

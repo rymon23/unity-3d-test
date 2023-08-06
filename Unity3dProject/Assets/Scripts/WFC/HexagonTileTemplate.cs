@@ -181,6 +181,9 @@ namespace WFCSystem
         {
             model = _model;
         }
+
+        public Dictionary<Vector3, Vector3> markerPoints_spawn { get; private set; } = null;
+
         // [Header("Inversion Settings")]
         // [SerializeField] private bool isInvertable;
         // [SerializeField] private float invertedPosition = 0.01f;
@@ -260,6 +263,7 @@ namespace WFCSystem
                     {
                         Debug.LogError("incompatibile on side: " + (HexagonTileSide)side);
                         cell.Highlight(true);
+                        cell.HighlightSide(true, (HexagonTileSide)side);
 
                         if (neighborCell != null)
                         {

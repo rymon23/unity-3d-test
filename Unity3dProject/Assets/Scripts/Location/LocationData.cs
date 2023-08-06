@@ -41,6 +41,7 @@ namespace ProceduralBase
         public Vector3[] entryPoints;
         public Vector3[] spawnPoints;
         public LocationMarkerPrefabOption prefabSettings { get; private set; }
+        public Dictionary<Vector3, Vector3> markerPoints_spawn = null;
 
         // public LocationData(string id, Vector3 centerPostion, LocationType type, LocationMarkerPrefabOption _prefabSettings, float radius)
         // {

@@ -129,7 +129,7 @@ namespace WFCSystem
         }
         public static bool IsAnyHexEdgePointWithinPolygon(Vector3 point, int pointSize, Vector3[] polygonCorners)
         {
-            Vector3[] hexCorners = HexCoreUtil.GenerateHexagonPoints(point, pointSize);
+            Vector3[] hexCorners = GenerateHexagonPoints(point, pointSize);
             foreach (var item in hexCorners)
             {
                 if (VectorUtil.IsPointWithinPolygon(item, polygonCorners)) return true;
@@ -143,7 +143,7 @@ namespace WFCSystem
         }
         public static bool IsAnyHexEdgePointOutsidePolygon(Vector3 point, int pointSize, Vector3[] polygonCorners)
         {
-            Vector3[] hexCorners = HexCoreUtil.GenerateHexagonPoints(point, pointSize);
+            Vector3[] hexCorners = GenerateHexagonPoints(point, pointSize);
             foreach (var item in hexCorners)
             {
                 if (VectorUtil.IsPointWithinPolygon(item, polygonCorners) == false) return true;
@@ -151,12 +151,12 @@ namespace WFCSystem
             return false;
         }
 
-        public static Vector2 Calculate_CenterLookup(Vector3 position, int size) => Calculate_CenterLookup(new Vector2(position.x, position.z), size);
-        public static Vector2 Calculate_CenterLookup(Vector2 position, int size)
+        public static Vector2 Calculate_CenterLookup(Vector3 position, float size) => Calculate_CenterLookup(new Vector2(position.x, position.z), size);
+        public static Vector2 Calculate_CenterLookup(Vector2 position, float size)
         {
             // if (size < (int)HexCellSizes.X_36)  return VectorUtil.ToVector2Int(position);
             if (size < (int)HexCellSizes.X_36) return VectorUtil.PointLookupDefault_X2(position);
-            else return Calculate_CenterLookup_WithDynamicRound(position, size);
+            else return Calculate_CenterLookup_WithDynamicRound(position, (int)size);
         }
 
 
@@ -810,14 +810,13 @@ namespace WFCSystem
                 Dictionary<Vector2, Vector3> clusterCenterPoints = HexGridPathingUtil.GetConsecutiveCellPoints(
                     item,
                     999,
-                    12,
-                    (int)HexCellSizes.X_36 * 3,
+                    (int)HexCellSizes.X_12,
+                    (int)HexCellSizes.Worldspace,
                     HexNeighborExpansionSize.X_7,
                     HexNeighborExpansionSize.X_7,
                     excludeList,
-                    added
-                , absoluteBoundsCorners,
-                maxRadius
+                    added,
+                    absoluteBoundsCorners
                 );
 
                 if (clusterCenterPoints.Count > 0)
@@ -877,11 +876,7 @@ namespace WFCSystem
         public static (Dictionary<Vector2, Vector3>, Dictionary<Vector2, Vector3>) Generate_FoundationPoints(
             Vector3 center,
             int hostCellSize,
-            int innersMax,
-            int cornersMax,
-            int random_Inners = 40,
-            int random_Corners = 40,
-            int random_Center = 100,
+            LocationFoundationSettings foundationSettings,
             Dictionary<Vector2, Vector3> allCenterPointsAdded = null
         )
         {
@@ -909,11 +904,11 @@ namespace WFCSystem
                 ) = HexCoreUtil.Generate_FoundationNode_CenterPoints(
                     host,
                     nodeCellSize,
-                    innersMax,
-                    cornersMax,
-                    random_Inners,
-                    random_Corners,
-                    random_Center,
+                    foundationSettings.foundation_innersMax,
+                    foundationSettings.foundation_cornersMax,
+                    foundationSettings.foundation_random_Inners,
+                    foundationSettings.foundation_random_Corners,
+                    foundationSettings.foundation_random_Center,
                     _min,
                     _max
                 // UnityEngine.Random.Range(1, 3) == 1 ? UnityEngine.Random.Range(1, 3) : UnityEngine.Random.Range(4, 8),
@@ -1069,6 +1064,42 @@ namespace WFCSystem
             // Debug.Log("total points: " + results.Count);
             return results;
         }
+
+        public static Dictionary<Vector2, Vector3> Generate_HexLocationCenterPoints(Vector3 center, int size, int maxAmount = 7)
+        {
+            // Vector3[] cornerPoints = GenerateHexagonPoints(center, size);
+            Dictionary<Vector2, Vector3> results = new Dictionary<Vector2, Vector3>() {
+                {
+                    Calculate_CenterLookup(center, size), center
+                }
+            };
+            int added = 1;
+            for (int i = 0; i < 6; i++)
+            {
+                if (added >= maxAmount) break;
+                // Get Side
+                // Vector3 sidePoint = Vector3.Lerp(cornerPoints[i], cornerPoints[(i + 1) % 6], 0.5f);
+                // Vector3 direction = (sidePoint - center).normalized;
+                // float edgeDistance = Vector2.Distance(new Vector2(sidePoint.x, sidePoint.z), new Vector2(center.x, center.z));
+                // sidePoint = center + direction * (edgeDistance * 2f);
+
+                // Get Corner
+                float angle = 60f * i;
+                float x = center.x + size * Mathf.Cos(Mathf.Deg2Rad * angle);
+                float z = center.z + size * Mathf.Sin(Mathf.Deg2Rad * angle);
+
+                Vector3 cornerPoint = new Vector3(x, center.y, z);
+                Vector3 direction = (cornerPoint - center).normalized;
+                float edgeDistance = Vector2.Distance(new Vector2(cornerPoint.x, cornerPoint.z), new Vector2(center.x, center.z));
+
+                cornerPoint = center + direction * (edgeDistance * 3f);
+                results.Add(Calculate_CenterLookup(cornerPoint, size), cornerPoint);
+                added++;
+            }
+            // Debug.Log("total points: " + results.Count);
+            return results;
+        }
+
 
 
         public static List<Vector3> GenerateHexCenterPoints_X19(Vector3 center, int size)
@@ -1556,6 +1587,7 @@ namespace WFCSystem
             }
             return resultsByLookup;
         }
+
         public static (Dictionary<int, Dictionary<Vector2, Vector3>>, Dictionary<Vector2, Vector3>) Generate_CellCityClusterCenters(
             Vector3 center,
             int cellSize,

@@ -73,8 +73,6 @@ namespace ProceduralBase
             }
         }
 
-
-
         public string uid { get; private set; }
         public BoundsType boundsType { get; private set; }
         public Vector3 Center { get; private set; }
@@ -177,324 +175,6 @@ namespace ProceduralBase
             // {
             //     Gizmos.DrawSphere(item, size);
             // }
-        }
-    }
-
-
-    public class RampPrototype
-    {
-        public RampPrototype(Vector3 position, float _size, int _rotation, Vector3 _dimensions)
-        {
-            Position = position;
-            size = _size;
-            rotation = _rotation;
-            dimensions = _dimensions;
-            corners = CreateCorners(position, size, rotation, dimensions);
-        }
-
-        // public Vector3 Center { get; private set; }
-        public Vector3 Position { get; private set; }
-        public Vector3 Lookup() => VectorUtil.PointLookupDefault(Position);
-        public float size;
-        public Vector3 dimensions { get; private set; }
-        public int rotation;
-        public Vector3[] corners { get; private set; } = new Vector3[8];
-
-        // public static Vector3[] CreateRampCorners(Vector3 centerPos, float size, int rotation, Vector3 dimensions)
-        // {
-        //     Vector3[] new_corners = new Vector3[6];
-        //     // Calculate half size for convenience
-        //     float halfSize = size * 0.5f;
-        //     centerPos.y += dimensions.y;
-
-        //     Vector3 direction = VectorUtil.GetDirectionFromRotation(rotation);
-
-        //     // Calculate the axis vectors based on the provided direction
-        //     Vector3 right = Vector3.Cross(Vector3.up, direction).normalized;
-        //     Vector3 up = Vector3.Cross(direction, right).normalized;
-
-        //     // Calculate the corner points of the ramp
-        //     // Bottom corners
-        //     new_corners[0] = centerPos - right * halfSize * dimensions.x - up * halfSize * dimensions.y - direction * halfSize * dimensions.z;
-        //     new_corners[1] = centerPos + right * halfSize * dimensions.x - up * halfSize * dimensions.y + direction * halfSize * dimensions.z;
-
-        //     // Top corners
-        //     new_corners[2] = centerPos - right * halfSize * dimensions.x + up * halfSize * dimensions.y - direction * halfSize * dimensions.z;
-        //     new_corners[3] = centerPos + right * halfSize * dimensions.x + up * halfSize * dimensions.y + direction * halfSize * dimensions.z;
-
-        //     // Left and Right corners (side edges)
-        //     new_corners[4] = centerPos - right * halfSize * dimensions.x;
-        //     new_corners[5] = centerPos + right * halfSize * dimensions.x;
-
-        //     return new_corners;
-        // }
-
-        public static Vector3[] CreateCorners(Vector3 centerPos, float size, int rotation, Vector3 dimensions)
-        {
-            Vector3[] new_corners = new Vector3[6];
-            // Calculate half size for convenience
-            float halfSize = size * 0.5f;
-            centerPos.y += dimensions.y;
-
-            Vector3 direction = VectorUtil.GetDirectionFromRotation(rotation);
-
-            // Calculate the axis vectors based on the provided direction
-            Vector3 right = Vector3.Cross(Vector3.up, direction).normalized;
-            Vector3 up = Vector3.Cross(direction, right).normalized;
-
-            // Calculate the corner points of the cube
-            //Bottom corners
-            new_corners[0] = centerPos - right * halfSize * dimensions.x - up * halfSize * dimensions.y - direction * halfSize * dimensions.z;
-            new_corners[1] = centerPos - right * halfSize * dimensions.x - up * halfSize * dimensions.y + direction * halfSize * dimensions.z;
-            new_corners[2] = centerPos + right * halfSize * dimensions.x - up * halfSize * dimensions.y + direction * halfSize * dimensions.z;
-            new_corners[3] = centerPos + right * halfSize * dimensions.x - up * halfSize * dimensions.y - direction * halfSize * dimensions.z;
-
-            //Top corners
-            new_corners[4] = centerPos - right * halfSize * dimensions.x + up * halfSize * dimensions.y - direction * halfSize * dimensions.z;
-            new_corners[5] = centerPos - right * halfSize * dimensions.x + up * halfSize * dimensions.y + direction * halfSize * dimensions.z;
-
-            return new_corners;
-        }
-
-        public Vector3[] GetCornersOnSide(SurfaceBlockSide side)
-        {
-            Vector3[] sideCorners = new Vector3[4];
-            switch (side)
-            {
-                case SurfaceBlockSide.Front:
-                    sideCorners[0] = corners[1];
-                    sideCorners[1] = corners[2];
-                    sideCorners[2] = corners[5];
-                    sideCorners[3] = corners[6];
-                    break;
-                case SurfaceBlockSide.Right:
-                    sideCorners[0] = corners[2];
-                    sideCorners[1] = corners[3];
-                    sideCorners[2] = corners[6];
-                    sideCorners[3] = corners[7];
-                    break;
-                case SurfaceBlockSide.Back:
-                    sideCorners[0] = corners[0];
-                    sideCorners[1] = corners[3];
-                    sideCorners[2] = corners[4];
-                    sideCorners[3] = corners[7];
-                    break;
-                case SurfaceBlockSide.Left:
-                    sideCorners[0] = corners[0];
-                    sideCorners[1] = corners[1];
-                    sideCorners[2] = corners[4];
-                    sideCorners[3] = corners[5];
-                    break;
-                case SurfaceBlockSide.Top:
-                    sideCorners[0] = corners[4];
-                    sideCorners[1] = corners[5];
-                    sideCorners[2] = corners[6];
-                    sideCorners[3] = corners[7];
-                    break;
-                case SurfaceBlockSide.Bottom:
-                    sideCorners[0] = corners[0];
-                    sideCorners[1] = corners[1];
-                    sideCorners[2] = corners[2];
-                    sideCorners[3] = corners[3];
-                    break;
-            }
-            return sideCorners;
-        }
-
-        public void Draw()
-        {
-            // Gizmos.color = Color.white;
-            // for (var i = 0; i < 6; i++)
-            // {
-            //     SurfaceBlockSide _side = (SurfaceBlockSide)i;
-
-            //     if (_side == SurfaceBlockSide.Top || _side == SurfaceBlockSide.Right) continue;
-            //     // Debug.Log("No neighbor on side: " + (SurfaceBlockSide)i);
-            //     Vector3[] sideCorners = GetCornersOnSide((SurfaceBlockSide)i);
-            //     Gizmos.DrawLine(sideCorners[0], sideCorners[1]);
-            //     Gizmos.DrawLine(sideCorners[1], sideCorners[3]);
-            //     Gizmos.DrawLine(sideCorners[3], sideCorners[2]);
-            //     Gizmos.DrawLine(sideCorners[2], sideCorners[0]);
-
-            //     Gizmos.DrawLine(sideCorners[0], sideCorners[3]);
-            //     Gizmos.DrawLine(sideCorners[2], sideCorners[1]);
-            // }
-            for (var i = 0; i < corners.Length; i++)
-            {
-                Gizmos.DrawSphere(corners[i], 0.3f);
-                if (i < corners.Length - 1)
-                {
-                    Gizmos.DrawLine(corners[i], corners[i + 1]);
-                }
-                // SurfaceBlockSide _side = (SurfaceBlockSide)i;
-
-            }
-        }
-    }
-
-    public class RectangleBounds
-    {
-        public RectangleBounds(Vector3 position, float _size, int _rotation, Vector3 _dimensions)
-        {
-            Position = position;
-            size = _size;
-            rotation = _rotation;
-            dimensions = _dimensions;
-            corners = CreateCorners(position, size, rotation, dimensions);
-        }
-
-        // public Vector3 Center { get; private set; }
-        public Vector3 Position { get; private set; }
-        public Vector3 Lookup() => VectorUtil.PointLookupDefault(Position);
-        public float size;
-        public Vector3 dimensions { get; private set; }
-        public int rotation;
-        public Vector3[] corners { get; private set; } = new Vector3[8];
-        public Vector3[] GetCornersOnSide(SurfaceBlockSide side)
-        {
-            Vector3[] sideCorners = new Vector3[4];
-            switch (side)
-            {
-                case SurfaceBlockSide.Front:
-                    sideCorners[0] = corners[1];
-                    sideCorners[1] = corners[2];
-                    sideCorners[2] = corners[5];
-                    sideCorners[3] = corners[6];
-                    break;
-                case SurfaceBlockSide.Right:
-                    sideCorners[0] = corners[2];
-                    sideCorners[1] = corners[3];
-                    sideCorners[2] = corners[6];
-                    sideCorners[3] = corners[7];
-                    break;
-                case SurfaceBlockSide.Back:
-                    sideCorners[0] = corners[0];
-                    sideCorners[1] = corners[3];
-                    sideCorners[2] = corners[4];
-                    sideCorners[3] = corners[7];
-                    break;
-                case SurfaceBlockSide.Left:
-                    sideCorners[0] = corners[0];
-                    sideCorners[1] = corners[1];
-                    sideCorners[2] = corners[4];
-                    sideCorners[3] = corners[5];
-                    break;
-                case SurfaceBlockSide.Top:
-                    sideCorners[0] = corners[4];
-                    sideCorners[1] = corners[5];
-                    sideCorners[2] = corners[6];
-                    sideCorners[3] = corners[7];
-                    break;
-                case SurfaceBlockSide.Bottom:
-                    sideCorners[0] = corners[0];
-                    sideCorners[1] = corners[1];
-                    sideCorners[2] = corners[2];
-                    sideCorners[3] = corners[3];
-                    break;
-            }
-            return sideCorners;
-        }
-
-        public static Vector3[] CreateCorners(Vector3 centerPos, float size, int rotation, Vector3 dimensions)
-        {
-            Vector3[] new_corners = new Vector3[8];
-            // Calculate half size for convenience
-            float halfSize = size * 0.5f;
-            centerPos.y += dimensions.y;
-
-            Vector3 direction = VectorUtil.GetDirectionFromRotation(rotation);
-
-            // Calculate the axis vectors based on the provided direction
-            Vector3 right = Vector3.Cross(Vector3.up, direction).normalized;
-            Vector3 up = Vector3.Cross(direction, right).normalized;
-
-            // Calculate the corner points of the cube
-            //Bottom corners
-            new_corners[0] = centerPos - right * halfSize * dimensions.x - up * halfSize * dimensions.y - direction * halfSize * dimensions.z;
-            new_corners[1] = centerPos - right * halfSize * dimensions.x - up * halfSize * dimensions.y + direction * halfSize * dimensions.z;
-            new_corners[2] = centerPos + right * halfSize * dimensions.x - up * halfSize * dimensions.y + direction * halfSize * dimensions.z;
-            new_corners[3] = centerPos + right * halfSize * dimensions.x - up * halfSize * dimensions.y - direction * halfSize * dimensions.z;
-
-            //Top corners
-            new_corners[4] = centerPos - right * halfSize * dimensions.x + up * halfSize * dimensions.y - direction * halfSize * dimensions.z;
-            new_corners[5] = centerPos - right * halfSize * dimensions.x + up * halfSize * dimensions.y + direction * halfSize * dimensions.z;
-            new_corners[6] = centerPos + right * halfSize * dimensions.x + up * halfSize * dimensions.y + direction * halfSize * dimensions.z;
-            new_corners[7] = centerPos + right * halfSize * dimensions.x + up * halfSize * dimensions.y - direction * halfSize * dimensions.z;
-
-            return new_corners;
-        }
-
-
-        public static Vector3[] CreateCorners(Vector3 centerPos, float size, int rotation)
-        {
-            Vector3[] new_corners = new Vector3[8];
-            // Calculate half size for convenience
-            float halfSize = size * 0.5f;
-
-            Vector3 direction = VectorUtil.GetDirectionFromRotation(rotation);
-            // Calculate the axis vectors based on the provided direction
-            Vector3 right = Vector3.Cross(Vector3.up, direction).normalized;
-            Vector3 up = Vector3.Cross(direction, right).normalized;
-
-            // Calculate the corner points of the cube
-            new_corners[0] = centerPos - right * halfSize - up * halfSize - direction * halfSize;
-            new_corners[1] = centerPos - right * halfSize - up * halfSize + direction * halfSize;
-            new_corners[2] = centerPos + right * halfSize - up * halfSize + direction * halfSize;
-            new_corners[3] = centerPos + right * halfSize - up * halfSize - direction * halfSize;
-            new_corners[4] = centerPos - right * halfSize + up * halfSize - direction * halfSize;
-            new_corners[5] = centerPos - right * halfSize + up * halfSize + direction * halfSize;
-            new_corners[6] = centerPos + right * halfSize + up * halfSize + direction * halfSize;
-            new_corners[7] = centerPos + right * halfSize + up * halfSize - direction * halfSize;
-
-            return new_corners;
-        }
-
-        public static bool IsPointWithinBounds(Vector3 point, Vector3[] corners)
-        {
-            float minX = Mathf.Infinity;
-            float maxX = Mathf.NegativeInfinity;
-            float minY = Mathf.Infinity;
-            float maxY = Mathf.NegativeInfinity;
-            float minZ = Mathf.Infinity;
-            float maxZ = Mathf.NegativeInfinity;
-
-            // Find the minimum and maximum values in each axis
-            for (int i = 0; i < corners.Length; i++)
-            {
-                Vector3 corner = corners[i];
-                minX = Mathf.Min(minX, corner.x);
-                maxX = Mathf.Max(maxX, corner.x);
-                minY = Mathf.Min(minY, corner.y);
-                maxY = Mathf.Max(maxY, corner.y);
-                minZ = Mathf.Min(minZ, corner.z);
-                maxZ = Mathf.Max(maxZ, corner.z);
-            }
-
-            // Check if the point is within the bounds
-            if (point.x >= minX && point.x <= maxX &&
-                point.y >= minY && point.y <= maxY &&
-                point.z >= minZ && point.z <= maxZ)
-            {
-                return true;
-            }
-
-            return false;
-        }
-
-        public void Draw()
-        {
-            // Gizmos.color = Color.white;
-            for (var i = 0; i < 6; i++)
-            {
-                // Debug.Log("No neighbor on side: " + (SurfaceBlockSide)i);
-                Vector3[] sideCorners = GetCornersOnSide((SurfaceBlockSide)i);
-                Gizmos.DrawLine(sideCorners[0], sideCorners[1]);
-                Gizmos.DrawLine(sideCorners[1], sideCorners[3]);
-                Gizmos.DrawLine(sideCorners[3], sideCorners[2]);
-                Gizmos.DrawLine(sideCorners[2], sideCorners[0]);
-                Gizmos.DrawLine(sideCorners[0], sideCorners[3]);
-                Gizmos.DrawLine(sideCorners[2], sideCorners[1]);
-            }
         }
     }
 
@@ -2395,7 +2075,7 @@ namespace ProceduralBase
         }
 
         public static Dictionary<HexagonCellPrototype, GameObject> Generate_MeshObjectsByCell(
-            Dictionary<HexagonCellPrototype, List<SurfaceBlock>> resultsByCell,
+            Dictionary<HexagonCellPrototype, List<SurfaceBlock>> surfaceBlocksByCell,
             GameObject prefab,
             Transform transform,
             List<SurfaceBlockState> filterOnStates,
@@ -2407,9 +2087,9 @@ namespace ProceduralBase
         {
             Dictionary<HexagonCellPrototype, GameObject> objectsByCell = new Dictionary<HexagonCellPrototype, GameObject>();
             int ix = 0;
-            foreach (var cell in resultsByCell.Keys)
+            foreach (var cell in surfaceBlocksByCell.Keys)
             {
-                GameObject gameObject = Generate_MeshObject(resultsByCell[cell], prefab, transform, cell.center, filterOnStates, folder);
+                GameObject gameObject = Generate_MeshObject(surfaceBlocksByCell[cell], prefab, transform, cell.center, filterOnStates, folder);
                 if (gameObject != null)
                 {
                     objectsByCell.Add(cell, gameObject);
@@ -2848,6 +2528,8 @@ namespace ProceduralBase
                 }
             }
         }
+
+
 
         public void DrawNeighbors()
         {

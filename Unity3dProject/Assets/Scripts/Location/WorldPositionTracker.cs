@@ -180,7 +180,6 @@ public class WorldPositionTracker : MonoBehaviour
                 {
                     _childrenHX.Add(HexagonCellPrototype.Generate_HexCellAtPosition(item, (HexCellSizes)size, debug_currentCellHeight));
                 }
-
             }
 
 
@@ -189,23 +188,27 @@ public class WorldPositionTracker : MonoBehaviour
                 cellCenters_ByLookup = new Dictionary<Vector2, Vector3>();
                 allCenterPointsAdded = new Dictionary<Vector2, Vector3>();
 
+
+                LocationFoundationSettings foundationSettings = new LocationFoundationSettings(
+                                                                                4,
+                                                                                1,
+                                                                                40,
+                                                                                40,
+                                                                                90
+                                                                            );
+
+
                 buildingBlockClusters = Generate_TerrainPlatform(
                     debug_currentHexCell.center,
                     debug_alternateCell_size,
                     foundation_layerOffset,
                     foundation_maxLayers,
                     HexCellSizes.Worldspace,
-                    foundation_innersMax,
-                    foundation_cornersMax,
-                    foundation_random_Inners = 40,
-                    foundation_random_Corners = 40,
-                    foundation_random_Center = 100,
+                    foundationSettings,
                     cellCenters_ByLookup,
-                    // pathCenters_ByLookup,
                     allCenterPointsAdded,
                     layeredNoise_terrainGlobal,
-                    terrainHeightDefault,
-                    foundation_maxLayerDifference
+                    terrainHeightDefault
                 );
 
                 // (
@@ -459,21 +462,16 @@ public class WorldPositionTracker : MonoBehaviour
         int layerOffset,
         int maxLayers,
         HexCellSizes maxGridSize,
-        int foundation_innersMax,
-        int foundation_cornersMax,
-        int foundation_random_Inners = 40,
-        int foundation_random_Corners = 40,
-        int foundation_random_Center = 100,
+        LocationFoundationSettings foundationSettings,
         Dictionary<Vector2, Vector3> cellCenters_ByLookup = null,
-        // Dictionary<Vector2, Vector3> pathCenters_ByLookup = null,
         Dictionary<Vector2, Vector3> allCenterPointsAdded = null,
         List<LayeredNoiseOption> layerdNoises_terrain = null,
-        float terrainHeight = 1,
-        int maxLayerDifference = 2
+        float terrainHeight = 1
     )
     {
         int baseLayer = HexCoreUtil.Calculate_CellSnapLayer(layerOffset, gridCenter.y);
         int _maxGridSize = (int)maxGridSize;
+        int maxLayerDifference = foundationSettings.foundation_maxLayerDifference;
 
         (
             Dictionary<Vector2, Vector3> foundationNodes,
@@ -481,11 +479,7 @@ public class WorldPositionTracker : MonoBehaviour
         ) = HexCoreUtil.Generate_FoundationPoints(
             gridCenter,
             hostCellSize,
-            foundation_innersMax,
-            foundation_cornersMax,
-            foundation_random_Inners,
-            foundation_random_Corners,
-            foundation_random_Center,
+            foundationSettings,
             allCenterPointsAdded
         );
 
@@ -931,6 +925,15 @@ public class WorldPositionTracker : MonoBehaviour
     }
 
 
+    [SerializeField] private bool enable_locationCenters;
+    [Range(1, 7)][SerializeField] int maxLocations = 7;
+
+    [SerializeField] private bool enable_meshVertices;
+    [SerializeField] private bool generate_meshVertices;
+    // [Range(1, 7)][SerializeField] int maxLocations = 7;
+    public GameObject meshPrefab;
+
+
     private void OnDrawGizmos()
     {
         Gizmos.color = Color.yellow;
@@ -947,10 +950,79 @@ public class WorldPositionTracker : MonoBehaviour
                 VectorUtil.DrawHexagonPointLinesInGizmos(debug_currentHexCell.cornerPoints);
 
 
-                Vector2Int cornerIX = HexCoreUtil.GetCornersFromSide_Default(debug_sideNeighbor);
-                // Gizmos.DrawSphere(debug_currentHexCell.cornerPoints[cornerIX.x], 0.5f);
-                Gizmos.DrawSphere(debug_currentHexCell.cornerPoints[cornerIX.y], 0.5f);
+                // Vector2Int cornerIX = HexCoreUtil.GetCornersFromSide_Default(debug_sideNeighbor);
+                // // Gizmos.DrawSphere(debug_currentHexCell.cornerPoints[cornerIX.x], 0.5f);
+                // Gizmos.DrawSphere(debug_currentHexCell.cornerPoints[cornerIX.y], 0.5f);
 
+
+                if (enable_locationCenters)
+                {
+                    Dictionary<Vector2, Vector3> locationCenters = HexCoreUtil.Generate_HexLocationCenterPoints(debug_currentHexCell.center, debug_currentHexCell.size, maxLocations);
+                    Gizmos.color = Color.cyan;
+                    foreach (var item in locationCenters.Values)
+                    {
+                        Gizmos.DrawSphere(item, 1f);
+                        VectorUtil.DrawHexagonPointLinesInGizmos(
+                            HexCoreUtil.GenerateHexagonPoints(item, debug_currentHexCell.size)
+                        );
+                    }
+                }
+                else if (enable_meshVertices)
+                {
+                    // float centerSize = 1.3f;
+                    float centerSize = 4 / 3f;
+                    Dictionary<Vector2, HexVertexNode> hexVertexNodes = HexVertexUtil.Generate_HexMVertexGrid(
+                        debug_currentHexCell.center,
+                        centerSize,
+                        debug_currentHexCell.size
+                    );
+
+                    if (generate_meshVertices)
+                    {
+                        generate_meshVertices = false;
+
+                        Mesh mesh = HexVertexNode.Generate_Mesh(hexVertexNodes, transform);
+                        MeshUtil.InstantiatePrefabWithMesh(meshPrefab, mesh, transform.position);
+                    }
+                    else
+                    {
+                        foreach (var node in hexVertexNodes.Values)
+                        {
+                            // if (generate_meshVertices)
+                            // {
+                            //     generate_meshVertices = false;
+
+                            //     Mesh mesh = HexVertexNode.Generate_Mesh(node);
+                            //     MeshUtil.InstantiatePrefabWithMesh(meshPrefab, mesh, transform.position);
+                            // }
+
+                            HexVertexNode.Draw(node);
+                        }
+                    }
+
+
+                    // Dictionary<float, Dictionary<Vector2, Vector3>> hexVertexCenters = HexVertexUtil.Generate_HexMVertexGrid(
+                    //     debug_currentHexCell.center,
+                    //     centerSize,
+                    //     debug_currentHexCell.size
+                    // // bool logResults = false
+                    // );
+                    // foreach (float currentSize in hexVertexCenters.Keys)
+                    // {
+                    //     if (currentSize > centerSize) continue;
+
+                    //     foreach (var item in hexVertexCenters[currentSize].Values)
+                    //     {
+                    //         Gizmos.color = Color.cyan;
+                    //         Gizmos.DrawSphere(item, 0.33f);
+
+                    //         Gizmos.color = Color.yellow;
+                    //         VectorUtil.Draw_PointsInGizmos(
+                    //             HexCoreUtil.GenerateHexagonPoints(item, centerSize), 0.2f
+                    //         );
+                    //     }
+                    // }
+                }
 
 
                 // //temp
@@ -1253,88 +1325,87 @@ public class WorldPositionTracker : MonoBehaviour
 
 
 
-                if (debug_useAlternateCellSize)
-                {
-                    Vector3 hexCenter = HexCoreUtil.Calculate_ClosestHexCenter_V2(transform.position, (int)debug_alternateCell_snapSize);
+                // if (debug_useAlternateCellSize)
+                // {
+                //     Vector3 hexCenter = HexCoreUtil.Calculate_ClosestHexCenter_V2(transform.position, (int)debug_alternateCell_snapSize);
 
-                    if (debug_alternateCell_expansionSize == HexNeighborExpansionSize.X_12) debug_alternateCell_expansionSize = HexNeighborExpansionSize.X_13;
+                //     if (debug_alternateCell_expansionSize == HexNeighborExpansionSize.X_12) debug_alternateCell_expansionSize = HexNeighborExpansionSize.X_13;
 
-                    // List<Vector3> centerPoints = HexCoreUtil.GenerateHexCenterPoints_X(hexCenter, debug_alternateCell_size, debug_alternateCell_expansionSize);
-
-
-
-                    (Dictionary<Vector2, Vector3> foundationNodes,
-                    Dictionary<Vector2, Vector3> bufferNodes
-                    ) = HexCoreUtil.Generate_FoundationPoints(
-                        debug_currentHexCell.center,
-                        debug_alternateCell_size,
-                        foundation_innersMax,
-                        foundation_cornersMax,
-                        foundation_random_Inners,
-                        foundation_random_Corners,
-                        foundation_random_Center
-                    );
-
-                    // (Dictionary<Vector2, Vector3> foundationNodes,
-                    // Dictionary<Vector2, Vector3> bufferNodes
-                    // ) = HexCoreUtil.Generate_FoundationNode_CenterPoints(hexCenter, debug_alternateCell_size, 5, 7, 40, 50);
-                    // List<Vector3> centerPoints = HexCoreUtil.Generate_FoundationNode_CenterPoints(hexCenter, debug_alternateCell_size, 5, 7, 40, 50);
-
-                    List<Vector3> hostPoints = HexCoreUtil.GenerateHexCenterPoints_X13(debug_currentHexCell.center, debug_alternateCell_size);
-                    HashSet<Vector2> added = new HashSet<Vector2>();
-                    HashSet<Vector2> excludeList = new HashSet<Vector2>();
-                    foreach (var k in bufferNodes.Keys)
-                    {
-                        excludeList.Add(k);
-                    }
-
-                    Dictionary<int, Dictionary<Vector2, Vector3>> buildingBlockClusters = new Dictionary<int, Dictionary<Vector2, Vector3>>();
-
-                    buildingBlockClusters = HexCoreUtil.Generate_BaseBuildingNodeGroups(
-                           debug_currentHexCell.center,
-                           excludeList,
-                            (int)HexCellSizes.Worldspace
-                       );
+                //     // List<Vector3> centerPoints = HexCoreUtil.GenerateHexCenterPoints_X(hexCenter, debug_alternateCell_size, debug_alternateCell_expansionSize);
 
 
-                    int baseLayer = 0; //debug_currentHexCell.layer;
-                    int maxLayerDifference = 8; //debug_currentHexCell.layerOffset;
-                    int offset = 4; //debug_currentHexCell.layerOffset;
-                    bool doOnce = false;
 
-                    foreach (var item in buildingBlockClusters.Values)
-                    {
-                        int groundLayer = UnityEngine.Random.Range(baseLayer, baseLayer + (maxLayerDifference + 1));
-                        bool highlight = false;
+                //     (Dictionary<Vector2, Vector3> foundationNodes,
+                //     Dictionary<Vector2, Vector3> bufferNodes
+                //     ) = HexCoreUtil.Generate_FoundationPoints(
+                //         debug_currentHexCell.center,
+                //         debug_alternateCell_size,
+                //         foundation_innersMax,
+                //         foundation_cornersMax,
+                //         foundation_random_Inners,
+                //         foundation_random_Corners,
+                //         foundation_random_Center
+                //     );
 
-                        if (!doOnce)
-                        {
-                            doOnce = true;
-                            highlight = true;
-                        }
+                //     // (Dictionary<Vector2, Vector3> foundationNodes,
+                //     // Dictionary<Vector2, Vector3> bufferNodes
+                //     // ) = HexCoreUtil.Generate_FoundationNode_CenterPoints(hexCenter, debug_alternateCell_size, 5, 7, 40, 50);
+                //     // List<Vector3> centerPoints = HexCoreUtil.Generate_FoundationNode_CenterPoints(hexCenter, debug_alternateCell_size, 5, 7, 40, 50);
 
-                        foreach (var pt in item.Values)
-                        {
-                            Vector3 pos = pt;
-                            pos.y = (groundLayer * offset);
+                //     List<Vector3> hostPoints = HexCoreUtil.GenerateHexCenterPoints_X13(debug_currentHexCell.center, debug_alternateCell_size);
+                //     HashSet<Vector2> added = new HashSet<Vector2>();
+                //     HashSet<Vector2> excludeList = new HashSet<Vector2>();
+                //     foreach (var k in bufferNodes.Keys)
+                //     {
+                //         excludeList.Add(k);
+                //     }
 
-                            // Gizmos.DrawSphere(pos, size / 2);
+                //     Dictionary<int, Dictionary<Vector2, Vector3>> buildingBlockClusters = new Dictionary<int, Dictionary<Vector2, Vector3>>();
 
-                            Gizmos.color = Color.yellow;
-                            VectorUtil.DrawHexagonPointLinesInGizmos(pos, debug_alternateCell_size / 3, true);
+                //     buildingBlockClusters = HexCoreUtil.Generate_BaseBuildingNodeGroups(
+                //            debug_currentHexCell.center,
+                //            excludeList,
+                //             (int)HexCellSizes.Worldspace
+                //        );
 
-                            Gizmos.color = highlight ? Color.red : Color.black;
-                            if (highlight) Gizmos.DrawWireSphere(pos, size / 3);
-                        }
-                        // break;
-                    }
-                }
+
+                //     int baseLayer = 0; //debug_currentHexCell.layer;
+                //     int maxLayerDifference = 8; //debug_currentHexCell.layerOffset;
+                //     int offset = 4; //debug_currentHexCell.layerOffset;
+                //     bool doOnce = false;
+
+                //     foreach (var item in buildingBlockClusters.Values)
+                //     {
+                //         int groundLayer = UnityEngine.Random.Range(baseLayer, baseLayer + (maxLayerDifference + 1));
+                //         bool highlight = false;
+
+                //         if (!doOnce)
+                //         {
+                //             doOnce = true;
+                //             highlight = true;
+                //         }
+
+                //         foreach (var pt in item.Values)
+                //         {
+                //             Vector3 pos = pt;
+                //             pos.y = (groundLayer * offset);
+
+                //             // Gizmos.DrawSphere(pos, size / 2);
+
+                //             Gizmos.color = Color.yellow;
+                //             VectorUtil.DrawHexagonPointLinesInGizmos(pos, debug_alternateCell_size / 3, true);
+
+                //             Gizmos.color = highlight ? Color.red : Color.black;
+                //             if (highlight) Gizmos.DrawWireSphere(pos, size / 3);
+                //         }
+                //         // break;
+                //     }
+                // }
             }
 
         }
-
-
     }
+
     public static Dictionary<Vector2, HexagonCellPrototype> Generate_HexCellsByLookup(List<Vector3> centerPoints, int cellSize, int cellLayerOffset)
     {
         Dictionary<Vector2, HexagonCellPrototype> new_cellLookup = new Dictionary<Vector2, HexagonCellPrototype>();

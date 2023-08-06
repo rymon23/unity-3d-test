@@ -161,8 +161,7 @@ namespace WFCSystem
             HexNeighborExpansionSize initialExpansionSize = HexNeighborExpansionSize.X_7,
             HashSet<Vector2> excludeList = null,
             HashSet<Vector2> added = null,
-            Vector3[] absoluteBoundsCorners = null,
-            int absoluteBoundsRadius = 108
+            Vector3[] absoluteBoundsCorners = null
         )
         {
             if (maxRadius < _cellSize * 3) maxRadius = (_cellSize * 3);
@@ -205,8 +204,9 @@ namespace WFCSystem
 
                     if (HexCoreUtil.IsAnyHexPointWithinPolygon(neighbor, _cellSize, boundsCorners))
                     {
-                        if (absoluteBoundsCorners != null && VectorUtil.IsPointWithinPolygon(neighbor, absoluteBoundsCorners) == false) continue;
+                        // if (absoluteBoundsCorners != null && VectorUtil.IsPointWithinPolygon(neighbor, absoluteBoundsCorners) == false) continue;
                         // if (absoluteBoundsCorners != null && HexCoreUtil.IsAnyHexPointWithinPolygon(neighbor, _cellSize, absoluteBoundsCorners) == false) continue;
+                        if (absoluteBoundsCorners != null && HexCoreUtil.IsAnyHexPointOutsidePolygon(neighbor, _cellSize, absoluteBoundsCorners)) continue;
 
                         foundByLookup.Add(neighborLookup, neighbor);
                         headsToCheck.Add(neighbor);
